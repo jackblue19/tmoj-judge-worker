@@ -1,4 +1,4 @@
-namespace WebAPI.Models.Auth;
+namespace WebAPI.Controllers.v1.Auth;
 
 public record UserDto(
     Guid UserId,
@@ -15,4 +15,3 @@ public record AuthResponse(
     string RefreshToken,
     int ExpiresIn,
     UserDto User);
-

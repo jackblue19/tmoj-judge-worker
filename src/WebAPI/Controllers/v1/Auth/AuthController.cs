@@ -538,7 +538,7 @@ public class AuthController : ControllerBase
         var users = await _db.Users.Where(u => u.Status == false)
             .Select(u => new UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
             .ToListAsync(ct);
-        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users));
+        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users, "list of locked accounts"));
     }
 
     [Authorize(Roles = "admin")]
@@ -548,7 +548,7 @@ public class AuthController : ControllerBase
         var users = await _db.Users.Where(u => u.Status == true)
             .Select(u => new UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
             .ToListAsync(ct);
-        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users));
+        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users, "List of active accounts"));
     }
 
     [Authorize(Roles = "admin")]

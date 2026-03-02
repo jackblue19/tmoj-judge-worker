@@ -67,6 +67,16 @@ builder.Services.AddHttpLogging(o =>
 });
 
 //builder.Services.AddCorsPolicy(builder.Configuration);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll" ,
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
 //builder.Services.AddRateLimiting();
 
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(ValidationBehavior<,>));
@@ -85,6 +95,8 @@ if ( app.Environment.IsDevelopment() )
 app.UseHttpsRedirection();
 app.UseExceptionHandler();
 app.UseRouting();
+
+app.UseCors("AllowAll");
 
 //app.UseCors(CorsExtensions.DefaultPolicyName);
 //app.UseRateLimiter();

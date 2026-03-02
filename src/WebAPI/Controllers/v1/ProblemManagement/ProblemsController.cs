@@ -81,8 +81,8 @@ public class ProblemsController : ControllerBase
         });
     }
 
-    // POST api/problems
-    [HttpPost]
+    // POST api/v1/problems/drafts
+    [HttpPost("drafts")]
     public async Task<ActionResult<ProblemResponseDto>> Create(
         [FromBody] ProblemCreateDto dto ,
         CancellationToken ct)
@@ -192,24 +192,68 @@ public class ProblemsController : ControllerBase
         return Ok(problem.Id);
     }
 
-    // DELETE api/problems/{id}
+    // DELETE api/problems/{id}     (del-ver1)      -> được thì cái del-ver2 thành soft-del còn del-ver1 này thì cho thành hard-del
+    [HttpDelete("{id:guid}/hard")]
+    public async Task<IActionResult> HardDelete(Guid id , CancellationToken ct)
+    {
+        var problem = await _db.Problems.FirstOrDefaultAsync(x => x.Id == id , ct);
+        if ( problem is null ) return NotFound();
+
+        _db.Problems.Remove(problem);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+            return NoContent();
+        }
+        catch ( DbUpdateException ex )
+        {
+            // thường là FK violation 23503
+            return Conflict("Cannot hard delete: problem is referenced by other records (FK). Use archive or delete dependencies first.");
+        }
+    }
+    // POST api/v{version}/problems/{id}/archive    (del-ver 2)
+    [HttpPost("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(
+    Guid id ,
+    [FromBody] ProblemArchiveDto? dto ,
+    CancellationToken ct)
+    {
+        var problem = await _db.Problems.FirstOrDefaultAsync(x => x.Id == id , ct);
+        if ( problem is null ) return NotFound();
+
+        problem.IsActive = false;
+        problem.StatusCode = "archived";
+
+        // FIX constraint publish consistency:
+        problem.PublishedAt = null;
+
+        problem.UpdatedAt = DateTime.UtcNow;
+        problem.UpdatedBy = dto?.ArchivedBy;
+
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> SoftDelete(Guid id , CancellationToken ct)
     {
         var problem = await _db.Problems.FirstOrDefaultAsync(x => x.Id == id , ct);
-
-        if ( problem is null )
-            return NotFound();
+        if ( problem is null ) return NotFound();
 
         problem.IsActive = false;
         problem.StatusCode = "archived";
+
+        // FIX constraint publish consistency:
+        problem.PublishedAt = null;
+
         problem.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
-
         return NoContent();
     }
 
+    //  helpers
     private static ProblemResponseDto ToDto(Problem p)
     {
         return new ProblemResponseDto
@@ -226,5 +270,45 @@ public class ProblemsController : ControllerBase
             CreatedAt = p.CreatedAt ,
             PublishedAt = p.PublishedAt
         };
+    }
+
+    // PUT api/v{version}/problems/{id}/difficulty
+    [HttpPut("{id:guid}/difficulty")]
+    public async Task<ActionResult<ProblemResponseDto>> SetDifficulty(
+        Guid id ,
+        [FromBody] ProblemSetDifficultyDto dto ,
+        CancellationToken ct)
+    {
+        var problem = await _db.Problems.FirstOrDefaultAsync(x => x.Id == id && x.IsActive , ct);
+        if ( problem is null ) return NotFound();
+
+        problem.Difficulty = dto.Difficulty;
+        problem.UpdatedAt = DateTime.UtcNow;
+        problem.UpdatedBy = dto.UpdatedBy;
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(ToDto(problem));
+    }
+
+    // POST api/v{version}/problems/{id}/publish
+    [HttpPost("{id:guid}/publish")]
+    public async Task<ActionResult<ProblemResponseDto>> Publish(
+        Guid id ,
+        [FromBody] ProblemPublishDto dto ,
+        CancellationToken ct)
+    {
+        var problem = await _db.Problems.FirstOrDefaultAsync(x => x.Id == id && x.IsActive , ct);
+        if ( problem is null ) return NotFound();
+
+        if ( problem.StatusCode is "archived" )
+            return Conflict("Archived problem cannot be published.");
+
+        problem.StatusCode = "published";
+        problem.PublishedAt = DateTime.UtcNow;
+        problem.UpdatedAt = DateTime.UtcNow;
+        problem.UpdatedBy = dto?.PublishedBy;
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(ToDto(problem));
     }
 }

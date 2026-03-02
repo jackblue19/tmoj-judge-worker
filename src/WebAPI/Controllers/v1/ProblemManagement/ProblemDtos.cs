@@ -69,3 +69,21 @@ public sealed class ProblemResponseDto
     public DateTime? PublishedAt { get; set; }
 }
 
+public sealed class ProblemSetDifficultyDto
+{
+    [Required]
+    public string Difficulty { get; set; } = null!;
+
+    public Guid? UpdatedBy { get; set; }
+}
+
+public sealed class ProblemPublishDto
+{
+    public Guid? PublishedBy { get; set; }
+}
+
+public sealed class ProblemArchiveDto
+{
+    public Guid? ArchivedBy { get; set; }
+}
+

@@ -7,6 +7,37 @@ namespace Infrastructure.Persistence.Scaffolded.Context;
 
 public partial class TmojDbContext : DbContext
 {
+    public override int SaveChanges()
+    {
+        NormalizeDateTimes();
+        return base.SaveChanges();
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        NormalizeDateTimes();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void NormalizeDateTimes()
+    {
+        var entries = ChangeTracker.Entries();
+
+        foreach (var entry in entries)
+        {
+            foreach (var property in entry.Properties)
+            {
+                if (property.CurrentValue is DateTime dt)
+                {
+                    property.CurrentValue =
+                        DateTime.SpecifyKind(
+                            dt,
+                            DateTimeKind.Unspecified);
+                }
+            }
+        }
+    }
     public TmojDbContext(DbContextOptions<TmojDbContext> options)
         : base(options)
     {
@@ -890,6 +921,9 @@ public partial class TmojDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("discussion_comments_user_id_fkey");
         });
+
+
+
 
         modelBuilder.Entity<Editorial>(entity =>
         {

@@ -37,6 +37,7 @@ builder.Services.AddControllers().AddOData(opt =>
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);
 builder.Services.Configure<GoogleOptions>(builder.Configuration.GetSection("Authentication:Google"));
+builder.Services.Configure<GithubOptions>(builder.Configuration.GetSection("Authentication:Github"));
 
 //  wrap + problem details + rate limit
 builder.Services.AddControllers(options =>

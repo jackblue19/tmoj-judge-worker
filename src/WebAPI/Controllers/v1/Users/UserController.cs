@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebAPI.Models.Common;
-
+using WebAPI.Controllers.v1.Auth;
 
 namespace WebAPI.Controllers.v1.Users;
 
@@ -86,6 +86,7 @@ public class UserController : ControllerBase
     }
 
 
+    [Authorize(Roles = "admin,manager")]
     [HttpGet("list-all")]
     public async Task<IActionResult> ListAll(CancellationToken ct)
     {
@@ -94,7 +95,7 @@ public class UserController : ControllerBase
             var users = await _db.Users
                 .Where(u => u.DeletedAt == null)
                 .OrderByDescending(u => u.CreatedAt)
-                .Select(u => new UserProfileResponse(
+                .Select(u => new Auth.UserProfileResponse(
                     u.UserId,
                     u.Email,
                     u.FirstName,
@@ -108,7 +109,7 @@ public class UserController : ControllerBase
                 ))
                 .ToListAsync(ct);
 
-            return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users , "Users list fetched successfully"));
+            return Ok(ApiResponse<List<Auth.UserProfileResponse>>.Ok(users , "Users list fetched successfully"));
         }
         catch ( Exception )
         {
@@ -116,16 +117,21 @@ public class UserController : ControllerBase
         }
     }
 
-    [Authorize(Roles = "admin")]
-    [HttpGet("list-banned")]
-    public async Task<IActionResult> ListBanned(CancellationToken ct)
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMe(CancellationToken ct)
     {
         try
         {
-            var users = await _db.Users
-                .Where(u => u.DeletedAt == null && u.Status == false)
-                .OrderByDescending(u => u.CreatedAt)
-                .Select(u => new UserProfileResponse(
+            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
+                        ?? User.FindFirst("sub")?.Value;
+            if ( string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr , out var userId) )
+            {
+                return Unauthorized(new { Message = "Unauthorized access." });
+            }
+
+            var user = await _db.Users
+                .Where(u => u.UserId == userId && u.DeletedAt == null)
+                .Select(u => new Auth.UserProfileResponse(
                     u.UserId,
                     u.Email,
                     u.FirstName,
@@ -137,53 +143,46 @@ public class UserController : ControllerBase
                     u.Status,
                     u.CreatedAt
                 ))
-                .ToListAsync(ct);
+                .FirstOrDefaultAsync(ct);
 
-            return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users , "Banned users list fetched successfully"));
+            if ( user == null ) return NotFound(new { Message = "User not found." });
+
+            return Ok(ApiResponse<Auth.UserProfileResponse>.Ok(user , "Profile fetched successfully"));
         }
         catch ( Exception )
         {
-            return StatusCode(500 , new { Message = "An error occurred while fetching the banned users list. Please try again later." });
+            return StatusCode(500 , new { Message = "An error occurred while fetching your profile. Please try again later." });
         }
     }
 
-    [Authorize(Roles = "admin")]
-    [HttpPut("{id}/lock")]
-    public async Task<IActionResult> Lock(Guid id, CancellationToken ct)
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetProfile(Guid id, CancellationToken ct)
     {
         try
         {
-            var user = await _db.Users.FindAsync(new object[] { id }, ct);
-            if (user == null) return NotFound(new { Message = "User not found." });
+            var user = await _db.Users
+                .Where(u => u.UserId == id && u.DeletedAt == null)
+                .Select(u => new Auth.UserProfileResponse(
+                    u.UserId,
+                    u.Email,
+                    u.FirstName,
+                    u.LastName,
+                    u.DisplayName,
+                    u.Username,
+                    u.AvatarUrl,
+                    u.EmailVerified,
+                    u.Status,
+                    u.CreatedAt
+                ))
+                .FirstOrDefaultAsync(ct);
 
-            user.Status = false;
-            await _db.SaveChangesAsync(ct);
+            if ( user == null ) return NotFound(new { Message = "User not found." });
 
-            return Ok(new { Message = "Account locked successfully." });
+            return Ok(ApiResponse<Auth.UserProfileResponse>.Ok(user , "User profile fetched successfully"));
         }
         catch ( Exception )
         {
-            return StatusCode(500 , new { Message = "An error occurred while locking the account. Please try again later." });
-        }
-    }
-
-    [Authorize(Roles = "admin")]
-    [HttpPut("{id}/unlock")]
-    public async Task<IActionResult> Unlock(Guid id, CancellationToken ct)
-    {
-        try
-        {
-            var user = await _db.Users.FindAsync(new object[] { id }, ct);
-            if (user == null) return NotFound(new { Message = "User not found." });
-
-            user.Status = true;
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(new { Message = "Account unlocked successfully." });
-        }
-        catch ( Exception )
-        {
-            return StatusCode(500 , new { Message = "An error occurred while unlocking the account. Please try again later." });
+            return StatusCode(500 , new { Message = "An error occurred while fetching the user profile. Please try again later." });
         }
     }
 

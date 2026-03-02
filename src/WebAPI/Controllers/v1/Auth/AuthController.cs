@@ -9,10 +9,11 @@ using Microsoft.Extensions.Options;
 using System.Security.Principal;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
-
 using Domain.Entities;
 using System.Security.Cryptography;
 using WebAPI.Models.Common;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace WebAPI.Controllers.v1.Auth;
 
@@ -27,6 +28,7 @@ public class AuthController : ControllerBase
     private readonly IPasswordHasher _passwordHasher;
     private readonly JwtOptions _jwt;
     private readonly GoogleOptions _google;
+    private readonly GithubOptions _github;
     private readonly TmojDbContext _db;
 
     public AuthController(
@@ -35,6 +37,7 @@ public class AuthController : ControllerBase
         IPasswordHasher passwordHasher ,
         IOptions<JwtOptions> jwt ,
         IOptions<GoogleOptions> google ,
+        IOptions<GithubOptions> github ,
         TmojDbContext db)
     {
         _tokenService = tokenService;
@@ -42,6 +45,7 @@ public class AuthController : ControllerBase
         _passwordHasher = passwordHasher;
         _jwt = jwt.Value;
         _google = google.Value;
+        _github = github.Value;
         _db = db;
     }
 
@@ -117,7 +121,7 @@ public class AuthController : ControllerBase
         {
             var email = req.Email.ToLowerInvariant();
             var verification = await _db.EmailVerifications
-                .Include(v => v.User)
+                .Include(v => v.User).ThenInclude(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
                 .FirstOrDefaultAsync(v => v.User.Email == email && v.Token == req.Token , ct);
 
             if ( verification == null || verification.ExpiresAt < DateTime.UtcNow )
@@ -129,7 +133,9 @@ public class AuthController : ControllerBase
             _db.EmailVerifications.Remove(verification);
             await _db.SaveChangesAsync(ct);
 
-            return Ok(new { Message = "Email verified successfully." });
+            var authResponse = await CreateAuthResponseAsync(verification.User , ct);
+
+            return Ok(ApiResponse<AuthResponse>.Ok(authResponse , "Email verified successfully and logged in."));
         }
         catch ( Exception )
         {
@@ -143,15 +149,13 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                        ?? User.FindFirst("sub")?.Value;
             if ( string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr , out var userId) )
             {
                 return Unauthorized(new { Message = "Unauthorized access." });
             }
 
-            // Revoke all active sessions for this user (or just the current one if tracked)
-            // For simplicity, we'll revoke the latest session or the one matching the refresh token if provided.
-            // Here we just clear the sessions/tokens for this user.
             var sessions = await _db.UserSessions
                 .Where(s => s.UserId == userId)
                 .Include(s => s.RefreshTokens)
@@ -194,52 +198,9 @@ public class AuthController : ControllerBase
                 return BadRequest(new { Message = "Your account has been locked." });
             }
 
-            // Create Session
-            var session = new UserSession
-            {
-                UserId = user.UserId ,
-                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ,
-                UserAgent = Request.Headers["User-Agent"]
-            };
+            var authResponse = await CreateAuthResponseAsync(user , ct);
 
-            var refreshTokenStr = _refreshTokenService.GenerateToken();
-            var refreshTokenHash = _refreshTokenService.HashToken(refreshTokenStr);
-
-            var refreshToken = new RefreshToken
-            {
-                TokenHash = refreshTokenHash ,
-                ExpireAt = DateTime.UtcNow.AddDays(_jwt.RefreshTokenDays)
-            };
-
-            session.RefreshTokens.Add(refreshToken);
-            _db.UserSessions.Add(session);
-            await _db.SaveChangesAsync(ct);
-
-            var roles = user.UserRoleUsers.Select(ur => ur.Role.RoleCode).ToList();
-            if ( !roles.Any() ) roles.Add("user"); // Default role
-
-            var accessToken = _tokenService.CreateAccessToken(
-                user.UserId.ToString() ,
-                user.DisplayName ?? user.Username ,
-                roles);
-
-            var userDto = new UserDto(
-                UserId: user.UserId ,
-                Email: user.Email ,
-                FirstName: user.FirstName ,
-                LastName: user.LastName ,
-                DisplayName: user.DisplayName ,
-                Username: user.Username ,
-                AvatarUrl: user.AvatarUrl ,
-                Roles: roles
-            );
-
-            return Ok(ApiResponse<AuthResponse>.Ok(new AuthResponse(
-                AccessToken: accessToken ,
-                RefreshToken: refreshTokenStr ,
-                ExpiresIn: _jwt.AccessTokenMinutes * 60 ,
-                User: userDto
-            ) , "Login successful"));
+            return Ok(ApiResponse<AuthResponse>.Ok(authResponse , "Login successful"));
         }
         catch ( Exception )
         {
@@ -323,52 +284,9 @@ public class AuthController : ControllerBase
                 await _db.SaveChangesAsync(ct);
             }
 
-            // Create Session
-            var session = new UserSession
-            {
-                UserId = user.UserId ,
-                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ,
-                UserAgent = Request.Headers["User-Agent"]
-            };
+            var authResponse = await CreateAuthResponseAsync(user , ct);
 
-            var refreshTokenStr = _refreshTokenService.GenerateToken();
-            var refreshTokenHash = _refreshTokenService.HashToken(refreshTokenStr);
-
-            var refreshToken = new RefreshToken
-            {
-                TokenHash = refreshTokenHash ,
-                ExpireAt = DateTime.UtcNow.AddDays(_jwt.RefreshTokenDays)
-            };
-
-            session.RefreshTokens.Add(refreshToken);
-            _db.UserSessions.Add(session);
-            await _db.SaveChangesAsync(ct);
-
-            var roles = user.UserRoleUsers.Select(ur => ur.Role.RoleCode).ToList();
-            if ( !roles.Any() ) roles.Add("user"); // Default role
-
-            var accessToken = _tokenService.CreateAccessToken(
-                user.UserId.ToString() ,
-                user.DisplayName ?? user.Username ,
-                roles);
-
-            var userDto = new UserDto(
-                UserId: user.UserId ,
-                Email: user.Email ,
-                FirstName: user.FirstName ,
-                LastName: user.LastName ,
-                DisplayName: user.DisplayName ,
-                Username: user.Username ,
-                AvatarUrl: user.AvatarUrl ,
-                Roles: roles
-            );
-
-            return Ok(ApiResponse<AuthResponse>.Ok(new AuthResponse(
-                AccessToken: accessToken ,
-                RefreshToken: refreshTokenStr ,
-                ExpiresIn: _jwt.AccessTokenMinutes * 60 ,
-                User: userDto
-            ) , "Login with Google successful"));
+            return Ok(ApiResponse<AuthResponse>.Ok(authResponse , "Login with Google successful"));
         }
         catch ( InvalidJwtException )
         {
@@ -378,5 +296,344 @@ public class AuthController : ControllerBase
         {
             return StatusCode(500 , new { Message = "Internal Server Error during Google Login. Please try again later." });
         }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("github-login")]
+    public async Task<IActionResult> GithubLogin([FromBody] GithubLoginRequest req, CancellationToken ct)
+    {
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "TMOJ-Auth-App");
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", req.AccessToken);
+
+            var response = await client.GetAsync("https://api.github.com/user", ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return BadRequest(new { Message = "Invalid GitHub Access Token" });
+            }
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(content);
+            var root = doc.RootElement;
+
+            // GitHub might not return email if it's private, but we need it.
+            // In a real app, you might need to call /user/emails
+            var email = root.GetProperty("email").GetString()?.ToLowerInvariant();
+            var githubId = root.GetProperty("id").GetInt64().ToString();
+            var name = root.GetProperty("name").GetString() ?? root.GetProperty("login").GetString();
+            var avatarUrl = root.GetProperty("avatar_url").GetString();
+
+            if (string.IsNullOrEmpty(email))
+            {
+                // Fallback attempt to get private email
+                var emailResponse = await client.GetAsync("https://api.github.com/user/emails", ct);
+                if (emailResponse.IsSuccessStatusCode)
+                {
+                    var emailContent = await emailResponse.Content.ReadAsStringAsync(ct);
+                    using var emailDoc = JsonDocument.Parse(emailContent);
+                    email = emailDoc.RootElement.EnumerateArray()
+                        .FirstOrDefault(e => e.GetProperty("primary").GetBoolean())
+                        .GetProperty("email").GetString()?.ToLowerInvariant();
+                }
+            }
+
+            if (string.IsNullOrEmpty(email))
+            {
+                return BadRequest(new { Message = "Could not retrieve email from GitHub account." });
+            }
+
+            var user = await _db.Users
+                .Include(u => u.UserProviders)
+                .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.Email == email , ct);
+
+            if (user == null)
+            {
+                var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student", ct);
+                user = new User
+                {
+                    Email = email,
+                    DisplayName = name,
+                    AvatarUrl = avatarUrl,
+                    Username = email.Split('@')[0] + Random.Shared.Next(1000, 9999).ToString(),
+                    EmailVerified = true, // GitHub verified
+                    LanguagePreference = "vi",
+                    Status = true,
+                    UserProviders = new List<UserProvider>(),
+                    UserRoleUsers = new List<UserRole>()
+                };
+
+                var provider = await _db.Providers.FirstOrDefaultAsync(p => p.ProviderCode == "github", ct);
+                if (provider == null)
+                {
+                    provider = new Provider { ProviderCode = "github", ProviderDisplayName = "GitHub", Enabled = true };
+                    _db.Providers.Add(provider);
+                }
+
+                user.UserProviders.Add(new UserProvider
+                {
+                    ProviderId = provider.ProviderId,
+                    ProviderSubject = githubId,
+                    ProviderEmail = email
+                });
+
+                if (studentRole != null) user.UserRoleUsers.Add(new UserRole { RoleId = studentRole.RoleId });
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync(ct);
+            }
+
+            var authResponse = await CreateAuthResponseAsync(user, ct);
+            return Ok(ApiResponse<AuthResponse>.Ok(authResponse, "Login with GitHub successful"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "Internal Server Error during GitHub Login." });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("refresh-token")]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var hash = _refreshTokenService.HashToken(req.RefreshToken);
+            var token = await _db.RefreshTokens
+                .Include(t => t.Session).ThenInclude(s => s.User).ThenInclude(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
+
+            if (token == null || token.ExpireAt < DateTime.UtcNow || token.RevokedAt != null)
+            {
+                return Unauthorized(new { Message = "Invalid or expired refresh token." });
+            }
+
+            // Revoke old token
+            token.RevokedAt = DateTime.UtcNow;
+
+            // Create new response
+            var authResponse = await CreateAuthResponseAsync(token.Session.User, ct);
+            return Ok(ApiResponse<AuthResponse>.Ok(authResponse, "Token refreshed successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "Error refreshing token." });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == req.Email.ToLowerInvariant(), ct);
+            if (user == null) return Ok(new { Message = "If an account exists for this email, a reset link has been sent." });
+
+            var verification = new EmailVerification
+            {
+                UserId = user.UserId,
+                Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)),
+                ExpiresAt = DateTime.UtcNow.AddMinutes(30)
+            };
+
+            _db.EmailVerifications.Add(verification);
+            await _db.SaveChangesAsync(ct);
+
+            // TODO: Send reset email
+            return Ok(new { Message = "Password reset link sent.", Token = verification.Token });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "Error processing forgot password request." });
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var email = req.Email.ToLowerInvariant();
+            var verification = await _db.EmailVerifications
+                .FirstOrDefaultAsync(v => v.User.Email == email && v.Token == req.Token, ct);
+
+            if (verification == null || verification.ExpiresAt < DateTime.UtcNow)
+            {
+                return BadRequest(new { Message = "Invalid or expired reset token." });
+            }
+
+            var user = await _db.Users.FindAsync(new object[] { verification.UserId }, ct);
+            if (user != null)
+            {
+                user.Password = _passwordHasher.Hash(req.NewPassword);
+                _db.EmailVerifications.Remove(verification);
+                await _db.SaveChangesAsync(ct);
+            }
+
+            return Ok(new { Message = "Password reset successfully." });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "Error resetting password." });
+        }
+    }
+
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+            if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+
+            var user = await _db.Users.FindAsync(new object[] { userId }, ct);
+            if (user == null || string.IsNullOrEmpty(user.Password) || !_passwordHasher.Verify(req.CurrentPassword, user.Password))
+            {
+                return BadRequest(new { Message = "Invalid current password." });
+            }
+
+            user.Password = _passwordHasher.Hash(req.NewPassword);
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = "Password changed successfully." });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "Error changing password." });
+        }
+    }
+
+    // Administrative Actions
+    [Authorize(Roles = "admin")]
+    [HttpPut("users/{id}/lock")]
+    public async Task<IActionResult> LockAccount(Guid id, CancellationToken ct)
+    {
+        var user = await _db.Users.FindAsync(new object[] { id }, ct);
+        if (user == null) return NotFound();
+        user.Status = false;
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { Message = "Account locked." });
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpPut("users/{id}/unlock")]
+    public async Task<IActionResult> UnlockAccount(Guid id, CancellationToken ct)
+    {
+        var user = await _db.Users.FindAsync(new object[] { id }, ct);
+        if (user == null) return NotFound();
+        user.Status = true;
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { Message = "Account unlocked." });
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpGet("users/locked")]
+    public async Task<IActionResult> ListLockedAccounts(CancellationToken ct)
+    {
+        var users = await _db.Users.Where(u => u.Status == false)
+            .Select(u => new UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
+            .ToListAsync(ct);
+        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users));
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpGet("users/unlocked")]
+    public async Task<IActionResult> ListUnlockedAccounts(CancellationToken ct)
+    {
+        var users = await _db.Users.Where(u => u.Status == true)
+            .Select(u => new UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
+            .ToListAsync(ct);
+        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users));
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpPost("users/{id}/assign-role")]
+    public async Task<IActionResult> AssignRole(Guid id, [FromBody] AssignRoleRequest req, CancellationToken ct)
+    {
+        var user = await _db.Users.Include(u => u.UserRoleUsers).FirstOrDefaultAsync(u => u.UserId == id, ct);
+        if (user == null) return NotFound();
+
+        var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant(), ct);
+        if (role == null) return BadRequest(new { Message = "Role not found." });
+
+        if (!user.UserRoleUsers.Any(ur => ur.RoleId == role.RoleId))
+        {
+            user.UserRoleUsers.Add(new UserRole { RoleId = role.RoleId });
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return Ok(new { Message = $"Role {req.RoleCode} assigned." });
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpDelete("users/{id}/roles/{roleCode}")]
+    public async Task<IActionResult> RemoveRole(Guid id, string roleCode, CancellationToken ct)
+    {
+        var user = await _db.Users.Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.UserId == id, ct);
+        if (user == null) return NotFound();
+
+        var userRole = user.UserRoleUsers.FirstOrDefault(ur => ur.Role.RoleCode == roleCode.ToLowerInvariant());
+        if (userRole != null)
+        {
+            _db.UserRoles.Remove(userRole);
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return Ok(new { Message = $"Role {roleCode} removed." });
+    }
+
+    private async Task<AuthResponse> CreateAuthResponseAsync(User user , CancellationToken ct)
+    {
+        var session = new UserSession
+        {
+            UserId = user.UserId ,
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ,
+            UserAgent = Request.Headers["User-Agent"]
+        };
+
+        var refreshTokenStr = _refreshTokenService.GenerateToken();
+        var refreshTokenHash = _refreshTokenService.HashToken(refreshTokenStr);
+
+        var refreshToken = new RefreshToken
+        {
+            TokenHash = refreshTokenHash ,
+            ExpireAt = DateTime.UtcNow.AddDays(_jwt.RefreshTokenDays)
+        };
+
+        session.RefreshTokens.Add(refreshToken);
+        _db.UserSessions.Add(session);
+        await _db.SaveChangesAsync(ct);
+
+        var roles = user.UserRoleUsers.Select(ur => ur.Role.RoleCode).ToList();
+        if ( !roles.Any() ) roles.Add("user");
+
+        var accessToken = _tokenService.CreateAccessToken(
+            user.UserId.ToString() ,
+            user.DisplayName ?? user.Username ,
+            roles);
+
+        var userDto = new UserDto(
+            UserId: user.UserId ,
+            Email: user.Email ,
+            FirstName: user.FirstName ,
+            LastName: user.LastName ,
+            DisplayName: user.DisplayName ,
+            Username: user.Username ,
+            AvatarUrl: user.AvatarUrl ,
+            Roles: roles
+        );
+
+        return new AuthResponse(
+            AccessToken: accessToken ,
+            RefreshToken: refreshTokenStr ,
+            ExpiresIn: _jwt.AccessTokenMinutes * 60 ,
+            User: userDto
+        );
     }
 }

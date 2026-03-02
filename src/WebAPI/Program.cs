@@ -79,6 +79,9 @@ builder.Services.AddCors(options =>
 });
 //builder.Services.AddRateLimiting();
 
+builder.Services.Configure<LocalStorageOptions>(
+    builder.Configuration.GetSection("LocalStorage"));
+
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(ValidationBehavior<,>));
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(LoggingBehavior<,>));
 

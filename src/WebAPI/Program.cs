@@ -1,6 +1,7 @@
 ﻿using Infrastructure;
 using Infrastructure.Configurations.Auth;
 using Infrastructure.Persistence.Scaffolded.Context;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
 using WebAPI.Extensions;
 using WebAPI.Middlewares;
@@ -11,20 +12,20 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 //  database
 builder.Services.AddPostgresConnection(builder.Configuration);
-builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
+builder.Services.AddDbContext<TmojDbContext>((sp, opt) =>
 {
-    if ( builder.Environment.IsDevelopment() )
+    if (builder.Environment.IsDevelopment())
     {
         opt.EnableDetailedErrors();
         opt.EnableSensitiveDataLogging();
-        opt.LogTo(Console.WriteLine , LogLevel.Information);
+        opt.LogTo(Console.WriteLine, LogLevel.Information);
     }
 });
 
 //  controller + odata
 builder.Services.AddControllers().AddOData(opt =>
 {
-    opt.AddRouteComponents("odata" , EdmModelBuilder.GetEdmModel())
+    opt.AddRouteComponents("odata", EdmModelBuilder.GetEdmModel())
         .Select()
         .Filter()
         .OrderBy()
@@ -35,6 +36,8 @@ builder.Services.AddControllers().AddOData(opt =>
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);
+builder.Services.Configure<GoogleOptions>(builder.Configuration.GetSection("Authentication:Google"));
+builder.Services.Configure<GithubOptions>(builder.Configuration.GetSection("Authentication:Github"));
 
 //  wrap + problem details + rate limit
 builder.Services.AddControllers(options =>
@@ -67,7 +70,20 @@ builder.Services.AddHttpLogging(o =>
 });
 
 //builder.Services.AddCorsPolicy(builder.Configuration);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll" ,
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
 //builder.Services.AddRateLimiting();
+
+builder.Services.Configure<LocalStorageOptions>(
+    builder.Configuration.GetSection("LocalStorage"));
 
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(ValidationBehavior<,>));
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(LoggingBehavior<,>));
@@ -75,7 +91,7 @@ builder.Services.AddHttpLogging(o =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if ( app.Environment.IsDevelopment() )
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -85,6 +101,8 @@ if ( app.Environment.IsDevelopment() )
 app.UseHttpsRedirection();
 app.UseExceptionHandler();
 app.UseRouting();
+
+app.UseCors("AllowAll");
 
 //app.UseCors(CorsExtensions.DefaultPolicyName);
 //app.UseRateLimiter();
@@ -98,11 +116,10 @@ app.UseHttpLogging();
 app.UseMiddleware<RequestLogScopeMiddleware>();
 
 //  minimal apis
-app.MapGet("/health" , () => Results.Ok(new
+app.MapGet("/health", () => Results.Ok(new
 {
-    status = "Healthy" ,
+    status = "Healthy",
     timestamp = DateTime.UtcNow
 }));
 
 app.Run();
-

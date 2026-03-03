@@ -26,7 +26,7 @@ public static class JwtAuthExtensions
 
         services.AddSingleton<ITokenService , JwtTokenService>();
         services.AddSingleton<IRefreshTokenService , RefreshTokenService>();
-        //services.AddSingleton<IPasswordHasher , Pbkdf2PasswordHasher>();
+        services.AddSingleton<IPasswordHasher , Pbkdf2PasswordHasher>();
 
         services.AddAuthorization();
         return services;

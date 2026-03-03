@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using WebAPI.Filters;
 
 namespace WebAPI.Extensions;
 
@@ -29,7 +30,10 @@ public static class ScalarConfigureOptions
 
         // Swagger/OpenAPI generation (Swashbuckle) — đúng hướng “Swashbuckle” trong doc Scalar
         services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen();
+        services.AddSwaggerGen(c =>
+        {
+            c.OperationFilter<FileUploadOperationFilter>();
+        });
 
         // Tự tạo SwaggerDoc cho từng version (v1, v2, ...) từ ApiExplorer
         services.AddTransient<IConfigureOptions<SwaggerGenOptions> , ConfigureSwaggerOptions>();

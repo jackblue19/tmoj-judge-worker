@@ -1,4 +1,4 @@
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlMWE3MDllYy1kZDQ5LTQyMzAtYTVhMi02MzkzYmUzYjI1NzgiLCJqdGkiOiI5YWFjMDkyODZhOWY0ODkxODk3ZTg1Y2M0ZGJiOTZhYSIsImlhdCI6MTc3MjUyOTUxNywibmFtZSI6IkphY2sgQmx1ZSIsInJvbGUiOiJzdHVkZW50IiwibmJmIjoxNzcyNTI5NTE3LCJleHAiOjE3NzI1MzA0MTcsImlzcyI6ImZwdHUtdG1vai1hcGkiLCJhdWQiOiJ0bW9qLXVzZXJzIn0.cqUv6Q0BJWKTmdWJQg59HkWJ4xvCcJj8XwRHtghICkY
+@token = 
 
 ### Run sample (C++)
 POST https://localhost:7210/api/v1/problems/{{problemId}}/submissions/run-sample

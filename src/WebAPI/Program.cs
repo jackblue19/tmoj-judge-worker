@@ -4,6 +4,7 @@ using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
 using WebAPI.Extensions;
+using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 
@@ -12,20 +13,20 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 //  database
 builder.Services.AddPostgresConnection(builder.Configuration);
-builder.Services.AddDbContext<TmojDbContext>((sp, opt) =>
+builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {
-    if (builder.Environment.IsDevelopment())
+    if ( builder.Environment.IsDevelopment() )
     {
         opt.EnableDetailedErrors();
         opt.EnableSensitiveDataLogging();
-        opt.LogTo(Console.WriteLine, LogLevel.Information);
+        opt.LogTo(Console.WriteLine , LogLevel.Information);
     }
 });
 
 //  controller + odata
 builder.Services.AddControllers().AddOData(opt =>
 {
-    opt.AddRouteComponents("odata", EdmModelBuilder.GetEdmModel())
+    opt.AddRouteComponents("odata" , EdmModelBuilder.GetEdmModel())
         .Select()
         .Filter()
         .OrderBy()
@@ -57,6 +58,9 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddScalarWithApiVersioning(builder.Configuration);
+
+//  DI
+builder.Services.AddSingleton<LocalJudgeService>();
 
 //  mediatr -> sau này refactor thì sẽ dùng
 //builder.Services.AddMediatR(cfg =>
@@ -91,7 +95,7 @@ builder.Services.Configure<LocalStorageOptions>(
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if ( app.Environment.IsDevelopment() )
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -116,9 +120,9 @@ app.UseHttpLogging();
 app.UseMiddleware<RequestLogScopeMiddleware>();
 
 //  minimal apis
-app.MapGet("/health", () => Results.Ok(new
+app.MapGet("/health" , () => Results.Ok(new
 {
-    status = "Healthy",
+    status = "Healthy" ,
     timestamp = DateTime.UtcNow
 }));
 

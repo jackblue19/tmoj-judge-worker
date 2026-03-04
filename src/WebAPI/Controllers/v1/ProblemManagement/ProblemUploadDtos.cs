@@ -85,3 +85,20 @@ public sealed class AddSingleTestcaseFormDto
     [Required]
     public IFormFile Output { get; set; } = null!;
 }
+
+public sealed class ProblemCreateFormDto
+{
+    public string Slug { get; set; } = null!;
+    public string Title { get; set; } = null!;
+    public string? Difficulty { get; set; }
+    public string? TypeCode { get; set; }
+    public string? VisibilityCode { get; set; }
+    public string? ScoringCode { get; set; }
+    public string? DescriptionMd { get; set; }
+    public decimal? AcceptancePercent { get; set; }
+    public int? DisplayIndex { get; set; }
+    public int? TimeLimitMs { get; set; }
+    public int? MemoryLimitKb { get; set; }
+
+    public IFormFile? DescriptionFile { get; set; }
+}

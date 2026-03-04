@@ -3,6 +3,7 @@ using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 namespace WebAPI.Controllers.v1.ProblemManagement;
 
@@ -144,6 +145,83 @@ public class ProblemsController : ControllerBase
             new { id = problem.Id } ,
             ToDto(problem)
         );
+    }
+
+    [HttpPost("drafts/upload")]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<ProblemResponseDto>> CreateWithMarkdownUpload(
+    [FromForm] ProblemCreateFormDto dto ,
+    CancellationToken ct)
+    {
+        if ( string.IsNullOrWhiteSpace(dto.Slug) )
+            return Problem(statusCode: StatusCodes.Status400BadRequest , title: "Slug is required.");
+
+        if ( string.IsNullOrWhiteSpace(dto.Title) )
+            return Problem(statusCode: StatusCodes.Status400BadRequest , title: "Title is required.");
+
+        string? descriptionMd = dto.DescriptionMd;
+
+        if ( dto.DescriptionFile is not null && dto.DescriptionFile.Length > 0 )
+        {
+            var ext = Path.GetExtension(dto.DescriptionFile.FileName).ToLowerInvariant();
+            if ( ext != ".md" )
+                return Problem(statusCode: StatusCodes.Status400BadRequest , title: "Only .md is supported for descriptionFile.");
+
+            await using var fs = dto.DescriptionFile.OpenReadStream();
+            using var sr = new StreamReader(fs , Encoding.UTF8 , detectEncodingFromByteOrderMarks: true);
+            descriptionMd = await sr.ReadToEndAsync(ct);
+        }
+
+        var existing = await _db.Problems.FirstOrDefaultAsync(x => x.Slug == dto.Slug , ct);
+
+        if ( existing != null )
+        {
+            if ( existing.IsActive )
+                return Conflict("Slug already exists.");
+
+            existing.Title = dto.Title.Trim();
+            existing.Difficulty = dto.Difficulty;
+            existing.TypeCode = dto.TypeCode;
+            existing.VisibilityCode = dto.VisibilityCode;
+            existing.ScoringCode = dto.ScoringCode;
+            existing.DescriptionMd = descriptionMd;
+            existing.AcceptancePercent = dto.AcceptancePercent;
+            existing.DisplayIndex = dto.DisplayIndex;
+            existing.TimeLimitMs = dto.TimeLimitMs;
+            existing.MemoryLimitKb = dto.MemoryLimitKb;
+
+            existing.IsActive = true;
+            existing.StatusCode = "draft";
+            existing.PublishedAt = null;
+            existing.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync(ct);
+            return Ok(ToDto(existing));
+        }
+
+        var problem = new Problem
+        {
+            Id = Guid.NewGuid() ,
+            Slug = dto.Slug ,
+            Title = dto.Title.Trim() ,
+            Difficulty = dto.Difficulty ,
+            TypeCode = dto.TypeCode ,
+            VisibilityCode = dto.VisibilityCode ,
+            ScoringCode = dto.ScoringCode ,
+            DescriptionMd = descriptionMd ,
+            AcceptancePercent = dto.AcceptancePercent ,
+            DisplayIndex = dto.DisplayIndex ,
+            TimeLimitMs = dto.TimeLimitMs ,
+            MemoryLimitKb = dto.MemoryLimitKb ,
+            StatusCode = "draft" ,
+            CreatedAt = DateTime.UtcNow ,
+            IsActive = true
+        };
+
+        _db.Problems.Add(problem);
+        await _db.SaveChangesAsync(ct);
+
+        return CreatedAtAction(nameof(GetById) , new { id = problem.Id } , ToDto(problem));
     }
 
     // PUT api/problems

@@ -197,7 +197,7 @@ public class ProblemUploadsController : ControllerBase
 
         ZipFile.ExtractToDirectory(zipPath , tempDir);
 
-        var pairs = CollectTestcasePairs(tempDir);
+        var pairs = CollectTestcasePairsByFolder(tempDir);
         if ( pairs.Count == 0 )
             return BadRequest("No valid testcase pairs found. Expected *.inp/*.out or *-inp.txt/*-out.txt");
 
@@ -375,6 +375,7 @@ public class ProblemUploadsController : ControllerBase
         });
     }
 
+    //  helpers
     private static string? FindFirstExisting(string dir , params string[] candidates)
     {
         foreach ( var name in candidates )
@@ -451,6 +452,62 @@ public class ProblemUploadsController : ControllerBase
         var result = new Dictionary<int , Pair>();
         foreach ( var idx in inputs.Keys.Intersect(outputs.Keys) )
             result[idx] = new Pair(inputs[idx] , outputs[idx]);
+
+        return result;
+    }
+
+    //private static Dictionary<int , Pair> CollectTestcasePairsByFolder(string extractedRoot)
+    //{
+    //    var result = new Dictionary<int , Pair>();
+
+    //    foreach ( var dir in Directory.EnumerateDirectories(extractedRoot , "*" , SearchOption.AllDirectories) )
+    //    {
+    //        var folderName = Path.GetFileName(dir);
+    //        if ( !int.TryParse(folderName , out var ordinal) ) continue;
+
+    //        var inp = Directory.EnumerateFiles(dir , "*.inp" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+    //                  ?? Directory.EnumerateFiles(dir , "*-inp.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+    //                  ?? Directory.EnumerateFiles(dir , "input.inp" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+    //                  ?? Directory.EnumerateFiles(dir , "input.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault();
+
+    //        var outp = Directory.EnumerateFiles(dir , "*.out" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+    //                   ?? Directory.EnumerateFiles(dir , "*-out.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+    //                   ?? Directory.EnumerateFiles(dir , "output.out" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+    //                   ?? Directory.EnumerateFiles(dir , "output.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault();
+
+    //        if ( inp is null || outp is null ) continue;
+
+    //        result[ordinal] = new Pair(inp , outp);
+    //    }
+
+    //    return result;
+    //}
+
+    private static Dictionary<int , Pair> CollectTestcasePairsByFolder(string extractedRoot)
+    {
+        var result = new Dictionary<int , Pair>();
+
+        foreach ( var dir in Directory.EnumerateDirectories(extractedRoot , "*" , SearchOption.AllDirectories) )
+        {
+            var folderName = Path.GetFileName(dir);
+            if ( !int.TryParse(folderName , out var ordinal) )
+                continue;
+
+            var inp = Directory.EnumerateFiles(dir , "*.inp" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+                      ?? Directory.EnumerateFiles(dir , "*-inp.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+                      ?? Directory.EnumerateFiles(dir , "input.inp" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+                      ?? Directory.EnumerateFiles(dir , "input.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault();
+
+            var outp = Directory.EnumerateFiles(dir , "*.out" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+                       ?? Directory.EnumerateFiles(dir , "*-out.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+                       ?? Directory.EnumerateFiles(dir , "output.out" , SearchOption.TopDirectoryOnly).FirstOrDefault()
+                       ?? Directory.EnumerateFiles(dir , "output.txt" , SearchOption.TopDirectoryOnly).FirstOrDefault();
+
+            if ( inp is null || outp is null )
+                continue;
+
+            result[ordinal] = new Pair(inp , outp);
+        }
 
         return result;
     }

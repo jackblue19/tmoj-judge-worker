@@ -8,7 +8,9 @@ public record CreateAccountRequest(
     string FirstName,
     string LastName,
     string Email,
-    string Password);
+    string Password,
+    string? Avatar
+    );
 
 public record ConfirmEmailRequest(string Email, string Token);
 

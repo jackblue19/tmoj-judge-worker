@@ -6,8 +6,8 @@ using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using WebAPI.Models.Common;
 using WebAPI.Controllers.v1.Auth;
+using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Users;
 
@@ -19,11 +19,13 @@ public class UserController : ControllerBase
 {
     private readonly TmojDbContext _db;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly ILogger<AuthController> _logger;
 
-    public UserController(TmojDbContext db, IPasswordHasher passwordHasher)
+    public UserController(TmojDbContext db, IPasswordHasher passwordHasher, ILogger<AuthController> logger)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _logger = logger;
     }
 
     [Authorize(Roles = "admin")]
@@ -93,9 +95,9 @@ public class UserController : ControllerBase
         try
         {
             var users = await _db.Users
-                .Where(u => u.DeletedAt == null)
-                .OrderByDescending(u => u.CreatedAt)
-                .Select(u => new Auth.UserProfileResponse(
+                .Include(u => u.UserRoleUsers)
+                    .ThenInclude(ur => ur.Role)
+                .Select(u => new UserDto(
                     u.UserId,
                     u.Email,
                     u.FirstName,
@@ -104,57 +106,75 @@ public class UserController : ControllerBase
                     u.Username,
                     u.AvatarUrl,
                     u.EmailVerified,
-                    u.Status,
-                    u.CreatedAt
+                    u.UserRoleUsers
+                        .Select(ur => ur.Role.RoleCode)
+                        .ToList()
                 ))
                 .ToListAsync(ct);
 
-            return Ok(ApiResponse<List<Auth.UserProfileResponse>>.Ok(users , "Users list fetched successfully"));
+            return Ok(ApiResponse<List<UserDto>>.Ok(
+                users,
+                "Users list fetched successfully"
+            ));
         }
-        catch ( Exception )
+        catch (Exception)
         {
-            return StatusCode(500 , new { Message = "An error occurred while fetching the users list. Please try again later." });
-        }
-    }
-
-    [HttpGet("me")]
-    public async Task<IActionResult> GetMe(CancellationToken ct)
-    {
-        try
-        {
-            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value 
-                        ?? User.FindFirst("sub")?.Value;
-            if ( string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr , out var userId) )
+            return StatusCode(500, new
             {
-                return Unauthorized(new { Message = "Unauthorized access." });
-            }
-
-            var user = await _db.Users
-                .Where(u => u.UserId == userId && u.DeletedAt == null)
-                .Select(u => new Auth.UserProfileResponse(
-                    u.UserId,
-                    u.Email,
-                    u.FirstName,
-                    u.LastName,
-                    u.DisplayName,
-                    u.Username,
-                    u.AvatarUrl,
-                    u.EmailVerified,
-                    u.Status,
-                    u.CreatedAt
-                ))
-                .FirstOrDefaultAsync(ct);
-
-            if ( user == null ) return NotFound(new { Message = "User not found." });
-
-            return Ok(ApiResponse<Auth.UserProfileResponse>.Ok(user , "Profile fetched successfully"));
-        }
-        catch ( Exception )
-        {
-            return StatusCode(500 , new { Message = "An error occurred while fetching your profile. Please try again later." });
+                Message = "An error occurred while fetching the users list. Please try again later."
+            });
         }
     }
 
+    [Authorize]
+[HttpGet("me")]
+public async Task<IActionResult> GetMe(CancellationToken ct)
+{
+    try
+    {
+        var userIdStr =
+            User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("sub")?.Value;
+
+        if (string.IsNullOrEmpty(userIdStr) ||
+            !Guid.TryParse(userIdStr, out var userId))
+        {
+            return Unauthorized(new { Message = "Unauthorized access." });
+        }
+
+        var user = await _db.Users
+            .Where(u => u.UserId == userId && u.DeletedAt == null)
+            .Select(u => new UserDto(
+                u.UserId,
+                u.Email,
+                u.FirstName,
+                u.LastName,
+                u.DisplayName,
+                u.Username,
+                u.AvatarUrl,
+                u.EmailVerified,
+                u.UserRoleUsers
+                    .Select(ur => ur.Role.RoleCode)
+                    .ToList()
+            ))
+            .FirstOrDefaultAsync(ct);
+
+        if (user == null)
+            return NotFound(new { Message = "User not found." });
+
+        return Ok(ApiResponse<UserDto>.Ok(
+            user,
+            "Profile fetched successfully"
+        ));
+    }
+    catch (Exception)
+    {
+        return StatusCode(500, new
+        {
+            Message = "An error occurred while fetching your profile. Please try again later."
+        });
+    }
+}
     [HttpGet("{id}")]
     public async Task<IActionResult> GetProfile(Guid id, CancellationToken ct)
     {

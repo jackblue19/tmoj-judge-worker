@@ -11,6 +11,7 @@ public record UserDto(
     string? DisplayName,
     string? Username,
     string? AvatarUrl,
+    bool emailVerified,
     List<string> Roles);
 
 public record UserProfileResponse(

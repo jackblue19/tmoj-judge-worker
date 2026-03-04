@@ -3,7 +3,7 @@ using Infrastructure.Persistence.Common;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using WebAPI.Controllers.v1.ProblemDiscussionAndEditorial.WebAPI.Controllers.v1.ProblemDiscussionAndEditorial;
+using WebAPI.Controllers.v1.ProblemDiscussionAndEditorial;
 
 namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
 {
@@ -19,25 +19,28 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
         }
 
         // =====================================================
-        // ✅ CURSOR PAGINATION (LEETCODE STYLE)
+        // ✅ STABLE CURSOR PAGINATION (LEETCODE STYLE)
         // =====================================================
-
         [HttpGet]
         public async Task<IActionResult> GetPaged(
-            DateTime? cursor,
+            DateTime? cursorCreatedAt,
+            Guid? cursorId,
             int pageSize = 10)
         {
             var query = _db.ProblemDiscussions
                 .AsNoTracking()
                 .OrderByDescending(x => x.IsPinned)
                 .ThenByDescending(x => x.CreatedAt)
+                .ThenByDescending(x => x.Id)
                 .AsQueryable();
 
-            // cursor load tiếp
-            if (cursor.HasValue)
+            // ✅ composite cursor
+            if (cursorCreatedAt.HasValue && cursorId.HasValue)
             {
-                query = query
-                    .Where(x => x.CreatedAt < cursor.Value);
+                query = query.Where(x =>
+                    x.CreatedAt < cursorCreatedAt ||
+                    (x.CreatedAt == cursorCreatedAt &&
+                     x.Id.CompareTo(cursorId.Value) < 0));
             }
 
             var discussions = await query
@@ -60,23 +63,20 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
             if (hasMore)
                 discussions.RemoveAt(pageSize);
 
-            var nextCursor =
-                discussions.LastOrDefault()?.CreatedAt;
+            var last = discussions.LastOrDefault();
 
-            var result = new CursorPaginationDto<DiscussionResponseDto>
+            return Ok(new CursorPaginationDto<DiscussionResponseDto>
             {
                 Items = discussions,
-                NextCursor = nextCursor,
+                NextCursorCreatedAt = last?.CreatedAt,
+                NextCursorId = last?.Id,
                 HasMore = hasMore
-            };
-
-            return Ok(result);
+            });
         }
 
         // =====================================================
         // CREATE DISCUSSION
         // =====================================================
-
         [HttpPost]
         public async Task<IActionResult> Create(CreateDiscussionDto dto)
         {
@@ -108,7 +108,6 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
         // =====================================================
         // CREATE COMMENT (LEVEL = 1)
         // =====================================================
-
         [HttpPost("comment")]
         public async Task<IActionResult> CreateComment(CreateCommentDto dto)
         {
@@ -116,6 +115,7 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
                 .AnyAsync(x => x.Id == dto.DiscussionId))
                 return BadRequest("Discussion not found");
 
+            // limit reply depth
             if (dto.ParentId != null)
             {
                 var parent = await _db.DiscussionComments
@@ -149,7 +149,6 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
         // =====================================================
         // DISCUSSION DETAIL + COMMENT TREE
         // =====================================================
-
         [HttpGet("{discussionId}")]
         public async Task<IActionResult> GetDiscussionDetail(Guid discussionId)
         {
@@ -200,24 +199,18 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
         }
 
         // =====================================================
-        // DELETE COMMENT (TREE DELETE)
+        // ✅ DELETE COMMENT (DB CASCADE SAFE)
         // =====================================================
-
         [HttpDelete("comment/{id}")]
         public async Task<IActionResult> DeleteComment(Guid id)
         {
-            var parent = await _db.DiscussionComments
-                .FirstOrDefaultAsync(x => x.Id == id);
+            var comment =
+                await _db.DiscussionComments.FindAsync(id);
 
-            if (parent == null)
+            if (comment == null)
                 return NotFound();
 
-            var replies = await _db.DiscussionComments
-                .Where(x => x.ParentId == id)
-                .ToListAsync();
-
-            _db.DiscussionComments.RemoveRange(replies);
-            _db.DiscussionComments.Remove(parent);
+            _db.DiscussionComments.Remove(comment);
 
             await _db.SaveChangesAsync();
 
@@ -227,7 +220,6 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
         // =====================================================
         // EDITORIAL CRUD
         // =====================================================
-
         [HttpGet("editorial")]
         public async Task<IActionResult> GetEditorials()
         {
@@ -256,7 +248,8 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
         }
 
         [HttpPut("editorial/{id}")]
-        public async Task<IActionResult> UpdateEditorial(Guid id,
+        public async Task<IActionResult> UpdateEditorial(
+            Guid id,
             UpdateEditorialDto dto)
         {
             var entity =

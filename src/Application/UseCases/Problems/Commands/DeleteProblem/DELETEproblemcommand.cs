@@ -4,10 +4,9 @@
 //using System.Text;
 //using System.Threading.Tasks;
 
-//namespace Application.UseCases.Problems.Queries.GetProblemById
+//namespace Application.UseCases.Problems.Commands.DeleteProblem
 //{
-//    internal class GetProblemByIdQuery
+//    internal class DELETEproblemcommand
 //    {
-//          đây chính là DTO
 //    }
 //}

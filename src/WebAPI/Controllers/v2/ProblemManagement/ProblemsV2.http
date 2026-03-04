@@ -1,0 +1,71 @@
+@host = https://localhost:7210
+@json = application/json
+
+### Get all problems (default page=1, pageSize=20)
+GET {{host}}/api/v2/problems
+Accept: {{json}}
+
+### Page 1 - 10 items
+GET {{host}}/api/v2/problems?page=1&pageSize=10
+Accept: {{json}}
+
+### Page 2 - 10 items
+GET {{host}}/api/v2/problems?page=2&pageSize=10
+Accept: {{json}}
+
+### Large page size
+GET {{host}}/api/v2/problems?page=1&pageSize=50
+Accept: {{json}}
+
+### Difficulty = easy
+GET {{host}}/api/v2/problems?difficulty=easy
+Accept: {{json}}
+
+### Difficulty = medium
+GET {{host}}/api/v2/problems?difficulty=medium
+Accept: {{json}}
+
+### Difficulty = hard
+GET {{host}}/api/v2/problems?difficulty=hard
+Accept: {{json}}
+
+### Published problems
+GET {{host}}/api/v2/problems?status=published
+Accept: {{json}}
+
+### Draft problems
+GET {{host}}/api/v2/problems?status=draft
+Accept: {{json}}
+
+### Archived problems
+GET {{host}}/api/v2/problems?status=archived
+Accept: {{json}}
+
+### Published + Easy + Page 1
+GET {{host}}/api/v2/problems?status=published&difficulty=easy&page=1&pageSize=20
+Accept: {{json}}
+
+### Published + Medium + Page 2
+GET {{host}}/api/v2/problems?status=published&difficulty=medium&page=2&pageSize=10
+Accept: {{json}}
+
+### Invalid status (should return empty list)
+GET {{host}}/api/v2/problems?status=invalid_status
+Accept: {{json}}
+
+### Page = 0 (handler auto fix to 1)
+GET {{host}}/api/v2/problems?page=0&pageSize=10
+Accept: {{json}}
+
+### Negative page size (handler auto fallback)
+GET {{host}}/api/v2/problems?page=1&pageSize=-5
+Accept: {{json}}
+
+### Cache test 1
+GET {{host}}/api/v2/problems?status=published&page=1&pageSize=10
+Accept: {{json}}
+
+### Cache test 2 (should be cached)
+GET {{host}}/api/v2/problems?status=published&page=1&pageSize=10
+Accept: {{json}}
+

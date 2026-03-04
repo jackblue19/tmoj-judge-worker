@@ -1,4 +1,5 @@
 ﻿using Domain.Abstractions;
+using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -13,9 +14,9 @@ namespace Infrastructure.Persistence.Common;
 /// </summary>
 public sealed class EfUnitOfWork : IUnitOfWork
 {
-    private readonly DbContext _db;
+    private readonly TmojDbContext _db;
 
-    public EfUnitOfWork(DbContext db)
+    public EfUnitOfWork(TmojDbContext db)
         => _db = db ?? throw new ArgumentNullException(nameof(db));
 
     public Task<int> SaveChangesAsync(CancellationToken ct = default)

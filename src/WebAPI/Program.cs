@@ -1,5 +1,9 @@
-﻿using Infrastructure;
+﻿using Application;
+using Application.UseCases.Problems.Queries.GetAllProblems;
+using Domain.Abstractions;
+using Infrastructure;
 using Infrastructure.Configurations.Auth;
+using Infrastructure.Persistence.Common;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
@@ -35,6 +39,14 @@ builder.Services.AddControllers().AddOData(opt =>
         .SetMaxTop(100);
 });
 
+builder.Services.AddScoped(
+    typeof(IReadRepository<,>) ,
+    typeof(EfReadRepository<,>));
+builder.Services.AddScoped(
+    typeof(IWriteRepository<,>) ,
+    typeof(EfWriteRepository<,>));
+builder.Services.AddScoped<IUnitOfWork , EfUnitOfWork>();
+
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);
 builder.Services.Configure<GoogleOptions>(builder.Configuration.GetSection("Authentication:Google"));
@@ -65,6 +77,12 @@ builder.Services.AddSingleton<LocalJudgeService>();
 //  mediatr -> sau này refactor thì sẽ dùng
 //builder.Services.AddMediatR(cfg =>
 //    cfg.RegisterServicesFromAssembly(typeof(ApplicationAssemblyMarker).Assembly));
+//builder.Services.AddMediatR(cfg =>
+//{
+//    cfg.RegisterServicesFromAssembly(
+//        typeof(GetProblemsQuery).Assembly);
+//});
+builder.Services.AddApplication();
 
 builder.Services.AddHttpLogging(o =>
 {
@@ -88,6 +106,16 @@ builder.Services.AddCors(options =>
 
 builder.Services.Configure<LocalStorageOptions>(
     builder.Configuration.GetSection("LocalStorage"));
+
+builder.Services.AddOutputCache(options =>
+{
+    options.AddPolicy("ProblemsList" , policy =>
+    {
+        policy
+            .Expire(TimeSpan.FromSeconds(30))
+            .Tag("problems");
+    });
+});
 
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(ValidationBehavior<,>));
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(LoggingBehavior<,>));
@@ -113,6 +141,8 @@ app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseOutputCache();
 
 app.MapControllers();
 app.UseStatusCodePages();

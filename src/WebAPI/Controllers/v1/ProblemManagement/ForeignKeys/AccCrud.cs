@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace WebAPI.Controllers.v1.ProblemManagement.ForeignKeys;
 
+//[ApiExplorerSettings(IgnoreApi = true)]
 [Route("api/test")]
 [ApiController]
 public class AccCrud : ControllerBase
@@ -57,6 +58,7 @@ public class AccCrud : ControllerBase
         return Ok(users);
     }
 
+    //[ApiExplorerSettings(IgnoreApi = true)]
     // GET: api/test/users/{id}
     [HttpGet("users/{id:guid}")]
     public async Task<ActionResult<UserResponseDto>> GetById(

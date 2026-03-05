@@ -147,6 +147,7 @@ public class ProblemsController : ControllerBase
         );
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("drafts/upload")]
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<ProblemResponseDto>> CreateWithMarkdownUpload(
@@ -224,6 +225,7 @@ public class ProblemsController : ControllerBase
         return CreatedAtAction(nameof(GetById) , new { id = problem.Id } , ToDto(problem));
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     // PUT api/problems
     [HttpPut]
     public async Task<ActionResult> Update([FromBody] ProblemUpdateDto dto , CancellationToken ct)
@@ -270,6 +272,7 @@ public class ProblemsController : ControllerBase
         return Ok(problem.Id);
     }
 
+
     // DELETE api/problems/{id}     (del-ver1)      -> được thì cái del-ver2 thành soft-del còn del-ver1 này thì cho thành hard-del
     [HttpDelete("{id:guid}/hard")]
     public async Task<IActionResult> HardDelete(Guid id , CancellationToken ct)
@@ -290,6 +293,7 @@ public class ProblemsController : ControllerBase
             return Conflict("Cannot hard delete: problem is referenced by other records (FK). Use archive or delete dependencies first.");
         }
     }
+
     // POST api/v{version}/problems/{id}/archive    (del-ver 2)
     [HttpPost("{id:guid}/archive")]
     public async Task<IActionResult> Archive(
@@ -313,6 +317,7 @@ public class ProblemsController : ControllerBase
         return NoContent();
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> SoftDelete(Guid id , CancellationToken ct)
     {

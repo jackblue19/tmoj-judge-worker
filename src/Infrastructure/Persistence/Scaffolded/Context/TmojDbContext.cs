@@ -404,6 +404,7 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
 
             entity.HasOne(d => d.Semester).WithMany(p => p.Classes)
                 .HasForeignKey(d => d.SemesterId)

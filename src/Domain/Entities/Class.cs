@@ -29,6 +29,8 @@ public partial class Class
 
     public DateTime UpdatedAt { get; set; }
 
+    public string? InviteCode { get; set; }
+
     public virtual ICollection<ClassMember> ClassMembers { get; set; } = new List<ClassMember>();
 
     public virtual ICollection<ClassSlot> ClassSlots { get; set; } = new List<ClassSlot>();

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Infrastructure.Persistence.Scaffolded.Entities;
+Domain.Entities
 
 public partial class CoinConversion
 {

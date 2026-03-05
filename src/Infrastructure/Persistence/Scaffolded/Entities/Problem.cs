@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Infrastructure.Persistence.Scaffolded.Entities;
+Domain.Entities
 
 public partial class Problem
 {
@@ -52,6 +52,8 @@ public partial class Problem
     public virtual ICollection<Checker> Checkers { get; set; } = new List<Checker>();
 
     public virtual ICollection<ClassSlotProblem> ClassSlotProblems { get; set; } = new List<ClassSlotProblem>();
+
+    public virtual ICollection<CollectionItem> CollectionItems { get; set; } = new List<CollectionItem>();
 
     public virtual ICollection<ContestProblem> ContestProblems { get; set; } = new List<ContestProblem>();
 

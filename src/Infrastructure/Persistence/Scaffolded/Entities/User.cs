@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Infrastructure.Persistence.Scaffolded.Entities;
+Domain.Entities
 
 public partial class User
 {
@@ -52,6 +52,10 @@ public partial class User
     public virtual ICollection<ClassSlot> ClassSlotUpdatedByNavigations { get; set; } = new List<ClassSlot>();
 
     public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
+
+    public virtual Collection? Collection { get; set; }
+
+    public virtual ICollection<CommentVote> CommentVotes { get; set; } = new List<CommentVote>();
 
     public virtual ICollection<ContentReport> ContentReports { get; set; } = new List<ContentReport>();
 

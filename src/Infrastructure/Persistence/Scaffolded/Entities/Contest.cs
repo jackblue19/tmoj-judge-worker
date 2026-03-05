@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Infrastructure.Persistence.Scaffolded.Entities;
+Domain.Entities
 
 public partial class Contest
 {
@@ -48,6 +48,8 @@ public partial class Contest
     public string? InviteCode { get; set; }
 
     public virtual ICollection<ClassSlot> ClassSlots { get; set; } = new List<ClassSlot>();
+
+    public virtual ICollection<CollectionItem> CollectionItems { get; set; } = new List<CollectionItem>();
 
     public virtual ICollection<ContestAnalytic> ContestAnalytics { get; set; } = new List<ContestAnalytic>();
 

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Infrastructure.Persistence.Scaffolded.Entities;
+Domain.Entities
 
 public partial class DiscussionComment
 {
@@ -18,6 +18,12 @@ public partial class DiscussionComment
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }
+
+    public int VoteCount { get; set; }
+
+    public bool? IsHidden { get; set; }
+
+    public virtual ICollection<CommentVote> CommentVotes { get; set; } = new List<CommentVote>();
 
     public virtual ProblemDiscussion Discussion { get; set; } = null!;
 

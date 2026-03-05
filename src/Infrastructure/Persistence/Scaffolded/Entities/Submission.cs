@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 
-namespace Infrastructure.Persistence.Scaffolded.Entities;
+Domain.Entities
 
 public partial class Submission
 {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Infrastructure.Persistence.Scaffolded.Entities;
+Domain.Entities
 
 public partial class Class
 {
@@ -28,6 +28,10 @@ public partial class Class
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
+
+    public string? InviteCode { get; set; }
+
+    public DateTime? InviteCodeExpiresAt { get; set; }
 
     public virtual ICollection<ClassMember> ClassMembers { get; set; } = new List<ClassMember>();
 

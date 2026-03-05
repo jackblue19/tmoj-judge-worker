@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-Domain.Entities
+namespace Domain.Entities;
 
 public partial class CollectionItem
 {

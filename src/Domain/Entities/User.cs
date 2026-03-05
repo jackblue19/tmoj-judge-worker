@@ -53,6 +53,10 @@ public partial class User
 
     public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
 
+    public virtual Collection? Collection { get; set; }
+
+    public virtual ICollection<CommentVote> CommentVotes { get; set; } = new List<CommentVote>();
+
     public virtual ICollection<ContentReport> ContentReports { get; set; } = new List<ContentReport>();
 
     public virtual ICollection<Contest> ContestCreatedByNavigations { get; set; } = new List<Contest>();

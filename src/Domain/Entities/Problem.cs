@@ -53,6 +53,8 @@ public partial class Problem
 
     public virtual ICollection<ClassSlotProblem> ClassSlotProblems { get; set; } = new List<ClassSlotProblem>();
 
+    public virtual ICollection<CollectionItem> CollectionItems { get; set; } = new List<CollectionItem>();
+
     public virtual ICollection<ContestProblem> ContestProblems { get; set; } = new List<ContestProblem>();
 
     public virtual ICollection<ContestScoreboard> ContestScoreboards { get; set; } = new List<ContestScoreboard>();

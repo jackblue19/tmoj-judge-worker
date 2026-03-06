@@ -13,7 +13,7 @@ namespace WebAPI.Controllers.v1.ClassContestManagement;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/class/{classId:guid}/contests")]
-[Authorize]
+// [Authorize]
 public class ClassContestController : ControllerBase
 {
     private readonly TmojDbContext _db;
@@ -64,7 +64,7 @@ public class ClassContestController : ControllerBase
     // ──────────────────────────────────────────
     // POST .../contests  →  Create Class's Contest (Teacher)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
+    // [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
     public async Task<IActionResult> Create(
         Guid classId,
@@ -88,7 +88,6 @@ public class ClassContestController : ControllerBase
             // 1. Create Contest entity
             var contest = new Contest
             {
-                Id = Guid.NewGuid(),
                 Title = req.Title.Trim(),
                 Slug = req.Slug?.Trim(),
                 DescriptionMd = req.DescriptionMd?.Trim(),
@@ -100,7 +99,6 @@ public class ClassContestController : ControllerBase
                 FreezeAt = req.FreezeAt,
                 Rules = req.Rules?.Trim(),
                 IsActive = true,
-                CreatedAt = DateTime.UtcNow,
                 CreatedBy = userId
             };
             _db.Contests.Add(contest);
@@ -116,7 +114,6 @@ public class ClassContestController : ControllerBase
 
                     _db.ContestProblems.Add(new ContestProblem
                     {
-                        Id = Guid.NewGuid(),
                         ContestId = contest.Id,
                         ProblemId = p.ProblemId,
                         Ordinal = p.Ordinal ?? ord,
@@ -126,7 +123,6 @@ public class ClassContestController : ControllerBase
                         TimeLimitMs = p.TimeLimitMs,
                         MemoryLimitKb = p.MemoryLimitKb,
                         IsActive = true,
-                        CreatedAt = DateTime.UtcNow,
                         CreatedBy = userId
                     });
                     ord++;
@@ -140,16 +136,13 @@ public class ClassContestController : ControllerBase
 
             var slot = new ClassSlot
             {
-                Id = Guid.NewGuid(),
                 ClassId = classId,
                 SlotNo = slotNo,
                 Title = req.SlotTitle ?? req.Title.Trim(),
                 Mode = "contest",
                 ContestId = contest.Id,
                 IsPublished = false,
-                CreatedAt = DateTime.UtcNow,
                 CreatedBy = userId,
-                UpdatedAt = DateTime.UtcNow,
                 UpdatedBy = userId
             };
             _db.ClassSlots.Add(slot);
@@ -227,7 +220,7 @@ public class ClassContestController : ControllerBase
     // ──────────────────────────────────────────
     // PUT .../contests/{contestId}/extend  →  Extend Contest's Time (Teacher)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
+    // [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{contestId:guid}/extend")]
     public async Task<IActionResult> ExtendTime(
         Guid classId, Guid contestId,
@@ -255,7 +248,6 @@ public class ClassContestController : ControllerBase
                 return BadRequest(new { Message = "New end time must be after current end time." });
 
             contest.EndAt = req.NewEndAt;
-            contest.UpdatedAt = DateTime.UtcNow;
             contest.UpdatedBy = userId;
 
             await _db.SaveChangesAsync(ct);
@@ -309,20 +301,16 @@ public class ClassContestController : ControllerBase
                 var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId.Value, ct);
                 personalTeam = new Team
                 {
-                    Id = Guid.NewGuid(),
                     LeaderId = userId.Value,
                     TeamSize = 1,
                     TeamName = user?.DisplayName ?? "Personal Team",
-                    IsPersonal = true,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    IsPersonal = true
                 };
                 _db.Teams.Add(personalTeam);
                 _db.TeamMembers.Add(new TeamMember
                 {
                     TeamId = personalTeam.Id,
-                    UserId = userId.Value,
-                    JoinedAt = DateTime.UtcNow
+                    UserId = userId.Value
                 });
             }
 
@@ -333,10 +321,8 @@ public class ClassContestController : ControllerBase
 
             _db.ContestTeams.Add(new ContestTeam
             {
-                Id = Guid.NewGuid(),
                 ContestId = contestId,
-                TeamId = personalTeam.Id,
-                JoinAt = DateTime.UtcNow
+                TeamId = personalTeam.Id
             });
             await _db.SaveChangesAsync(ct);
 

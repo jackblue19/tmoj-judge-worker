@@ -11,6 +11,7 @@ public record ClassResponse(
     DateOnly? EndDate,
     bool IsActive,
     string? InviteCode,
+    DateTime? InviteCodeExpiresAt,
     DateTime CreatedAt,
     DateTime UpdatedAt,
     // nested info
@@ -42,7 +43,8 @@ public record ClassListResponse(
 /// <summary>Returned after generating an invite code.</summary>
 public record InviteCodeResponse(
     Guid ClassId,
-    string InviteCode);
+    string InviteCode,
+    DateTime ExpiresAt);
 
 /// <summary>Student information within a class (Teacher view).</summary>
 public record ClassMemberResponse(

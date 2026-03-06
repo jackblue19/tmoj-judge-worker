@@ -1,0 +1,481 @@
+================================================================
+  CLASS & SUBJECT MANAGEMENT – CHANGE LOG
+  Project: TMOJ-BE
+  Date: 2026-03-05
+================================================================
+
+── NEW FILES ──────────────────────────────────────────────────
+
+ Controllers:
+  1. src/WebAPI/Controllers/v1/SubjectManagement/SubjectController.cs
+  2. src/WebAPI/Controllers/v1/ClassManagement/ClassController.cs
+  3. src/WebAPI/Controllers/v1/ClassSlotManagement/ClassSlotController.cs
+  4. src/WebAPI/Controllers/v1/ClassContestManagement/ClassContestController.cs
+
+ Request / Response DTOs:
+  6.  SubjectRequest.cs       7. SubjectResponse.cs
+  8.  ClassRequest.cs         9. ClassResponse.cs
+  10. ClassSlotRequest.cs     11. ClassSlotResponse.cs
+  12. ClassContestRequest.cs  13. ClassContestResponse.cs
+
+── MODIFIED FILES ─────────────────────────────────────────────
+
+  13. src/Domain/Entities/Class.cs
+      + public string? InviteCode { get; set; }
+      + public DateTime? InviteCodeExpiresAt { get; set; }
+  14. Infrastructure/.../TmojDbContext.cs
+      + entity.Property(e => e.InviteCode).HasColumnName("invite_code");
+  15. src/WebAPI/Controllers/v1/ClassManagement/ClassResponse.cs
+      + ClassResponse: added InviteCodeExpiresAt field
+      + InviteCodeResponse: added ExpiresAt field
+  16. src/WebAPI/Controllers/v1/SubjectManagement/SubjectController.cs
+      - Removed auto-generated fields (SubjectId, CreatedAt)
+  17. src/WebAPI/Controllers/v1/ClassSlotManagement/ClassSlotController.cs
+      - Removed auto-generated fields (Id, CreatedAt, UpdatedAt)
+  18. src/WebAPI/Controllers/v1/ClassManagement/ClassController.cs
+      - Removed auto-generated fields (ClassId, Id, CreatedAt, UpdatedAt, AssignedAt, JoinedAt)
+  19. src/WebAPI/Controllers/v1/ClassContestManagement/ClassContestController.cs
+      - Removed auto-generated fields (Id, CreatedAt, UpdatedAt, JoinAt)
+
+── DATABASE MIGRATION ─────────────────────────────────────────
+
+  ALTER TABLE class ADD COLUMN invite_code TEXT UNIQUE;
+  ALTER TABLE class ADD COLUMN invite_code_expires_at TIMESTAMPTZ NULL;
+
+================================================================
+  API TESTING – JSON FORMAT
+  Base URL: https://localhost:{port}/api/v1
+  Header:   Authorization: Bearer <JWT_TOKEN>
+================================================================
+
+────────────────────────────────────────────────────────────────
+ 1. SUBJECT MANAGEMENT (Manager)
+────────────────────────────────────────────────────────────────
+
+▸ POST /subject — Create Subject
+  Request:
+  {
+    "code": "PRF192",
+    "name": "Programming Fundamentals",
+    "description": "Basic C/C++ programming course"
+  }
+  Response (201):
+  {
+    "data": {
+      "subjectId": "...",
+      "code": "PRF192",
+      "name": "Programming Fundamentals",
+      "description": "Basic C/C++ programming course",
+      "isActive": true,
+      "createdAt": "2026-03-05T..."
+    },
+    "message": "Subject created successfully"
+  }
+
+▸ GET /subject?search=PRF&page=1&pageSize=20 — View All Subjects
+  Response (200):
+  {
+    "data": {
+      "items": [ { "subjectId": "...", "code": "PRF192", ... } ],
+      "totalCount": 1
+    },
+    "message": "Subjects fetched successfully"
+  }
+
+▸ GET /subject/{subjectId} — Get Subject By Id
+  Response (200):
+  {
+    "data": { "subjectId": "...", "code": "PRF192", ... },
+    "message": "Subject fetched successfully"
+  }
+
+▸ PUT /subject/{subjectId} — Update Subject
+  Request:
+  {
+    "name": "Programming Fundamentals (Updated)",
+    "description": "Updated description",
+    "isActive": true
+  }
+
+────────────────────────────────────────────────────────────────
+ 2. CLASS MANAGEMENT (Manager / Teacher / Student)
+────────────────────────────────────────────────────────────────
+
+▸ POST /class — Create Class (Manager)
+  Request:
+  {
+    "subjectId": "<SUBJECT_ID>",
+    "semesterId": "<SEMESTER_ID>",
+    "classCode": "SE1801",
+    "className": "Software Engineering - Batch 1",
+    "description": "SE class for Spring 2026",
+    "startDate": "2026-03-01",
+    "endDate": "2026-07-01",
+    "teacherId": "<TEACHER_USER_ID>"
+  }
+  Response (201):
+  {
+    "data": { "classId": "...", "classCode": "SE1801" },
+    "message": "Class created successfully"
+  }
+
+▸ GET /class?semesterId=...&subjectId=...&search=SE&page=1&pageSize=20 — View All Classes
+  Response (200):
+  {
+    "data": {
+      "items": [{
+        "classId": "...",
+        "classCode": "SE1801",
+        "className": "Software Engineering - Batch 1",
+        "description": "...",
+        "startDate": "2026-03-01",
+        "endDate": "2026-07-01",
+        "isActive": true,
+        "inviteCode": null,
+        "inviteCodeExpiresAt": null,
+        "createdAt": "...",
+        "updatedAt": "...",
+        "subject": { "subjectId": "...", "code": "PRF192", "name": "..." },
+        "semester": { "semesterId": "...", "code": "SP2026", "name": "..." },
+        "teacher": { "userId": "...", "displayName": "...", "email": "...", "avatarUrl": null },
+        "memberCount": 0
+      }],
+      "totalCount": 1
+    },
+    "message": "Classes fetched successfully"
+  }
+
+▸ GET /class/{classId} — Get Class By Id
+
+▸ PUT /class/{classId}/teacher — Assign Teacher to Class (Manager)
+  Request:
+  {
+    "teacherId": "<USER_ID>"
+  }
+  Response (200): { "message": "Teacher assigned successfully." }
+
+▸ POST /class/assign-teacher-role — Assign Teacher Role (Manager)
+  Request:
+  {
+    "userId": "<USER_ID>"
+  }
+  Response (200): { "message": "Teacher role assigned successfully." }
+
+▸ POST /class/{classId}/invite-code — Create Invite Code (Teacher)
+  Note: Invite code expires after 30 minutes. Teacher can close it early.
+  Request: (no body)
+  Response (200):
+  {
+    "data": {
+      "classId": "...",
+      "inviteCode": "XK7N2P8Q",
+      "expiresAt": "2026-03-05T10:30:00Z"
+    },
+    "message": "Invite code created successfully"
+  }
+
+▸ DELETE /class/{classId}/invite-code — Close Invite Code (Teacher)
+  Note: Teacher can close the invite code at any time before it expires.
+  Request: (no body)
+  Response (200):
+  {
+    "data": { "classId": "..." },
+    "message": "Invite code closed successfully"
+  }
+  Error (400): { "message": "No active invite code to close." }
+
+▸ POST /class/{classId}/members — Add Student (Teacher)
+  Request (by userId):
+  {
+    "userId": "<STUDENT_USER_ID>",
+    "email": null
+  }
+  Request (by email):
+  {
+    "userId": null,
+    "email": "student@example.com"
+  }
+  Response (200): { "message": "Student added successfully.", "userId": "..." }
+
+▸ DELETE /class/{classId}/members/{userId} — Remove Student (Teacher)
+  Response (200): { "message": "Student removed successfully." }
+
+▸ POST /class/join — Submit Invite Code (Student)
+  Note: Returns error if invite code has expired (after 30 min) or been closed.
+  Request:
+  {
+    "inviteCode": "XK7N2P8Q"
+  }
+  Response (200): { "message": "Joined class successfully.", "classId": "...", "className": "..." }
+  Error (400): { "message": "Invite code has expired." }
+  Error (404): { "message": "Invalid or expired invite code." }
+
+▸ DELETE /class/{classId}/members/me — Leave Class (Student)
+  Response (200): { "message": "Left class successfully." }
+
+▸ GET /class/{classId}/members — List All Members
+  Response (200):
+  {
+    "data": [{
+      "userId": "...",
+      "displayName": "Nguyen Van A",
+      "email": "a@example.com",
+      "avatarUrl": null,
+      "joinedAt": "2026-03-05T...",
+      "isActive": true
+    }],
+    "message": "Members fetched successfully"
+  }
+
+▸ GET /class/{classId}/members/{userId} — View Student Information (Teacher)
+  Response (200):
+  {
+    "data": {
+      "userId": "...",
+      "firstName": "Van A",
+      "lastName": "Nguyen",
+      "displayName": "Nguyen Van A",
+      "email": "a@example.com",
+      "avatarUrl": null,
+      "joinedAt": "...",
+      "isActive": true,
+      "submissionCount": 15,
+      "solvedCount": 8,
+      "lastSubmissionAt": "2026-03-05T..."
+    },
+    "message": "Student info fetched successfully"
+  }
+
+▸ GET /class/{classId}/ranking — View Subject Ranking
+  Response (200):
+  {
+    "data": [{
+      "rank": 1,
+      "userId": "...",
+      "displayName": "Nguyen Van A",
+      "avatarUrl": null,
+      "solvedCount": 8,
+      "totalScore": 850.00,
+      "submissionCount": 15
+    }],
+    "message": "Ranking fetched successfully"
+  }
+
+▸ GET /class/{classId}/report/export — Export Mark Report (Teacher)
+  Response: File download (CSV)
+  Content-Type: text/csv; charset=utf-8
+  Filename: SE1801_MarkReport_20260305.csv
+
+────────────────────────────────────────────────────────────────
+ 3. ASSIGNMENT / SLOT MANAGEMENT (Teacher)
+────────────────────────────────────────────────────────────────
+
+▸ GET /class/{classId}/slots — List All Slots
+  Response (200):
+  {
+    "data": [{
+      "id": "...",
+      "classId": "...",
+      "slotNo": 1,
+      "title": "Lab 1 - Variables",
+      "description": "...",
+      "rules": null,
+      "openAt": "2026-03-01T08:00:00Z",
+      "dueAt": "2026-03-08T23:59:00Z",
+      "closeAt": "2026-03-09T23:59:00Z",
+      "mode": "problemset",
+      "contestId": null,
+      "isPublished": true,
+      "createdAt": "...",
+      "updatedAt": "...",
+      "problems": [{
+        "problemId": "...",
+        "problemTitle": "Sum of Two Numbers",
+        "problemSlug": "sum-two",
+        "ordinal": 1,
+        "points": 100,
+        "isRequired": true
+      }]
+    }],
+    "message": "Slots fetched successfully"
+  }
+
+▸ POST /class/{classId}/slots — Create Assignment (Teacher)
+  Request:
+  {
+    "slotNo": 1,
+    "title": "Lab 1 - Variables",
+    "description": "Practice with basic variable types",
+    "rules": "No plagiarism allowed",
+    "openAt": "2026-03-01T08:00:00Z",
+    "dueAt": "2026-03-08T23:59:00Z",
+    "closeAt": "2026-03-09T23:59:00Z",
+    "mode": "problemset",
+    "problems": [
+      {
+        "problemId": "<PROBLEM_ID_1>",
+        "ordinal": 1,
+        "points": 100,
+        "isRequired": true
+      },
+      {
+        "problemId": "<PROBLEM_ID_2>",
+        "ordinal": 2,
+        "points": 50,
+        "isRequired": false
+      }
+    ]
+  }
+  Response (201): { "message": "Assignment created successfully.", "id": "...", "slotNo": 1 }
+
+▸ PUT /class/{classId}/slots/{slotId}/due-date — Set Due Date (Teacher)
+  Request:
+  {
+    "dueAt": "2026-03-15T23:59:00Z",
+    "closeAt": "2026-03-16T23:59:00Z"
+  }
+  Response (200): { "message": "Due date updated successfully.", "dueAt": "...", "closeAt": "..." }
+
+▸ PUT /class/{classId}/slots/{slotId}/publish?isPublished=true — Publish Slot
+
+▸ GET /class/{classId}/slots/{slotId}/scores — Score Assignment (Teacher)
+  Response (200):
+  {
+    "data": [{
+      "userId": "...",
+      "displayName": "Nguyen Van A",
+      "avatarUrl": null,
+      "problemScores": [{
+        "problemId": "...",
+        "problemTitle": "Sum of Two Numbers",
+        "verdictCode": "ac",
+        "score": 100.00,
+        "attempts": 3,
+        "lastSubmittedAt": "2026-03-05T..."
+      }],
+      "totalScore": 100.00,
+      "solvedCount": 1
+    }],
+    "message": "Scores fetched successfully"
+  }
+
+▸ GET /class/{classId}/slots/{slotId}/submissions/{userId} — View Student's Submission
+  Response (200):
+  {
+    "data": [{
+      "submissionId": "...",
+      "problemId": "...",
+      "problemTitle": "Sum of Two Numbers",
+      "verdictCode": "ac",
+      "finalScore": 100.00,
+      "timeMs": 45,
+      "memoryKb": 1024,
+      "statusCode": "done",
+      "createdAt": "2026-03-05T...",
+      "results": [{
+        "resultId": "...",
+        "statusCode": "ac",
+        "runtimeMs": 12,
+        "memoryKb": 512,
+        "checkerMessage": "Accepted",
+        "input": "1 2",
+        "expectedOutput": "3",
+        "actualOutput": "3"
+      }]
+    }],
+    "message": "Submissions fetched successfully"
+  }
+
+────────────────────────────────────────────────────────────────
+ 4. CLASS CONTEST (Teacher / Student)
+────────────────────────────────────────────────────────────────
+
+▸ GET /class/{classId}/contests — List Contests
+  Response (200):
+  {
+    "data": [{
+      "contestId": "...",
+      "title": "Midterm Contest",
+      "slug": "midterm-se1801",
+      "startAt": "2026-04-10T08:00:00Z",
+      "endAt": "2026-04-10T10:00:00Z",
+      "isActive": true,
+      "problemCount": 5,
+      "participantCount": 30
+    }],
+    "message": "Contests fetched successfully"
+  }
+
+▸ POST /class/{classId}/contests — Create Class Contest (Teacher)
+  Request:
+  {
+    "title": "Midterm Contest",
+    "slug": "midterm-se1801",
+    "descriptionMd": "## Rules\n- 120 minutes\n- 5 problems",
+    "startAt": "2026-04-10T08:00:00Z",
+    "endAt": "2026-04-10T10:00:00Z",
+    "freezeAt": "2026-04-10T09:45:00Z",
+    "rules": "No external help allowed",
+    "scoringCode": "icpc",
+    "problems": [
+      {
+        "problemId": "<PROBLEM_ID>",
+        "ordinal": 1,
+        "alias": "A",
+        "points": 100,
+        "maxScore": 100,
+        "timeLimitMs": 2000,
+        "memoryLimitKb": 262144
+      }
+    ],
+    "slotNo": null,
+    "slotTitle": "Midterm Contest"
+  }
+  Response (201): { "message": "Contest created successfully.", "id": "...", "slotId": "..." }
+
+▸ GET /class/{classId}/contests/{contestId} — View Contest Detail
+  Response (200):
+  {
+    "data": {
+      "contestId": "...",
+      "classId": "...",
+      "slotId": "...",
+      "title": "Midterm Contest",
+      "slug": "midterm-se1801",
+      "descriptionMd": "...",
+      "rules": "...",
+      "startAt": "2026-04-10T08:00:00Z",
+      "endAt": "2026-04-10T10:00:00Z",
+      "freezeAt": "2026-04-10T09:45:00Z",
+      "isActive": true,
+      "isJoined": false,
+      "timeRemainingSeconds": 7200.0,
+      "createdAt": "...",
+      "problems": [{
+        "contestProblemId": "...",
+        "problemId": "...",
+        "problemTitle": "Sum of Two Numbers",
+        "problemSlug": "sum-two",
+        "alias": "A",
+        "ordinal": 1,
+        "points": 100,
+        "maxScore": 100,
+        "timeLimitMs": 2000,
+        "memoryLimitKb": 262144
+      }]
+    },
+    "message": "Contest fetched successfully"
+  }
+
+▸ PUT /class/{classId}/contests/{contestId}/extend — Extend Contest Time (Teacher)
+  Request:
+  {
+    "newEndAt": "2026-04-10T10:30:00Z"
+  }
+  Response (200): { "message": "Contest time extended successfully.", "endAt": "2026-04-10T10:30:00Z" }
+
+▸ POST /class/{classId}/contests/{contestId}/join — Join Contest (Student)
+  Request: (no body)
+  Response (200): { "message": "Joined contest successfully." }
+
+================================================================

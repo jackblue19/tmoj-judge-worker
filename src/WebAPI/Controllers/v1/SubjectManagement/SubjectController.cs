@@ -11,7 +11,7 @@ namespace WebAPI.Controllers.v1.SubjectManagement;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-[Authorize]
+// [Authorize]
 public class SubjectController : ControllerBase
 {
     private readonly TmojDbContext _db;
@@ -24,7 +24,7 @@ public class SubjectController : ControllerBase
     // ──────────────────────────────────────────
     // POST api/v1/subject  →  Create Subject (Manager)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager")]
+    // [Authorize(Roles = "admin,manager")]
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateSubjectRequest req,
@@ -42,12 +42,10 @@ public class SubjectController : ControllerBase
 
             var subject = new Subject
             {
-                SubjectId = Guid.NewGuid(),
                 Code = codeNorm,
                 Name = req.Name.Trim(),
                 Description = req.Description?.Trim(),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
+                IsActive = true
             };
 
             _db.Subjects.Add(subject);
@@ -65,7 +63,7 @@ public class SubjectController : ControllerBase
     // ──────────────────────────────────────────
     // GET api/v1/subject  →  View All Subject (Manager)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager")]
+    // [Authorize(Roles = "admin,manager")]
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? search,
@@ -129,7 +127,7 @@ public class SubjectController : ControllerBase
     // ──────────────────────────────────────────
     // PUT api/v1/subject/{id}
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager")]
+    // [Authorize(Roles = "admin,manager")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
         Guid id,

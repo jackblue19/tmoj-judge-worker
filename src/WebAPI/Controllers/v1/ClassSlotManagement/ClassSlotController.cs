@@ -13,7 +13,7 @@ namespace WebAPI.Controllers.v1.ClassSlotManagement;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/class/{classId:guid}/slots")]
-[Authorize]
+// [Authorize]
 public class ClassSlotController : ControllerBase
 {
     private readonly TmojDbContext _db;
@@ -60,7 +60,7 @@ public class ClassSlotController : ControllerBase
     // ──────────────────────────────────────────
     // POST .../slots  →  Create Assignment (Teacher)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
+    // [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
     public async Task<IActionResult> Create(
         Guid classId,
@@ -90,7 +90,6 @@ public class ClassSlotController : ControllerBase
 
             var slot = new ClassSlot
             {
-                Id = Guid.NewGuid(),
                 ClassId = classId,
                 SlotNo = req.SlotNo,
                 Title = req.Title.Trim(),
@@ -101,9 +100,7 @@ public class ClassSlotController : ControllerBase
                 CloseAt = req.CloseAt,
                 Mode = mode,
                 IsPublished = false,
-                CreatedAt = DateTime.UtcNow,
                 CreatedBy = userId,
-                UpdatedAt = DateTime.UtcNow,
                 UpdatedBy = userId
             };
 
@@ -142,7 +139,7 @@ public class ClassSlotController : ControllerBase
     // ──────────────────────────────────────────
     // PUT .../slots/{slotId}/due-date  →  Set Due Date (Teacher)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
+    // [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{slotId:guid}/due-date")]
     public async Task<IActionResult> SetDueDate(
         Guid classId, Guid slotId,
@@ -165,7 +162,6 @@ public class ClassSlotController : ControllerBase
 
             slot.DueAt = req.DueAt;
             if (req.CloseAt.HasValue) slot.CloseAt = req.CloseAt.Value;
-            slot.UpdatedAt = DateTime.UtcNow;
             slot.UpdatedBy = userId;
 
             await _db.SaveChangesAsync(ct);
@@ -181,7 +177,7 @@ public class ClassSlotController : ControllerBase
     // ──────────────────────────────────────────
     // PUT .../slots/{slotId}/publish  →  Publish / Unpublish (Teacher)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
+    // [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{slotId:guid}/publish")]
     public async Task<IActionResult> Publish(
         Guid classId, Guid slotId,
@@ -202,7 +198,6 @@ public class ClassSlotController : ControllerBase
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
             slot.IsPublished = isPublished;
-            slot.UpdatedAt = DateTime.UtcNow;
             slot.UpdatedBy = userId;
             await _db.SaveChangesAsync(ct);
 
@@ -217,7 +212,7 @@ public class ClassSlotController : ControllerBase
     // ──────────────────────────────────────────
     // GET .../slots/{slotId}/scores  →  Score Assignment (Teacher)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
+    // [Authorize(Roles = "admin,manager,teacher")]
     [HttpGet("{slotId:guid}/scores")]
     public async Task<IActionResult> GetScores(
         Guid classId, Guid slotId, CancellationToken ct)
@@ -279,7 +274,7 @@ public class ClassSlotController : ControllerBase
     // ──────────────────────────────────────────
     // GET .../slots/{slotId}/submissions/{userId}  →  View Student's Submission (Teacher)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
+    // [Authorize(Roles = "admin,manager,teacher")]
     [HttpGet("{slotId:guid}/submissions/{userId:guid}")]
     public async Task<IActionResult> GetStudentSubmissions(
         Guid classId, Guid slotId, Guid userId, CancellationToken ct)

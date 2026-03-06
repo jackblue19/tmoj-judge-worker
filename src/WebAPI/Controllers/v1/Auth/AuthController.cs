@@ -1,4 +1,4 @@
-﻿using Application.UseCases.Auth;
+using Application.UseCases.Auth;
 using Ardalis.Specification;
 using Asp.Versioning;
 using Infrastructure.Configurations.Auth;
@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using WebAPI.Models.Common;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 
 namespace WebAPI.Controllers.v1.Auth;
 
@@ -30,6 +31,7 @@ public class AuthController : ControllerBase
     private readonly GoogleOptions _google;
     private readonly GithubOptions _github;
     private readonly TmojDbContext _db;
+    private readonly IConfiguration _config;
 
     public AuthController(
         ITokenService tokenService ,
@@ -38,7 +40,8 @@ public class AuthController : ControllerBase
         IOptions<JwtOptions> jwt ,
         IOptions<GoogleOptions> google ,
         IOptions<GithubOptions> github ,
-        TmojDbContext db)
+        TmojDbContext db,
+        IConfiguration config)
     {
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
@@ -47,6 +50,7 @@ public class AuthController : ControllerBase
         _google = google.Value;
         _github = github.Value;
         _db = db;
+        _config = config;
     }
 
     [AllowAnonymous]
@@ -178,6 +182,35 @@ public class AuthController : ControllerBase
     {
         try
         {
+            var adminEmail = _config["Authentication:Admin:Email"];
+            var adminPassword = _config["Authentication:Admin:Password"];
+
+            // Admin defined in appsettings override bypasses database completely
+            if (!string.IsNullOrEmpty(adminEmail) && 
+                req.Email.Equals(adminEmail, StringComparison.OrdinalIgnoreCase) && 
+                req.Password == adminPassword)
+            {
+                var roles = new List<string> { "admin" };
+                var adminToken = _tokenService.CreateAccessToken(Guid.Empty.ToString(), "Super Admin", roles);
+                var adminUserDto = new UserDto(
+                    UserId: Guid.Empty, 
+                    Email: adminEmail, 
+                    FirstName: "Super", 
+                    LastName: "Admin", 
+                    DisplayName: "Super Admin", 
+                    Username: "superadmin", 
+                    AvatarUrl: null, 
+                    Roles: roles);
+                    
+                var adminAuthResponse = new AuthResponse(
+                    AccessToken: adminToken, 
+                    RefreshToken: "admin-no-refresh", 
+                    ExpiresIn: _jwt.AccessTokenMinutes * 60, 
+                    User: adminUserDto);
+                    
+                return Ok(ApiResponse<AuthResponse>.Ok(adminAuthResponse, "Login successful"));
+            }
+
             var email = req.Email.ToLowerInvariant();
             var user = await _db.Users
                 .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)

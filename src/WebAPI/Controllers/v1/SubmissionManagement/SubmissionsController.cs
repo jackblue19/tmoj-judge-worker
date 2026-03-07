@@ -433,4 +433,61 @@ public sealed class SubmissionsController : ControllerBase
             Stderr = x.Stderr
         };
     }
+
+    //  ABOVE => SUBMIT CODE
+    //  GET ALL SUBMISSION BY USER ID
+    [HttpGet("get-all")]
+    public async Task<IActionResult> GetSubmissionsByUser(
+        Guid problemId ,
+        CancellationToken ct)
+    {
+
+        var userId = GetUserId();
+        var temp = "e1a709ec-dd49-4230-a5a2-6393be3b2578";
+
+        if ( Guid.TryParse(temp , out Guid userGuid) )
+        {
+            // use userGuid here
+            userId = userGuid;
+            Console.WriteLine(userGuid);
+        }
+        else
+        {
+            Console.WriteLine("Invalid GUID format");
+        }
+
+        /*var userId = GetUserId();
+
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value?? 
+        User.FindFirst("sub")?.Value;
+
+        if ( userIdClaim == null )
+            return Unauthorized("UserId not found in token");
+
+        var userId = Guid.Parse(userIdClaim);
+*/
+        var submissions = await _db.Submissions.AsNoTracking()
+            // .Where(x => x.ProblemId == problemId && x.UserId == userId && !x.IsDeleted)
+            .Where(x => x.ProblemId == problemId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new
+            {
+                x.Id ,
+                x.ProblemId ,
+                x.RuntimeId ,
+                x.CodeSize ,
+                x.CodeHash ,
+                x.StatusCode ,
+                x.VerdictCode ,
+                x.FinalScore ,
+                x.TimeMs ,
+                x.MemoryKb ,
+                x.JudgedAt ,
+                x.TestsetId ,
+                x.CreatedAt
+            })
+            .ToListAsync(ct);
+
+        return Ok(submissions);
+    }
 }

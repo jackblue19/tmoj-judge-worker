@@ -75,9 +75,9 @@ public class AuthController : ControllerBase
 
                     return email
                         .ToLowerInvariant()
-                        .EndsWith("@fpt.edu.vn");
+                        .EndsWith("@fe.edu.vn");
                 }
-            var roleCode = IsFptEmail(email) ? "admin" : "student";
+            var roleCode = IsFptEmail(email) ? "teacher" : "student";
 
             var role = await _db.Roles
                 .FirstOrDefaultAsync(r => r.RoleCode == roleCode, ct);

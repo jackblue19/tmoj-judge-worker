@@ -226,6 +226,7 @@ public class AuthController : ControllerBase
                     DisplayName: "Super Admin", 
                     Username: "superadmin", 
                     AvatarUrl: null, 
+                    emailVerified: true,
                     Roles: roles);
                     
                 var adminAuthResponse = new AuthResponse(

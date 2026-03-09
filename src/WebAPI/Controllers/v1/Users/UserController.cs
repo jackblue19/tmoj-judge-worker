@@ -14,7 +14,7 @@ namespace WebAPI.Controllers.v1.Users;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-[Authorize]
+//[Authorize]
 public class UserController : ControllerBase
 {
     private readonly TmojDbContext _db;
@@ -223,6 +223,52 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
         catch ( Exception )
         {
             return StatusCode(500 , new { Message = "An error occurred while deleting the account. Please try again later." });
+        }
+    }
+    [HttpGet("role/{roleName}")]
+    public async Task<IActionResult> ListAllUserByRole(string roleName, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(roleName))
+            return BadRequest(new { message = "Role name is required." });
+
+        try
+        {
+            var normalizedRoleName = roleName.Trim().ToLowerInvariant();
+
+            var role = await _db.Roles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.RoleCode.ToLower() == normalizedRoleName, ct);
+
+            if (role == null)
+                return NotFound(new { message = "Role name not found." });
+
+            var users = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.UserRoleUsers.Any(ur => ur.RoleId == role.RoleId))
+                 .OrderBy(u => u.DisplayName)
+                .Select(u => new UserDto(
+                    u.UserId,
+                    u.Email,
+                    u.FirstName,
+                    u.LastName,
+                    u.DisplayName,
+                    u.Username,
+                    u.AvatarUrl,
+                    u.EmailVerified,
+                    u.UserRoleUsers.Select(ur => ur.Role.RoleCode).ToList()
+                ))
+                .ToListAsync(ct);
+
+            return Ok(ApiResponse<List<UserDto>>.Ok(users, "Users fetched successfully"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching users by role {RoleName}", roleName);
+
+            return StatusCode(500, new
+            {
+                message = "An error occurred while fetching users."
+            });
         }
     }
 }

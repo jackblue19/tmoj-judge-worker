@@ -219,14 +219,14 @@ public class AuthController : ControllerBase
                 var roles = new List<string> { "admin" };
                 var adminToken = _tokenService.CreateAccessToken(Guid.Empty.ToString() , "Super Admin" , roles);
                 var adminUserDto = new UserDto(
-                    UserId: Guid.Empty ,
-                    Email: adminEmail ,
-                    FirstName: "Super" ,
-                    LastName: "Admin" ,
-                    DisplayName: "Super Admin" ,
-                    Username: "superadmin" ,
-                    AvatarUrl: null ,
-                    emailVerified: true ,
+                    UserId: Guid.Empty, 
+                    Email: adminEmail, 
+                    FirstName: "Super", 
+                    LastName: "Admin", 
+                    DisplayName: "Super Admin", 
+                    Username: "superadmin", 
+                    AvatarUrl: null, 
+                    emailVerified: true,
                     Roles: roles);
 
                 var adminAuthResponse = new AuthResponse(

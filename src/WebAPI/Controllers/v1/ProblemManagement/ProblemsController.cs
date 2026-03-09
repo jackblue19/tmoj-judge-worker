@@ -288,7 +288,7 @@ public class ProblemsController : ControllerBase
             await _db.SaveChangesAsync(ct);
             return NoContent();
         }
-        catch ( DbUpdateException ex )
+        catch ( DbUpdateException )
         {
             // thường là FK violation 23503
             return Conflict("Cannot hard delete: problem is referenced by other records (FK). Use archive or delete dependencies first.");

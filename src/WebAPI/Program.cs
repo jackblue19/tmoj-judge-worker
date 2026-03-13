@@ -13,6 +13,7 @@ using WebAPI.Extensions;
 using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -140,7 +141,21 @@ app.UseSwaggerUI();
 app.UseScalarUI();
 //}
 
-app.UseHttpsRedirection();
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
+//app.UseHttpsRedirection();
+//if ( app.Environment.IsDevelopment() )
+//{
+//    app.UseHttpsRedirection();
+//}
 app.UseExceptionHandler();
 app.UseRouting();
 

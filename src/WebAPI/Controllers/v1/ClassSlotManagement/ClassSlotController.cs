@@ -63,9 +63,9 @@ public class ClassSlotController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
     public async Task<IActionResult> Create(
-        Guid classId,
-        [FromBody] CreateClassSlotRequest req,
-        CancellationToken ct)
+    Guid classId,
+    [FromBody] CreateClassSlotRequest req,
+    CancellationToken ct)
     {
         try
         {
@@ -95,9 +95,9 @@ public class ClassSlotController : ControllerBase
                 Title = req.Title.Trim(),
                 Description = req.Description?.Trim(),
                 Rules = req.Rules?.Trim(),
-                OpenAt = req.OpenAt,
-                DueAt = req.DueAt,
-                CloseAt = req.CloseAt,
+                OpenAt = req.OpenAt?.ToUniversalTime(),
+                DueAt = req.DueAt?.ToUniversalTime(),
+                CloseAt = req.CloseAt?.ToUniversalTime(),
                 Mode = mode,
                 IsPublished = false,
                 CreatedBy = userId,
@@ -105,6 +105,8 @@ public class ClassSlotController : ControllerBase
             };
 
             _db.ClassSlots.Add(slot);
+
+            await _db.SaveChangesAsync(ct);
 
             // Add problems
             if (req.Problems is { Count: > 0 })
@@ -127,14 +129,17 @@ public class ClassSlotController : ControllerBase
 
             await _db.SaveChangesAsync(ct);
 
-            return CreatedAtAction(nameof(GetAll), new { classId },
+            return CreatedAtAction(nameof(GetAll), new { classId, version = "1.0" },
                 new { Message = "Assignment created successfully.", slot.Id, slot.SlotNo });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return StatusCode(500, new { Message = "An error occurred while creating the assignment." });
+            var inner = ex.InnerException?.Message ?? "No inner exception";
+            return StatusCode(500, new { Message = "An error occurred while creating the assignment.", Detail = ex.Message, Inner = inner });
         }
-    }
+    } 
+
+
 
     // ──────────────────────────────────────────
     // PUT .../slots/{slotId}/due-date  →  Set Due Date (Teacher)
@@ -179,29 +184,42 @@ public class ClassSlotController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{slotId:guid}/publish")]
-    public async Task<IActionResult> Publish(
-        Guid classId, Guid slotId,
-        [FromQuery] bool isPublished = true,
-        CancellationToken ct = default)
+    public async Task<IActionResult> TogglePublish(
+     Guid classId,
+     Guid slotId,
+     CancellationToken ct = default)
     {
         try
         {
             var userId = GetUserId();
             if (userId is null) return Unauthorized();
 
-            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-            if (cls is null) return NotFound(new { Message = "Class not found." });
-            if (cls.TeacherId != userId) return Forbid();
+            var cls = await _db.Classes
+                .FirstOrDefaultAsync(c => c.ClassId == classId, ct);
+
+            if (cls is null)
+                return NotFound(new { Message = "Class not found." });
+
+            if (cls.TeacherId != userId)
+                return Forbid();
 
             var slot = await _db.ClassSlots
                 .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassId == classId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            slot.IsPublished = isPublished;
+            if (slot is null)
+                return NotFound(new { Message = "Slot not found." });
+
+            // 🔥 Toggle trạng thái
+            slot.IsPublished = !slot.IsPublished;
             slot.UpdatedBy = userId;
+
             await _db.SaveChangesAsync(ct);
 
-            return Ok(new { Message = isPublished ? "Slot published." : "Slot unpublished.", slot.IsPublished });
+            return Ok(new
+            {
+                Message = slot.IsPublished ? "Slot published." : "Slot unpublished.",
+                IsPublished = slot.IsPublished
+            });
         }
         catch (Exception)
         {

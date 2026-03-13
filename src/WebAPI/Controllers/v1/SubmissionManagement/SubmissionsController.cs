@@ -23,7 +23,7 @@ public sealed class SubmissionsController : ControllerBase
 
     public SubmissionsController(
         TmojDbContext db ,
-        LocalJudgeService judge ,
+        LocalJudgeService judge,
         IOptions<LocalStorageOptions> storage)
     {
         _db = db;

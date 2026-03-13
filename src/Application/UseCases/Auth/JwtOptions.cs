@@ -10,7 +10,7 @@ public sealed class JwtOptions
 {
     public string Issuer { get; init; } = default!;
     public string Audience { get; init; } = default!;
-    public int AccessTokenMinutes { get; init; } = 15;
+    public int AccessTokenMinutes { get; init; } = 10000;
     public int RefreshTokenDays { get; init; } = 14;
 
     public SigningOptions Signing { get; init; } = new();

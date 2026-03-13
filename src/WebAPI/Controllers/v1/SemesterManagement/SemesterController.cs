@@ -40,12 +40,12 @@ public class SemesterController : ControllerBase
 
             var totalCount = await query.CountAsync(ct);
             var items = await query
-                .OrderByDescending(x => x.StartAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(x => new SemesterResponse(
-                    x.SemesterId, x.Code, x.Name, x.StartAt, x.EndAt, x.IsActive, x.CreatedAt))
-                .ToListAsync(ct);
+              .OrderByDescending(x => x.StartAt)   // sắp xếp trước
+              .Skip((page - 1) * pageSize)         // bỏ qua các record trước
+              .Take(pageSize)                    
+              .Select(x => new SemesterResponse(
+                  x.SemesterId, x.Code, x.Name, x.StartAt, x.EndAt, x.IsActive, x.CreatedAt))
+              .ToListAsync(ct);
 
             return Ok(ApiResponse<SemesterListResponse>.Ok(
                 new SemesterListResponse(items, totalCount), "Semesters fetched successfully"));
@@ -161,6 +161,42 @@ public class SemesterController : ControllerBase
         catch (Exception)
         {
             return StatusCode(500, new { Message = "An error occurred while deleting the semester." });
+        }
+    }
+
+    [Authorize(Roles = "admin,manager")]
+    [HttpGet("all-semester")]
+    public async Task<IActionResult> GetAllByManager(
+    [FromQuery] string? search,
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20,
+    CancellationToken ct = default)
+    {
+        try
+        {
+            var query = _db.Semesters.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x => x.Code.ToLower().Contains(s) || x.Name.ToLower().Contains(s));
+            }
+
+            var totalCount = await query.CountAsync(ct);
+            var items = await query
+                .OrderByDescending(x => x.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new SemesterResponse(
+                    x.SemesterId, x.Code, x.Name, x.StartAt, x.EndAt, x.IsActive, x.CreatedAt))
+                .ToListAsync(ct);
+
+            return Ok(ApiResponse<SemesterListResponse>.Ok(
+                new SemesterListResponse(items, totalCount), "Semesters fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching semesters." });
         }
     }
 }

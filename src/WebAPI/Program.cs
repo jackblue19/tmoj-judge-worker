@@ -77,6 +77,7 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 
 builder.Services.AddSingleton<JudgeConnectionRegistry>();
 builder.Services.AddSingleton<JudgeDispatchService>();
+builder.Services.AddScoped<LocalJudgeService>();
 builder.Services.AddHostedService<JudgeBridgeBackgroundService>();
 builder.Services.AddControllers();
 

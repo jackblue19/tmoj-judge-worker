@@ -14,6 +14,7 @@ using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -130,6 +131,16 @@ builder.Services.AddOutputCache(options =>
 
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(ValidationBehavior<,>));
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(LoggingBehavior<,>));
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
+});
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+});
 
 var app = builder.Build();
 

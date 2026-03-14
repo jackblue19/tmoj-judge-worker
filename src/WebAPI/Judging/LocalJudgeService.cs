@@ -189,7 +189,7 @@ public sealed class LocalJudgeService
         public string Stderr { get; set; } = "";
     }
 
-    private static async Task<RunInternal> RunExeAsync(
+    /*private static async Task<RunInternal> RunExeAsync(
         string exePath ,
         string stdin ,
         int timeLimitMs ,
@@ -219,6 +219,89 @@ public sealed class LocalJudgeService
         // Ghi stdin + đóng để gửi EOF (quan trọng nhất để tránh treo)
         await p.StandardInput.WriteAsync(stdin);
         p.StandardInput.Close();
+
+        var exitTask = p.WaitForExitAsync(ct);
+        var delayTask = Task.Delay(timeLimitMs , ct);
+
+        var finished = await Task.WhenAny(exitTask , delayTask);
+
+        if ( finished == delayTask )
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            sw.Stop();
+
+            return new RunInternal
+            {
+                ExitCode = -1 ,
+                TimedOut = true ,
+                ElapsedMs = (int) sw.ElapsedMilliseconds ,
+                Stdout = "" ,
+                Stderr = ""
+            };
+        }
+
+        await exitTask;
+        sw.Stop();
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        return new RunInternal
+        {
+            ExitCode = p.ExitCode ,
+            TimedOut = false ,
+            ElapsedMs = (int) sw.ElapsedMilliseconds ,
+            Stdout = stdout ?? "" ,
+            Stderr = stderr ?? ""
+        };
+    }*/
+
+    private static async Task<RunInternal> RunExeAsync(
+    string exePath ,
+    string stdin ,
+    int timeLimitMs ,
+    string workDir ,
+    CancellationToken ct)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = exePath ,
+            WorkingDirectory = workDir ,
+            RedirectStandardInput = true ,
+            RedirectStandardOutput = true ,
+            RedirectStandardError = true ,
+            UseShellExecute = false ,
+            CreateNoWindow = true
+        };
+
+        using var p = new Process { StartInfo = psi };
+
+        var sw = Stopwatch.StartNew();
+        p.Start();
+
+        var stdoutTask = p.StandardOutput.ReadToEndAsync();
+        var stderrTask = p.StandardError.ReadToEndAsync();
+
+        try
+        {
+            if ( !string.IsNullOrEmpty(stdin) )
+            {
+                await p.StandardInput.WriteAsync(stdin);
+            }
+        }
+        catch ( IOException )
+        {
+            // Process đã thoát sớm, pipe đóng.
+            // Không coi đây là lỗi của judge, mà là runtime behavior của bài nộp.
+        }
+        catch ( ObjectDisposedException )
+        {
+            // Stream đã bị đóng/dispose do process thoát quá nhanh.
+        }
+        finally
+        {
+            try { p.StandardInput.Close(); } catch { }
+        }
 
         var exitTask = p.WaitForExitAsync(ct);
         var delayTask = Task.Delay(timeLimitMs , ct);

@@ -35,7 +35,7 @@ public class ClassSlotController : ControllerBase
             if (cls is null) return NotFound(new { Message = "Class not found." });
 
             var slots = await _db.ClassSlots.AsNoTracking()
-                .Include(s => s.ClassSlotProblems).ThenInclude(sp => sp.Problem)
+                .Include(s => s.ClassSlotProblems!).ThenInclude(sp => sp.Problem)
                 .Where(s => s.ClassId == classId)
                 .OrderBy(s => s.SlotNo)
                 .ToListAsync(ct);
@@ -44,7 +44,7 @@ public class ClassSlotController : ControllerBase
                 s.Id, s.ClassId, s.SlotNo, s.Title, s.Description, s.Rules,
                 s.OpenAt, s.DueAt, s.CloseAt, s.Mode, s.ContestId, s.IsPublished,
                 s.CreatedAt, s.UpdatedAt,
-                s.ClassSlotProblems.OrderBy(sp => sp.Ordinal).Select(sp => new SlotProblemResponse(
+                (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).OrderBy(sp => sp.Ordinal).Select(sp => new SlotProblemResponse(
                     sp.ProblemId, sp.Problem.Title, sp.Problem.Slug,
                     sp.Ordinal, sp.Points, sp.IsRequired)).ToList()
             )).ToList();
@@ -238,11 +238,11 @@ public class ClassSlotController : ControllerBase
         try
         {
             var slot = await _db.ClassSlots.AsNoTracking()
-                .Include(s => s.ClassSlotProblems).ThenInclude(sp => sp.Problem)
+                .Include(s => s.ClassSlotProblems!).ThenInclude(sp => sp.Problem)
                 .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassId == classId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            var problemIds = slot.ClassSlotProblems.Select(sp => sp.ProblemId).ToList();
+            var problemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId).ToList();
 
             var members = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
@@ -257,7 +257,7 @@ public class ClassSlotController : ControllerBase
                     .Where(s => s.UserId == m.UserId && problemIds.Contains(s.ProblemId))
                     .ToListAsync(ct);
 
-                var problemScores = slot.ClassSlotProblems.OrderBy(sp => sp.Ordinal).Select(sp =>
+                var problemScores = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).OrderBy(sp => sp.Ordinal).Select(sp =>
                 {
                     var pSubs = subs.Where(s => s.ProblemId == sp.ProblemId).ToList();
                     var best = pSubs.Where(s => s.FinalScore.HasValue)
@@ -300,11 +300,11 @@ public class ClassSlotController : ControllerBase
         try
         {
             var slot = await _db.ClassSlots.AsNoTracking()
-                .Include(s => s.ClassSlotProblems).ThenInclude(sp => sp.Problem)
+                .Include(s => s.ClassSlotProblems!).ThenInclude(sp => sp.Problem)
                 .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassId == classId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            var problemIds = slot.ClassSlotProblems.Select(sp => sp.ProblemId).ToList();
+            var problemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId).ToList();
 
             var submissions = await _db.Submissions.AsNoTracking()
                 .Include(s => s.Problem)

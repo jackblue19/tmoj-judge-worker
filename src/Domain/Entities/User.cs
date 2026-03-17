@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -12,6 +12,10 @@ public partial class User
     public string LastName { get; set; } = null!;
 
     public string Username { get; set; } = null!;
+
+    public string? RollNumber { get; set; }
+
+    public string? MemberCode { get; set; }
 
     public string Email { get; set; } = null!;
 

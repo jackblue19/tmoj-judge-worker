@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -39,7 +39,7 @@ public partial class ClassSlot
 
     public virtual Class Class { get; set; } = null!;
 
-    public virtual ICollection<ClassSlotProblem> ClassSlotProblems { get; set; } = new List<ClassSlotProblem>();
+    public virtual ICollection<ClassSlotProblem>? ClassSlotProblems { get; set; }
 
     public virtual Contest? Contest { get; set; }
 

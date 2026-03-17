@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -368,7 +368,6 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("class_id");
             entity.Property(e => e.ClassCode).HasColumnName("class_code");
-            entity.Property(e => e.ClassName).HasColumnName("class_name");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
@@ -491,9 +490,13 @@ public partial class TmojDbContext : DbContext
 
         modelBuilder.Entity<ClassSlotProblem>(entity =>
         {
-            entity.HasKey(e => new { e.SlotId, e.ProblemId }).HasName("class_slot_problems_pkey");
+            entity.HasKey(e => e.Id).HasName("class_slot_problems_pkey");
 
             entity.ToTable("class_slot_problems");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
 
             entity.Property(e => e.SlotId).HasColumnName("slot_id");
             entity.Property(e => e.ProblemId).HasColumnName("problem_id");
@@ -502,6 +505,9 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("is_required");
             entity.Property(e => e.Ordinal).HasColumnName("ordinal");
             entity.Property(e => e.Points).HasColumnName("points");
+
+            // Add unique index for (SlotId, ProblemId) to maintain integrity
+            entity.HasIndex(e => new { e.SlotId, e.ProblemId }, "uq_slot_problem").IsUnique();
 
             entity.HasOne(d => d.Problem).WithMany(p => p.ClassSlotProblems)
                 .HasForeignKey(d => d.ProblemId)
@@ -2239,6 +2245,8 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
             entity.Property(e => e.Username).HasColumnName("username");
+            entity.Property(e => e.RollNumber).HasColumnName("roll_number");
+            entity.Property(e => e.MemberCode).HasColumnName("member_code");
 
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .HasForeignKey(d => d.RoleId)

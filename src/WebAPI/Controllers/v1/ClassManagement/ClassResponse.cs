@@ -5,7 +5,6 @@ namespace WebAPI.Controllers.v1.ClassManagement;
 public record ClassResponse(
     Guid ClassId,
     string ClassCode,
-    string ClassName,
     string? Description,
     DateOnly? StartDate,
     DateOnly? EndDate,

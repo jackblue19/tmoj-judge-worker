@@ -36,8 +36,8 @@ public class ClassController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(req.ClassCode) || string.IsNullOrWhiteSpace(req.ClassName))
-                return BadRequest(new { Message = "ClassCode and ClassName are required." });
+            if (string.IsNullOrWhiteSpace(req.ClassCode))
+                return BadRequest(new { Message = "ClassCode is required." });
 
             if (!await _db.Subjects.AnyAsync(s => s.SubjectId == req.SubjectId, ct))
                 return BadRequest(new { Message = "Subject not found." });
@@ -54,7 +54,6 @@ public class ClassController : ControllerBase
                 SubjectId = req.SubjectId,
                 SemesterId = req.SemesterId,
                 ClassCode = codeNorm,
-                ClassName = req.ClassName.Trim(),
                 Description = req.Description?.Trim(),
                 StartDate = req.StartDate,
                 EndDate = req.EndDate,
@@ -102,8 +101,7 @@ public class ClassController : ControllerBase
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.Trim().ToLower();
-                query = query.Where(c => c.ClassCode.ToLower().Contains(s)
-                                      || c.ClassName.ToLower().Contains(s));
+                query = query.Where(c => c.ClassCode.ToLower().Contains(s));
             }
 
             var totalCount = await query.CountAsync(ct);
@@ -113,7 +111,7 @@ public class ClassController : ControllerBase
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(c => new ClassResponse(
-                    c.ClassId, c.ClassCode, c.ClassName, c.Description,
+                    c.ClassId, c.ClassCode, c.Description,
                     c.StartDate, c.EndDate, c.IsActive, c.InviteCode,
                     c.InviteCodeExpiresAt,
                     c.CreatedAt, c.UpdatedAt,
@@ -152,7 +150,7 @@ public class ClassController : ControllerBase
             if (c is null) return NotFound(new { Message = "Class not found." });
 
             var dto = new ClassResponse(
-                c.ClassId, c.ClassCode, c.ClassName, c.Description,
+                c.ClassId, c.ClassCode, c.Description,
                 c.StartDate, c.EndDate, c.IsActive, c.InviteCode,
                 c.InviteCodeExpiresAt,
                 c.CreatedAt, c.UpdatedAt,
@@ -434,7 +432,7 @@ public class ClassController : ControllerBase
             });
             await _db.SaveChangesAsync(ct);
 
-            return Ok(new { Message = "Joined class successfully.", cls.ClassId, cls.ClassName });
+            return Ok(new { Message = "Joined class successfully.", cls.ClassId });
         }
         catch (Exception)
         {
@@ -487,7 +485,7 @@ public class ClassController : ControllerBase
             // Get class slot problem ids for this class
             var slotProblemIds = await _db.ClassSlots.AsNoTracking()
                 .Where(s => s.ClassId == id)
-                .SelectMany(s => s.ClassSlotProblems.Select(sp => sp.ProblemId))
+                .SelectMany(s => (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId))
                 .Distinct()
                 .ToListAsync(ct);
 
@@ -562,7 +560,7 @@ public class ClassController : ControllerBase
             // Get all problem ids in this class's slots
             var problemIds = await _db.ClassSlots.AsNoTracking()
                 .Where(s => s.ClassId == id)
-                .SelectMany(s => s.ClassSlotProblems.Select(sp => sp.ProblemId))
+                .SelectMany(s => (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId))
                 .Distinct()
                 .ToListAsync(ct);
 
@@ -648,7 +646,7 @@ public class ClassController : ControllerBase
                 decimal total = 0;
                 foreach (var slot in slots)
                 {
-                    var problemIds = slot.ClassSlotProblems.Select(sp => sp.ProblemId).ToList();
+                    var problemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId).ToList();
                     var bestScores = await _db.Submissions.AsNoTracking()
                         .Where(s => s.UserId == m.UserId && problemIds.Contains(s.ProblemId)
                                  && s.FinalScore.HasValue)

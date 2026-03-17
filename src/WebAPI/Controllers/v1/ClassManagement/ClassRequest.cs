@@ -7,7 +7,6 @@ public record CreateClassRequest(
     Guid SubjectId,
     Guid SemesterId,
     string ClassCode,
-    string ClassName,
     string? Description,
     DateOnly? StartDate,
     DateOnly? EndDate,
@@ -15,7 +14,6 @@ public record CreateClassRequest(
 
 /// <summary>Update class details (Manager/Teacher).</summary>
 public record UpdateClassRequest(
-    string? ClassName,
     string? Description,
     DateOnly? StartDate,
     DateOnly? EndDate,

@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
 
 public partial class ClassSlotProblem
 {
+    public Guid Id { get; set; }
+
     public Guid SlotId { get; set; }
 
     public Guid ProblemId { get; set; }

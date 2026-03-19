@@ -206,6 +206,7 @@ public class ClassMemberController : ControllerBase
 
     // ──────────────────────────────────────────
     // POST api/v1/ClassMember/import/class/{classId}
+    // Import sinh viên vào 1 lớp cụ thể (classId truyền qua URL)
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost("import/class/{classId:guid}")]
@@ -220,7 +221,7 @@ public class ClassMemberController : ControllerBase
             if (cls == null)
                 return NotFound(new { Message = "Class not found." });
 
-            var result = await ProcessExcelImport(file, classId, ct);
+            var result = await ProcessClassImport(file, classId, ct);
             return Ok(ApiResponse<ImportResultResponse>.Ok(result, "Import processed successfully"));
         }
         catch (Exception ex)
@@ -230,18 +231,19 @@ public class ClassMemberController : ControllerBase
     }
 
     // ──────────────────────────────────────────
-    // POST api/v1/ClassMember/import/global
+    // POST api/v1/ClassMember/import
+    // Import sinh viên theo ClassCode (và SubjectCode nếu có) từ Excel
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager")]
-    [HttpPost("import/global")]
-    public async Task<IActionResult> ImportGlobal(IFormFile file, CancellationToken ct)
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("import")]
+    public async Task<IActionResult> ImportByClassCode(IFormFile file, CancellationToken ct)
     {
         if (file == null || file.Length == 0)
             return BadRequest(new { Message = "File is missing." });
 
         try
         {
-            var result = await ProcessExcelImport(file, null, ct);
+            var result = await ProcessClassImport(file, null, ct);
             return Ok(ApiResponse<ImportResultResponse>.Ok(result, "Import processed successfully"));
         }
         catch (Exception ex)
@@ -251,61 +253,12 @@ public class ClassMemberController : ControllerBase
     }
 
     // ──────────────────────────────────────────
-    // GET api/v1/ClassMember/import/template/global
-    // Template cho import toàn cục — chỉ thêm sinh viên vào hệ thống
-    // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager")]
-    [HttpGet("import/template/global")]
-    public IActionResult DownloadGlobalTemplate()
-    {
-        try
-        {
-            using var workbook = new ClosedXML.Excel.XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Template");
-
-            var headers = new List<string>
-            {
-                "FullName",
-                "Email",
-                "RollNumber",
-                "MemberCode"
-            };
-
-            // Write headers
-            for (int i = 0; i < headers.Count; i++)
-            {
-                var cell = worksheet.Cell(1, i + 1);
-                cell.Value = headers[i];
-                cell.Style.Font.Bold = true;
-                cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
-            }
-
-            // Write sample row
-            worksheet.Cell(2, 1).Value = "Nguyen Van A";
-            worksheet.Cell(2, 2).Value = "nguyenva@domain.com";
-            worksheet.Cell(2, 3).Value = "HE111111";
-            worksheet.Cell(2, 4).Value = "MEMBER001";
-
-            worksheet.Columns().AdjustToContents();
-
-            using var stream = new MemoryStream();
-            workbook.SaveAs(stream);
-            var content = stream.ToArray();
-
-            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Global_Import_Template.xlsx");
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Message = "An error occurred while generating template: " + ex.Message });
-        }
-    }
-
-    // ──────────────────────────────────────────
-    // GET api/v1/ClassMember/import/template/class
-    // Template cho import theo lớp + môn học (có SubjectCode, ClassCode)
+    // GET api/v1/ClassMember/import/template
+    // Template cho import theo lớp
+    // ClassCode bắt buộc, SubjectCode tùy chọn, cần ít nhất 1 trong RollNumber/MemberCode
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
-    [HttpGet("import/template/class")]
+    [HttpGet("import/template")]
     public IActionResult DownloadClassTemplate()
     {
         try
@@ -315,10 +268,8 @@ public class ClassMemberController : ControllerBase
 
             var headers = new List<string>
             {
-                "SubjectCode",
                 "ClassCode",
-                "FullName",
-                "Email",
+                "SubjectCode",
                 "RollNumber",
                 "MemberCode"
             };
@@ -332,13 +283,23 @@ public class ClassMemberController : ControllerBase
                 cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
             }
 
-            // Write sample row
-            worksheet.Cell(2, 1).Value = "PRF192";
-            worksheet.Cell(2, 2).Value = "SE21A01";
-            worksheet.Cell(2, 3).Value = "Nguyen Van A";
-            worksheet.Cell(2, 4).Value = "nguyenva@domain.com";
-            worksheet.Cell(2, 5).Value = "HE111111";
-            worksheet.Cell(2, 6).Value = "MEMBER001";
+            // Sample rows — có cả RollNumber và MemberCode
+            worksheet.Cell(2, 1).Value = "SE21A01";
+            worksheet.Cell(2, 2).Value = "PRF192";       // SubjectCode (optional)
+            worksheet.Cell(2, 3).Value = "HE111111";      // RollNumber
+            worksheet.Cell(2, 4).Value = "MEMBER001";      // MemberCode
+
+            // Row chỉ có MemberCode, không có SubjectCode
+            worksheet.Cell(3, 1).Value = "SE21A01";
+            worksheet.Cell(3, 2).Value = "";               // No SubjectCode
+            worksheet.Cell(3, 3).Value = "";               // No RollNumber
+            worksheet.Cell(3, 4).Value = "MEMBER002";      // Only MemberCode
+
+            // Row chỉ có RollNumber
+            worksheet.Cell(4, 1).Value = "SE21A02";
+            worksheet.Cell(4, 2).Value = "PRF192";
+            worksheet.Cell(4, 3).Value = "HE222222";      // Only RollNumber
+            worksheet.Cell(4, 4).Value = "";               // No MemberCode
 
             worksheet.Columns().AdjustToContents();
 
@@ -354,7 +315,13 @@ public class ClassMemberController : ControllerBase
         }
     }
 
-    private async Task<ImportResultResponse> ProcessExcelImport(IFormFile file, Guid? fallbackClassId, CancellationToken ct)
+    /// <summary>
+    /// Xử lý import Excel cho class member.
+    /// - Nếu fallbackClassId != null: bỏ qua ClassCode/SubjectCode trong file, dùng classId truyền vào.
+    /// - Nếu fallbackClassId == null: đọc ClassCode (bắt buộc) và SubjectCode (tùy chọn) từ file.
+    /// - Cần ít nhất 1 trong 2: RollNumber hoặc MemberCode.
+    /// </summary>
+    private async Task<ImportResultResponse> ProcessClassImport(IFormFile file, Guid? fallbackClassId, CancellationToken ct)
     {
         int successCount = 0;
         int failedCount = 0;
@@ -374,28 +341,45 @@ public class ClassMemberController : ControllerBase
             headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
         }
 
-        // Cache for global import
-        var classCache = new Dictionary<string, Guid>(); // keys like "SUBJECTCODE_CLASSCODE"
+        // Cache to avoid repeated DB lookups
+        var classCache = new Dictionary<string, Guid>(); // key: "CLASSCODE" or "SUBJECTCODE_CLASSCODE"
 
         foreach (var row in rows)
         {
             totalProcessed++;
             try
             {
-                // Parse required columns
-                string email = GetCellString(row, headers, "Email");
-                string fullName = GetCellString(row, headers, "FullName");
-                
-                if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
+                // Parse RollNumber và MemberCode — cần ít nhất 1
+                string rollNumber = GetCellString(row, headers, "RollNumber");
+                string memberCode = GetCellString(row, headers, "MemberCode");
+
+                if (string.IsNullOrWhiteSpace(rollNumber) && string.IsNullOrWhiteSpace(memberCode))
                 {
-                    errors.Add($"Row {row.RowNumber()}: Missing Email or FullName.");
+                    errors.Add($"Row {row.RowNumber()}: At least one of RollNumber or MemberCode is required.");
                     failedCount++;
                     continue;
                 }
 
-                string rollNumber = GetCellString(row, headers, "RollNumber");
-                string memberCode = GetCellString(row, headers, "MemberCode");
+                // Tìm user bằng RollNumber hoặc MemberCode
+                User? user = null;
+                if (!string.IsNullOrWhiteSpace(rollNumber))
+                {
+                    user = await _db.Users.FirstOrDefaultAsync(u => u.RollNumber == rollNumber, ct);
+                }
+                if (user == null && !string.IsNullOrWhiteSpace(memberCode))
+                {
+                    user = await _db.Users.FirstOrDefaultAsync(u => u.MemberCode == memberCode, ct);
+                }
 
+                if (user == null)
+                {
+                    var identifier = !string.IsNullOrWhiteSpace(rollNumber) ? $"RollNumber '{rollNumber}'" : $"MemberCode '{memberCode}'";
+                    errors.Add($"Row {row.RowNumber()}: User with {identifier} not found. Please add the student via admin import first.");
+                    failedCount++;
+                    continue;
+                }
+
+                // Determine target class
                 Guid targetClassId;
 
                 if (fallbackClassId.HasValue)
@@ -404,81 +388,51 @@ public class ClassMemberController : ControllerBase
                 }
                 else
                 {
-                    string subjectCode = GetCellString(row, headers, "SubjectCode");
                     string classCode = GetCellString(row, headers, "ClassCode");
+                    string subjectCode = GetCellString(row, headers, "SubjectCode");
 
-                    if (string.IsNullOrWhiteSpace(subjectCode) || string.IsNullOrWhiteSpace(classCode))
+                    if (string.IsNullOrWhiteSpace(classCode))
                     {
-                        errors.Add($"Row {row.RowNumber()}: Missing SubjectCode or ClassCode for global import.");
+                        errors.Add($"Row {row.RowNumber()}: ClassCode is required.");
                         failedCount++;
                         continue;
                     }
 
-                    string cacheKey = $"{subjectCode}_{classCode}".ToUpperInvariant();
+                    // Build cache key
+                    string cacheKey = string.IsNullOrWhiteSpace(subjectCode)
+                        ? classCode.ToUpperInvariant()
+                        : $"{subjectCode}_{classCode}".ToUpperInvariant();
+
                     if (!classCache.TryGetValue(cacheKey, out targetClassId))
                     {
-                        var sc = subjectCode.ToUpperInvariant();
                         var cc = classCode.ToUpperInvariant();
-                        var cls = await _db.Classes
-                            .Include(c => c.Subject)
-                            .FirstOrDefaultAsync(c => c.Subject.Code == sc && c.ClassCode == cc, ct);
+
+                        Domain.Entities.Class? cls;
+                        if (!string.IsNullOrWhiteSpace(subjectCode))
+                        {
+                            var sc = subjectCode.ToUpperInvariant();
+                            cls = await _db.Classes
+                                .Include(c => c.Subject)
+                                .FirstOrDefaultAsync(c => c.Subject.Code == sc && c.ClassCode == cc, ct);
+                        }
+                        else
+                        {
+                            cls = await _db.Classes
+                                .FirstOrDefaultAsync(c => c.ClassCode == cc, ct);
+                        }
 
                         if (cls == null)
                         {
-                            errors.Add($"Row {row.RowNumber()}: Class {classCode} in Subject {subjectCode} not found.");
+                            var errorMsg = string.IsNullOrWhiteSpace(subjectCode)
+                                ? $"Row {row.RowNumber()}: Class '{classCode}' not found."
+                                : $"Row {row.RowNumber()}: Class '{classCode}' in Subject '{subjectCode}' not found.";
+                            errors.Add(errorMsg);
                             failedCount++;
                             continue;
                         }
 
                         targetClassId = cls.ClassId;
                         classCache[cacheKey] = targetClassId;
-                    }
-                }
-
-                // Process User
-                email = email.Trim().ToLowerInvariant();
-                var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
-
-                if (user == null)
-                {
-                    // Create new user
-                    var names = SplitFullName(fullName);
-                    user = new User
-                    {
-                        FirstName = names.FirstName,
-                        LastName = names.LastName,
-                        Email = email,
-                        Username = email.Split('@')[0] + "_" + Guid.NewGuid().ToString("N").Substring(0, 4),
-                        RollNumber = rollNumber,
-                        MemberCode = memberCode,
-                        DisplayName = fullName,
-                        Status = true,
-                        EmailVerified = true,
-                        LanguagePreference = "en",
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-                    _db.Users.Add(user);
-                    await _db.SaveChangesAsync(ct);
-                }
-                else
-                {
-                    // Update existing if new fields are provided
-                    bool updated = false;
-                    if (!string.IsNullOrWhiteSpace(rollNumber) && user.RollNumber != rollNumber)
-                    {
-                        user.RollNumber = rollNumber;
-                        updated = true;
-                    }
-                    if (!string.IsNullOrWhiteSpace(memberCode) && user.MemberCode != memberCode)
-                    {
-                        user.MemberCode = memberCode;
-                        updated = true;
-                    }
-                    if (updated)
-                    {
-                        user.UpdatedAt = DateTime.UtcNow;
-                        await _db.SaveChangesAsync(ct);
                     }
                 }
 
@@ -518,21 +472,6 @@ public class ClassMemberController : ControllerBase
         return string.Empty;
     }
 
-    private (string LastName, string FirstName) SplitFullName(string fullName)
-    {
-        if (string.IsNullOrWhiteSpace(fullName))
-            return ("Unknown", "Unknown");
-
-        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1)
-        {
-            return (parts[0], parts[0]); // LastName = First name, FirstName = Last name
-        }
-
-        string lastName = parts[0];
-        string firstName = string.Join(" ", parts.Skip(1));
-        return (lastName, firstName);
-    }
 
     // ── Helpers ───────────────────────────────
 

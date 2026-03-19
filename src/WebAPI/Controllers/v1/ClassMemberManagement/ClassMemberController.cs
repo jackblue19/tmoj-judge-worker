@@ -251,28 +251,25 @@ public class ClassMemberController : ControllerBase
     }
 
     // ──────────────────────────────────────────
-    // GET api/v1/ClassMember/import/template
+    // GET api/v1/ClassMember/import/template/global
+    // Template cho import toàn cục — chỉ thêm sinh viên vào hệ thống
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager,teacher")]
-    [HttpGet("import/template")]
-    public IActionResult DownloadTemplate([FromQuery] bool isGlobal = false)
+    [Authorize(Roles = "admin,manager")]
+    [HttpGet("import/template/global")]
+    public IActionResult DownloadGlobalTemplate()
     {
         try
         {
             using var workbook = new ClosedXML.Excel.XLWorkbook();
             var worksheet = workbook.Worksheets.Add("Template");
 
-            // Define headers
-            var headers = new List<string>();
-            if (isGlobal)
+            var headers = new List<string>
             {
-                headers.Add("SubjectCode");
-                headers.Add("ClassCode");
-            }
-            headers.Add("FullName");
-            headers.Add("Email");
-            headers.Add("RollNumber");
-            headers.Add("MemberCode");
+                "FullName",
+                "Email",
+                "RollNumber",
+                "MemberCode"
+            };
 
             // Write headers
             for (int i = 0; i < headers.Count; i++)
@@ -284,16 +281,10 @@ public class ClassMemberController : ControllerBase
             }
 
             // Write sample row
-            int colIndex = 1;
-            if (isGlobal)
-            {
-                worksheet.Cell(2, colIndex++).Value = "PRF192";
-                worksheet.Cell(2, colIndex++).Value = "SE21A01";
-            }
-            worksheet.Cell(2, colIndex++).Value = "Nguyen Van A";
-            worksheet.Cell(2, colIndex++).Value = "nguyenva@domain.com";
-            worksheet.Cell(2, colIndex++).Value = "HE111111";
-            worksheet.Cell(2, colIndex++).Value = "MEMBER001";
+            worksheet.Cell(2, 1).Value = "Nguyen Van A";
+            worksheet.Cell(2, 2).Value = "nguyenva@domain.com";
+            worksheet.Cell(2, 3).Value = "HE111111";
+            worksheet.Cell(2, 4).Value = "MEMBER001";
 
             worksheet.Columns().AdjustToContents();
 
@@ -301,9 +292,61 @@ public class ClassMemberController : ControllerBase
             workbook.SaveAs(stream);
             var content = stream.ToArray();
 
-            var fileName = isGlobal ? "Global_Import_Template.xlsx" : "Class_Import_Template.xlsx";
-            
-            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Global_Import_Template.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while generating template: " + ex.Message });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/ClassMember/import/template/class
+    // Template cho import theo lớp + môn học (có SubjectCode, ClassCode)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("import/template/class")]
+    public IActionResult DownloadClassTemplate()
+    {
+        try
+        {
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Template");
+
+            var headers = new List<string>
+            {
+                "SubjectCode",
+                "ClassCode",
+                "FullName",
+                "Email",
+                "RollNumber",
+                "MemberCode"
+            };
+
+            // Write headers
+            for (int i = 0; i < headers.Count; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+            }
+
+            // Write sample row
+            worksheet.Cell(2, 1).Value = "PRF192";
+            worksheet.Cell(2, 2).Value = "SE21A01";
+            worksheet.Cell(2, 3).Value = "Nguyen Van A";
+            worksheet.Cell(2, 4).Value = "nguyenva@domain.com";
+            worksheet.Cell(2, 5).Value = "HE111111";
+            worksheet.Cell(2, 6).Value = "MEMBER001";
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var content = stream.ToArray();
+
+            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Class_Import_Template.xlsx");
         }
         catch (Exception ex)
         {

@@ -81,7 +81,6 @@ public class AuthController : ControllerBase
             }
 
             var existingUser = await _db.Users
-                .Include(u => u.UserRoleUsers)
                 .FirstOrDefaultAsync(u => u.Email == email , ct);
 
             bool IsFptEmail(string eml)
@@ -109,9 +108,8 @@ public class AuthController : ControllerBase
                 existingUser.Password = _passwordHasher.Hash(req.Password);
                 existingUser.EmailVerified = false;
 
-                if ( !existingUser.UserRoleUsers.Any() )
+                if ( existingUser.RoleId == null )
                 {
-                    existingUser.UserRoleUsers.Add(new UserRole { RoleId = selectedRole.RoleId });
                     existingUser.RoleId = selectedRole.RoleId;
                 }
 
@@ -145,11 +143,6 @@ public class AuthController : ControllerBase
                 RoleId = selectedRole.RoleId
             };
 
-            user.UserRoleUsers.Add(new UserRole
-            {
-                RoleId = selectedRole.RoleId
-            });
-
             var newVerification = new EmailVerification
             {
                 User = user ,
@@ -181,7 +174,7 @@ public class AuthController : ControllerBase
         {
             var email = req.Email.ToLowerInvariant();
             var verification = await _db.EmailVerifications
-                .Include(v => v.User).ThenInclude(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(v => v.User).ThenInclude(u => u.Role)
                 .FirstOrDefaultAsync(v => v.User.Email == email && v.Token == req.Token , ct);
 
             if ( verification == null || verification.ExpiresAt < DateTime.UtcNow )
@@ -241,7 +234,7 @@ public class AuthController : ControllerBase
         {
             var email = req.Email.ToLowerInvariant();
             var user = await _db.Users
-                .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email , ct);
 
             if ( user == null || string.IsNullOrEmpty(user.Password) || !_passwordHasher.Verify(req.Password , user.Password) )
@@ -289,7 +282,7 @@ public class AuthController : ControllerBase
 
             var user = await _db.Users
                 .Include(u => u.UserProviders)
-                .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email , ct);
 
             var provider = await _db.Providers.FirstOrDefaultAsync(p => p.ProviderCode == "google" , ct);
@@ -320,8 +313,7 @@ public class AuthController : ControllerBase
                     EmailVerified = payload.EmailVerified ,
                     LanguagePreference = "vi" ,
                     Status = true ,
-                    UserProviders = new List<UserProvider>() ,
-                    UserRoleUsers = new List<UserRole>()
+                    UserProviders = new List<UserProvider>()
                 };
 
                 user.UserProviders.Add(new UserProvider
@@ -334,10 +326,6 @@ public class AuthController : ControllerBase
                 if ( studentRole != null )
                 {
                     user.RoleId = studentRole.RoleId;
-                    user.UserRoleUsers.Add(new UserRole
-                    {
-                        RoleId = studentRole.RoleId ,
-                    });
                 }
 
                 _db.Users.Add(user);
@@ -429,7 +417,7 @@ public class AuthController : ControllerBase
 
             var user = await _db.Users
                 .Include(u => u.UserProviders)
-                .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email , ct);
 
             var provider = await _db.Providers.FirstOrDefaultAsync(p => p.ProviderCode == "github" , ct);
@@ -452,8 +440,7 @@ public class AuthController : ControllerBase
                     EmailVerified = true , // GitHub verified
                     LanguagePreference = "vi" ,
                     Status = true ,
-                    UserProviders = new List<UserProvider>() ,
-                    UserRoleUsers = new List<UserRole>()
+                    UserProviders = new List<UserProvider>()
                 };
 
                 user.UserProviders.Add(new UserProvider
@@ -466,7 +453,6 @@ public class AuthController : ControllerBase
                 if ( studentRole != null ) 
                 {
                     user.RoleId = studentRole.RoleId;
-                    user.UserRoleUsers.Add(new UserRole { RoleId = studentRole.RoleId });
                 }
 
                 _db.Users.Add(user);
@@ -508,7 +494,7 @@ public class AuthController : ControllerBase
         {
             var hash = _refreshTokenService.HashToken(req.RefreshToken);
             var token = await _db.RefreshTokens
-                .Include(t => t.Session).ThenInclude(s => s.User).ThenInclude(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(t => t.Session).ThenInclude(s => s.User).ThenInclude(u => u.Role)
                 .FirstOrDefaultAsync(t => t.TokenHash == hash , ct);
 
             if ( token == null || token.ExpireAt < DateTime.UtcNow || token.RevokedAt != null )
@@ -661,15 +647,15 @@ public class AuthController : ControllerBase
     [HttpPost("users/{id}/assign-role")]
     public async Task<IActionResult> AssignRole(Guid id , [FromBody] AssignRoleRequest req , CancellationToken ct)
     {
-        var user = await _db.Users.Include(u => u.UserRoleUsers).FirstOrDefaultAsync(u => u.UserId == id , ct);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id , ct);
         if ( user == null ) return NotFound();
 
         var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant() , ct);
         if ( role == null ) return BadRequest(new { Message = "Role not found." });
 
-        if ( !user.UserRoleUsers.Any(ur => ur.RoleId == role.RoleId) )
+        if ( user.RoleId != role.RoleId )
         {
-            user.UserRoleUsers.Add(new UserRole { RoleId = role.RoleId });
+            user.RoleId = role.RoleId;
             await _db.SaveChangesAsync(ct);
         }
 
@@ -680,14 +666,13 @@ public class AuthController : ControllerBase
     [HttpDelete("users/{id}/roles/{roleCode}")]
     public async Task<IActionResult> RemoveRole(Guid id , string roleCode , CancellationToken ct)
     {
-        var user = await _db.Users.Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+        var user = await _db.Users.Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.UserId == id , ct);
         if ( user == null ) return NotFound();
 
-        var userRole = user.UserRoleUsers.FirstOrDefault(ur => ur.Role.RoleCode == roleCode.ToLowerInvariant());
-        if ( userRole != null )
+        if ( user.Role != null && user.Role.RoleCode == roleCode.ToLowerInvariant() )
         {
-            _db.UserRoles.Remove(userRole);
+            user.RoleId = null;
             await _db.SaveChangesAsync(ct);
         }
 
@@ -716,7 +701,8 @@ public class AuthController : ControllerBase
         _db.UserSessions.Add(session);
         await _db.SaveChangesAsync(ct);
 
-        var roles = user.UserRoleUsers.Select(ur => ur.Role.RoleCode).ToList();
+        var roles = new List<string>();
+        if ( user.Role != null ) roles.Add(user.Role.RoleCode);
         if ( !roles.Any() ) roles.Add("user");
 
         var accessToken = _tokenService.CreateAccessToken(

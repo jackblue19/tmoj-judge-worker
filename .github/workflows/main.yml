@@ -20,7 +20,7 @@ jobs:
             cd /root/TMOJ-BE
             git fetch origin
             git checkout main
-            git pull origin develop
+            git pull origin main
             sudo systemctl daemon-reload
             sudo systemctl enable tmoj-api
             sudo systemctl start tmoj-api

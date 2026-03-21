@@ -1,8 +1,10 @@
-﻿using Asp.Versioning;
+﻿using Application.UseCases.Auth;
+using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Text;
 
 namespace WebAPI.Controllers.v1.ProblemManagement;
@@ -13,10 +15,12 @@ namespace WebAPI.Controllers.v1.ProblemManagement;
 public class ProblemsController : ControllerBase
 {
     private readonly TmojDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public ProblemsController(TmojDbContext db)
+    public ProblemsController(TmojDbContext db , ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     // GET api/problems
@@ -83,6 +87,13 @@ public class ProblemsController : ControllerBase
         });
     }
 
+    private Guid? GetUserId()
+    {
+        var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? User.FindFirst("sub")?.Value;
+        return Guid.TryParse(idStr , out var id) ? id : null;
+    }
+
     // POST api/v1/problems/drafts
     [HttpPost("drafts")]
     public async Task<ActionResult<ProblemResponseDto>> Create(
@@ -91,6 +102,33 @@ public class ProblemsController : ControllerBase
     {
         var existing = await _db.Problems
             .FirstOrDefaultAsync(x => x.Slug == dto.Slug , ct);
+
+        //  fetch userId ver1
+        //if ( Guid.TryParse(_currentUser.UserId , out var userId) )
+        //{
+        //    dto.CreatedBy = userId;
+        //}
+        //else
+        //{
+        //    throw new Exception("Invalid UserId format");
+        //}
+
+        //  fetch userId ver2
+        //dto.CreatedBy = _currentUser.GetUserIdAsGuid();
+        dto.CreatedBy = GetUserId();
+        if ( dto.CreatedBy == null ) Console.WriteLine("del co userid");
+        if ( string.IsNullOrEmpty(dto.CreatedBy.ToString()) ) Console.WriteLine("notfound404040404004");
+        Console.WriteLine(dto.CreatedBy);
+
+        //  fetch userId ver3   (có Authorize -> ko cần ver 3)
+        //if ( _currentUser.TryGetUserIdAsGuid(out var userId) )
+        //{
+        //    dto.CreatedBy = (Guid?) userId;
+        //}
+        //else
+        //{
+        //    return Unauthorized();
+        //}
 
         if ( existing != null )
         {
@@ -108,7 +146,7 @@ public class ProblemsController : ControllerBase
             existing.DisplayIndex = dto.DisplayIndex;
             existing.TimeLimitMs = dto.TimeLimitMs;
             existing.MemoryLimitKb = dto.MemoryLimitKb;
-
+            existing.CreatedBy = dto.CreatedBy;
             existing.IsActive = true;
             existing.StatusCode = "draft";
             existing.PublishedAt = null;

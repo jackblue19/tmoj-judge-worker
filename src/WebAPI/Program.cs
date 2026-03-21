@@ -14,6 +14,8 @@ using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 using Microsoft.AspNetCore.HttpOverrides;
+using Application.UseCases.Auth;
+using Infrastructure.ExternalServices.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,7 +76,12 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 
-//  DI
+//  DI TEMP SERVICES
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
+
+//  DI LOCAL JUDGE
 
 builder.Services.AddSingleton<JudgeConnectionRegistry>();
 builder.Services.AddSingleton<JudgeDispatchService>();
@@ -210,8 +217,8 @@ app.UseMiddleware<RequestLogScopeMiddleware>();
 app.MapGet("/health" , () => Results.Ok(new
 {
     status = "Healthy" ,
-    timestamp = DateTime.UtcNow,
-    author = "Jack Blue",
+    timestamp = DateTime.UtcNow ,
+    author = "Jack Blue" ,
     apiVersion = "ver_2"
 }));
 

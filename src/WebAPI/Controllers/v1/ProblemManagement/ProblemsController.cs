@@ -2,6 +2,7 @@
 using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -96,6 +97,7 @@ public class ProblemsController : ControllerBase
 
     // POST api/v1/problems/drafts
     [HttpPost("drafts")]
+    [Authorize]
     public async Task<ActionResult<ProblemResponseDto>> Create(
         [FromBody] ProblemCreateDto dto ,
         CancellationToken ct)
@@ -114,8 +116,8 @@ public class ProblemsController : ControllerBase
         //}
 
         //  fetch userId ver2
-        //dto.CreatedBy = _currentUser.GetUserIdAsGuid();
-        dto.CreatedBy = GetUserId();
+        dto.CreatedBy = _currentUser.GetUserIdAsGuid();
+        //dto.CreatedBy = GetUserId();
         if ( dto.CreatedBy == null ) Console.WriteLine("del co userid");
         if ( string.IsNullOrEmpty(dto.CreatedBy.ToString()) ) Console.WriteLine("notfound404040404004");
         Console.WriteLine(dto.CreatedBy);
@@ -171,6 +173,7 @@ public class ProblemsController : ControllerBase
             DisplayIndex = dto.DisplayIndex ,
             TimeLimitMs = dto.TimeLimitMs ,
             MemoryLimitKb = dto.MemoryLimitKb ,
+            CreatedBy = dto.CreatedBy,
             StatusCode = "draft" ,
             CreatedAt = DateTime.UtcNow ,
             IsActive = true

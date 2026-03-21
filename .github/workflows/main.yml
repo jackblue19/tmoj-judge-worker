@@ -22,7 +22,7 @@ jobs:
             git checkout main
             git pull origin main
             cd /root/tmoj-sys/TMOJ-BE/src/WebAPI
-            dotnet publish -c Release -o /var/www/tmoj-api
+            dotnet clean
+            dotnet publish WebAPI.csproj -c Release -o /var/www/tmoj-api
             sudo systemctl daemon-reload
-            sudo systemctl enable tmoj-api
-            sudo systemctl start tmoj-api
+            sudo systemctl restart tmoj-api

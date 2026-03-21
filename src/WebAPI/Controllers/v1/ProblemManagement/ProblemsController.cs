@@ -1,8 +1,10 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Text;
 
 namespace WebAPI.Controllers.v1.ProblemManagement;
@@ -85,6 +87,7 @@ public class ProblemsController : ControllerBase
 
     // POST api/v1/problems/drafts
     [HttpPost("drafts")]
+    [Authorize]
     public async Task<ActionResult<ProblemResponseDto>> Create(
         [FromBody] ProblemCreateDto dto ,
         CancellationToken ct)
@@ -113,6 +116,7 @@ public class ProblemsController : ControllerBase
             existing.StatusCode = "draft";
             existing.PublishedAt = null;
             existing.UpdatedAt = DateTime.UtcNow;
+            existing.CreatedBy = GetUserId();
 
             await _db.SaveChangesAsync(ct);
 
@@ -135,7 +139,8 @@ public class ProblemsController : ControllerBase
             MemoryLimitKb = dto.MemoryLimitKb ,
             StatusCode = "draft" ,
             CreatedAt = DateTime.UtcNow ,
-            IsActive = true
+            IsActive = true ,
+            CreatedBy = GetUserId()
         };
 
         _db.Problems.Add(problem);
@@ -151,6 +156,7 @@ public class ProblemsController : ControllerBase
     [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("drafts/upload")]
     [Consumes("multipart/form-data")]
+    [Authorize]
     public async Task<ActionResult<ProblemResponseDto>> CreateWithMarkdownUpload(
     [FromForm] ProblemCreateFormDto dto ,
     CancellationToken ct)
@@ -196,6 +202,7 @@ public class ProblemsController : ControllerBase
             existing.StatusCode = "draft";
             existing.PublishedAt = null;
             existing.UpdatedAt = DateTime.UtcNow;
+            existing.CreatedBy = GetUserId();
 
             await _db.SaveChangesAsync(ct);
             return Ok(ToDto(existing));
@@ -217,7 +224,8 @@ public class ProblemsController : ControllerBase
             MemoryLimitKb = dto.MemoryLimitKb ,
             StatusCode = "draft" ,
             CreatedAt = DateTime.UtcNow ,
-            IsActive = true
+            IsActive = true ,
+            CreatedBy = GetUserId()
         };
 
         _db.Problems.Add(problem);
@@ -394,5 +402,12 @@ public class ProblemsController : ControllerBase
 
         await _db.SaveChangesAsync(ct);
         return Ok(ToDto(problem));
+    }
+
+    private Guid? GetUserId()
+    {
+        var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? User.FindFirst("sub")?.Value;
+        return Guid.TryParse(idStr, out var id) ? id : null;
     }
 }

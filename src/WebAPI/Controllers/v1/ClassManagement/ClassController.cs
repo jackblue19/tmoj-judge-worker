@@ -1,6 +1,5 @@
 using Asp.Versioning;
 using Domain.Entities;
-using Class = Domain.Entities.Class;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -671,8 +670,222 @@ public class ClassController : ControllerBase
             return StatusCode(500, new { Message = "An error occurred while exporting the report." });
         }
     }
+    // ──────────────────────────────────────────
+    // GET api/v1/class/import/template  →  Export Template Class (Admin/Manager)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager")]
+    [HttpGet("import/template")]
+    public IActionResult DownloadImportTemplate()
+    {
+        try
+        {
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Template");
+
+            var headers = new List<string>
+            {
+                "ClassCode",
+                "SubjectCode",
+                "SemesterCode",
+                "TeacherEmail",
+                "Description",
+                "StartDate",
+                "EndDate"
+            };
+
+            for (int i = 0; i < headers.Count; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+            }
+
+            // Sample row
+            worksheet.Cell(2, 1).Value = "SE1701";
+            worksheet.Cell(2, 2).Value = "PRN211";
+            worksheet.Cell(2, 3).Value = "FA23";
+            worksheet.Cell(2, 4).Value = "teacher@domain.com";
+            worksheet.Cell(2, 5).Value = "CSharp Programming";
+            worksheet.Cell(2, 6).Value = "2023-09-01";
+            worksheet.Cell(2, 7).Value = "2023-12-31";
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var content = stream.ToArray();
+
+            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Class_Import_Template.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while generating template: " + ex.Message });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/import  →  Import Class from Excel (Admin/Manager)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager")]
+    [HttpPost("import")]
+    public async Task<IActionResult> ImportClasses(IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Message = "File is missing." });
+
+        try
+        {
+            int successCount = 0;
+            int failedCount = 0;
+            var errors = new List<string>();
+            int totalProcessed = 0;
+
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, ct);
+            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+            var worksheet = workbook.Worksheet(1);
+            var rows = worksheet.RowsUsed().Skip(1); // skip header
+
+            var headerRow = worksheet.Row(1);
+            var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var cell in headerRow.CellsUsed())
+            {
+                headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
+            }
+
+            var subjectsDict = await _db.Subjects.ToDictionaryAsync(s => s.Code.ToLowerInvariant(), s => s.SubjectId, ct);
+            var semestersDict = await _db.Semesters.ToDictionaryAsync(s => s.Code.ToLowerInvariant(), s => s.SemesterId, ct);
+
+            foreach (var row in rows)
+            {
+                totalProcessed++;
+                try
+                {
+                    string classCodeRaw = GetCellString(row, headers, "ClassCode");
+                    string subjectCodeRaw = GetCellString(row, headers, "SubjectCode");
+                    string semesterCodeRaw = GetCellString(row, headers, "SemesterCode");
+                    string teacherEmailRaw = GetCellString(row, headers, "TeacherEmail");
+                    string descRaw = GetCellString(row, headers, "Description");
+                    string startDateRaw = GetCellString(row, headers, "StartDate");
+                    string endDateRaw = GetCellString(row, headers, "EndDate");
+
+                    if (string.IsNullOrWhiteSpace(classCodeRaw) || string.IsNullOrWhiteSpace(subjectCodeRaw) || string.IsNullOrWhiteSpace(semesterCodeRaw))
+                    {
+                        errors.Add($"Row {row.RowNumber()}: Missing Required fields (ClassCode, SubjectCode, SemesterCode).");
+                        failedCount++;
+                        continue;
+                    }
+
+                    var classCode = classCodeRaw.Trim().ToUpperInvariant();
+                    var subjectCode = subjectCodeRaw.Trim().ToLowerInvariant();
+                    var semesterCode = semesterCodeRaw.Trim().ToLowerInvariant();
+
+                    if (!subjectsDict.TryGetValue(subjectCode, out var subjectId))
+                    {
+                        errors.Add($"Row {row.RowNumber()}: Subject '{subjectCodeRaw}' not found.");
+                        failedCount++;
+                        continue;
+                    }
+
+                    if (!semestersDict.TryGetValue(semesterCode, out var semesterId))
+                    {
+                        errors.Add($"Row {row.RowNumber()}: Semester '{semesterCodeRaw}' not found.");
+                        failedCount++;
+                        continue;
+                    }
+
+                    var isClassExists = await _db.Classes.AnyAsync(c => c.ClassCode == classCode, ct);
+                    if (isClassExists)
+                    {
+                        errors.Add($"Row {row.RowNumber()}: Class Code '{classCode}' already exists.");
+                        failedCount++;
+                        continue;
+                    }
+
+                    Guid? teacherId = null;
+                    if (!string.IsNullOrWhiteSpace(teacherEmailRaw))
+                    {
+                        var teacherEmail = teacherEmailRaw.Trim().ToLowerInvariant();
+                        var teacher = await _db.Users.FirstOrDefaultAsync(u => u.Email == teacherEmail, ct);
+                        if (teacher == null)
+                        {
+                            errors.Add($"Row {row.RowNumber()}: Teacher '{teacherEmailRaw}' not found.");
+                            failedCount++;
+                            continue;
+                        }
+                        teacherId = teacher.UserId;
+                    }
+
+                    DateOnly? startDate = null;
+                    DateOnly? endDate = null;
+
+                    if (!string.IsNullOrWhiteSpace(startDateRaw) && DateOnly.TryParse(startDateRaw, out var sDate))
+                        startDate = sDate;
+
+                    if (!string.IsNullOrWhiteSpace(endDateRaw) && DateOnly.TryParse(endDateRaw, out var eDate))
+                        endDate = eDate;
+
+                    var cls = new Domain.Entities.Class
+                    {
+                        SubjectId = subjectId,
+                        SemesterId = semesterId,
+                        ClassCode = classCode,
+                        Description = descRaw,
+                        StartDate = startDate,
+                        EndDate = endDate,
+                        TeacherId = teacherId,
+                        IsActive = true
+                    };
+                    _db.Classes.Add(cls);
+                    await _db.SaveChangesAsync(ct);
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Row {row.RowNumber()}: {ex.Message}");
+                    failedCount++;
+                }
+            }
+
+            var result = new
+            {
+                TotalProcessed = totalProcessed,
+                SuccessCount = successCount,
+                FailedCount = failedCount,
+                Errors = errors
+            };
+
+            return Ok(ApiResponse<object>.Ok(result, "Import processed with results."));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
+        }
+    }
 
     // ── Helpers ───────────────────────────────
+
+    private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string columnName)
+    {
+        if (headers.TryGetValue(columnName, out int colIdx))
+        {
+            try
+            {
+                var cell = row.Cell(colIdx);
+                if (cell.DataType == ClosedXML.Excel.XLDataType.DateTime)
+                {
+                    return cell.GetDateTime().ToString("yyyy-MM-dd");
+                }
+                return cell.GetString()?.Trim() ?? string.Empty;
+            }
+            catch
+            {
+                return row.Cell(colIdx).GetValue<string>()?.Trim() ?? string.Empty;
+            }
+        }
+        return string.Empty;
+    }
 
     private Guid? GetUserId()
     {

@@ -9,6 +9,7 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+using Infrastructure.Persistence.Scaffolded.Context;
 
 namespace Infrastructure.Persistence.Common;
 
@@ -21,7 +22,7 @@ namespace Infrastructure.Persistence.Common;
 public class EfReadRepository<TEntity, TKey> : IReadRepository<TEntity , TKey>
     where TEntity : class
 {
-    private readonly DbContext _db;
+    private readonly TmojDbContext _db;
     private readonly DbSet<TEntity> _set;
     private readonly ISpecificationEvaluator _evaluator;
     private readonly bool _defaultNoTracking;
@@ -31,7 +32,7 @@ public class EfReadRepository<TEntity, TKey> : IReadRepository<TEntity , TKey>
     private readonly Type? _singlePkClrType;
 
     public EfReadRepository(
-        DbContext db ,
+        TmojDbContext db ,
         ISpecificationEvaluator? evaluator = null ,
         bool defaultNoTracking = true)
     {

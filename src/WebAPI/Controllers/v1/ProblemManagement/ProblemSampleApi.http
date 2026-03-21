@@ -1,0 +1,40 @@
+@WebAPI_HostAddress = https://localhost:7210
+
+POST {{WebAPI_HostAddress}}/api/v1/Problems/drafts
+Content-Type: application/json
+Accept: application/json
+{
+  "slug": "two-saum4s444", 
+  "title": "Two Sum",
+  "difficulty": "easy",
+  "typeCode": "algorithm",
+  "visibilityCode": "public",
+  "scoringCode": "acm",
+  "descriptionMd": "Given an array of integers nums and an integer target...",
+  "displayIndex": 1,
+  "timeLimitMs": 1000,
+  "memoryLimitKb": 262144,
+  "createdBy": "11111111-1111-1111-1111-111111111111"
+}
+
+###
+
+GET {{WebAPI_HostAddress}}/api/v1/Problems
+Content-Type: application/json
+Accept: application/json
+
+###
+
+GET {{WebAPI_HostAddress}}/api/v1/Problems/{9bd4afde-0196-4e28-a7a4-e74d13dda5c3}
+Content-Type: application/json
+Accept: application/json
+
+###
+
+DELETE {{WebAPI_HostAddress}}/api/v1/Problems/{9bd4afde-0196-4e28-a7a4-e74d13dda5c3}
+Content-Type: application/json
+Accept: application/json
+
+###
+
+

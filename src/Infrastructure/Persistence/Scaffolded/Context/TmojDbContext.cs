@@ -7,6 +7,10 @@ namespace Infrastructure.Persistence.Scaffolded.Context;
 
 public partial class TmojDbContext : DbContext
 {
+    public TmojDbContext()
+    {
+    }
+
     public TmojDbContext(DbContextOptions<TmojDbContext> options)
         : base(options)
     {
@@ -33,6 +37,12 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<ClassSlotProblem> ClassSlotProblems { get; set; }
 
     public virtual DbSet<CoinConversion> CoinConversions { get; set; }
+
+    public virtual DbSet<Collection> Collections { get; set; }
+
+    public virtual DbSet<CollectionItem> CollectionItems { get; set; }
+
+    public virtual DbSet<CommentVote> CommentVotes { get; set; }
 
     public virtual DbSet<ContentReport> ContentReports { get; set; }
 
@@ -149,7 +159,6 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<Wallet> Wallets { get; set; }
 
     public virtual DbSet<WalletTransaction> WalletTransactions { get; set; }
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
@@ -353,6 +362,8 @@ public partial class TmojDbContext : DbContext
 
             entity.HasIndex(e => e.ClassCode, "class_class_code_key").IsUnique();
 
+            entity.HasIndex(e => e.InviteCode, "class_invite_code_key").IsUnique();
+
             entity.Property(e => e.ClassId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("class_id");
@@ -363,6 +374,8 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.EndDate).HasColumnName("end_date");
+            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
+            entity.Property(e => e.InviteCodeExpiresAt).HasColumnName("invite_code_expires_at");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
@@ -373,6 +386,7 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
 
             entity.HasOne(d => d.Semester).WithMany(p => p.Classes)
                 .HasForeignKey(d => d.SemesterId)
@@ -528,6 +542,116 @@ public partial class TmojDbContext : DbContext
                 .HasForeignKey(d => d.TransactionId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("coin_conversion_transaction_id_fkey");
+        });
+
+        modelBuilder.Entity<Collection>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("collections_pkey");
+
+            entity.ToTable("collections");
+
+            entity.HasIndex(e => e.UserId, "uq_user_favorite_contest")
+                .IsUnique()
+                .HasFilter("((type)::text = 'favorite_contest'::text)");
+
+            entity.HasIndex(e => e.UserId, "uq_user_favorite_problem")
+                .IsUnique()
+                .HasFilter("((type)::text = 'favorite_problem'::text)");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.IsVisibility)
+                .HasDefaultValue(false)
+                .HasColumnName("is_visibility");
+            entity.Property(e => e.Name)
+                .HasMaxLength(255)
+                .HasColumnName("name");
+            entity.Property(e => e.Type)
+                .HasMaxLength(30)
+                .HasColumnName("type");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+
+            entity.HasOne(d => d.User).WithOne(p => p.Collection)
+                .HasForeignKey<Collection>(d => d.UserId)
+                .HasConstraintName("fk_col_user");
+        });
+
+        modelBuilder.Entity<CollectionItem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("collection_items_pkey");
+
+            entity.ToTable("collection_items");
+
+            entity.HasIndex(e => new { e.CollectionId, e.ContestId }, "uq_collection_contest")
+                .IsUnique()
+                .HasFilter("(contest_id IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.CollectionId, e.ProblemId }, "uq_collection_problem")
+                .IsUnique()
+                .HasFilter("(problem_id IS NOT NULL)");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.CollectionId).HasColumnName("collection_id");
+            entity.Property(e => e.ContestId).HasColumnName("contest_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.ProblemId).HasColumnName("problem_id");
+
+            entity.HasOne(d => d.Collection).WithMany(p => p.CollectionItems)
+                .HasForeignKey(d => d.CollectionId)
+                .HasConstraintName("fk_ci_collection");
+
+            entity.HasOne(d => d.Contest).WithMany(p => p.CollectionItems)
+                .HasForeignKey(d => d.ContestId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_ci_contest");
+
+            entity.HasOne(d => d.Problem).WithMany(p => p.CollectionItems)
+                .HasForeignKey(d => d.ProblemId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_ci_problem");
+        });
+
+        modelBuilder.Entity<CommentVote>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("comment_votes_pkey");
+
+            entity.ToTable("comment_votes");
+
+            entity.HasIndex(e => e.CommentId, "idx_comment_votes_comment");
+
+            entity.HasIndex(e => e.UserId, "idx_comment_votes_user");
+
+            entity.HasIndex(e => new { e.UserId, e.CommentId }, "uq_user_comment_vote").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.CommentId).HasColumnName("comment_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Vote).HasColumnName("vote");
+
+            entity.HasOne(d => d.Comment).WithMany(p => p.CommentVotes)
+                .HasForeignKey(d => d.CommentId)
+                .HasConstraintName("fk_comment_votes_comment");
+
+            entity.HasOne(d => d.User).WithMany(p => p.CommentVotes)
+                .HasForeignKey(d => d.UserId)
+                .HasConstraintName("fk_comment_votes_user");
         });
 
         modelBuilder.Entity<ContentReport>(entity =>
@@ -869,12 +993,18 @@ public partial class TmojDbContext : DbContext
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
             entity.Property(e => e.DiscussionId).HasColumnName("discussion_id");
+            entity.Property(e => e.IsHidden)
+                .HasDefaultValue(false)
+                .HasColumnName("is_hidden");
             entity.Property(e => e.ParentId).HasColumnName("parent_id");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("updated_at");
             entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.VoteCount)
+                .HasDefaultValue(0)
+                .HasColumnName("vote_count");
 
             entity.HasOne(d => d.Discussion).WithMany(p => p.DiscussionComments)
                 .HasForeignKey(d => d.DiscussionId)

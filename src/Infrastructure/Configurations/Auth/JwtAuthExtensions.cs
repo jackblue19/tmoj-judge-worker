@@ -1,4 +1,4 @@
-﻿using Application.UseCases.Auth;
+using Application.UseCases.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +26,7 @@ public static class JwtAuthExtensions
 
         services.AddSingleton<ITokenService , JwtTokenService>();
         services.AddSingleton<IRefreshTokenService , RefreshTokenService>();
-        //services.AddSingleton<IPasswordHasher , Pbkdf2PasswordHasher>();
+        services.AddSingleton<IPasswordHasher , Pbkdf2PasswordHasher>();
 
         services.AddAuthorization();
         return services;
@@ -59,8 +59,8 @@ public static class JwtAuthExtensions
                 ValidateIssuerSigningKey = true ,
                 IssuerSigningKey = signingKey ,
 
-                NameClaimType = "name" ,
-                RoleClaimType = "role"
+                NameClaimType = System.Security.Claims.ClaimTypes.Name ,
+                RoleClaimType = System.Security.Claims.ClaimTypes.Role
             };
         }
 

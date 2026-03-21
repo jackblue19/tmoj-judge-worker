@@ -26,3 +26,20 @@
 //    bool IsPublic
 //) : IRequest<CreateProblemResult>;
 
+
+using MediatR;
+
+namespace Application.UseCases.Problems.Commands.CreateProblem;
+
+public sealed record CreateProblemCommand(
+    string Title ,
+    string? Slug ,
+    string? Difficulty ,
+    string? TypeCode ,
+    string? VisibilityCode ,
+    string? ScoringCode ,
+    string StatusCode ,
+    string? DescriptionMd ,
+    int? TimeLimitMs ,
+    int? MemoryLimitKb
+) : IRequest<Guid>;

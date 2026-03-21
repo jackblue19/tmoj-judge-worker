@@ -49,6 +49,8 @@ public partial class Contest
 
     public virtual ICollection<ClassSlot> ClassSlots { get; set; } = new List<ClassSlot>();
 
+    public virtual ICollection<CollectionItem> CollectionItems { get; set; } = new List<CollectionItem>();
+
     public virtual ICollection<ContestAnalytic> ContestAnalytics { get; set; } = new List<ContestAnalytic>();
 
     public virtual ICollection<ContestProblem> ContestProblems { get; set; } = new List<ContestProblem>();

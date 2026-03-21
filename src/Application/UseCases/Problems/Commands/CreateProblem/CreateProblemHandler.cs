@@ -1,59 +1,59 @@
-﻿//using System;
-//using System.Collections.Generic;
-//using System.Linq;
-//using System.Text;
-//using System.Threading.Tasks;
-//using Domain.Entities;
-//using MediatR;
+﻿using Domain.Abstractions;
+using Domain.Entities;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-//namespace Application.UseCases.Problems.Commands.CreateProblem;
+namespace Application.UseCases.Problems.Commands.CreateProblem;
 
-////  ở đoạn này có thể đặt record cho command ở đây cũng được
-////  ko nhất thiết tạo thêm 1 file CreateProblemCommand ...
-////  chả qua là muốn tường minh nên có tách ra
+public sealed class CreateProblemHandler
+    : IRequestHandler<CreateProblemCommand , Guid>
+{
+    private readonly IWriteRepository<Problem , Guid> _repo;
+    private readonly IUnitOfWork _uow;
 
-//public class CreateProblemHandler : IRequestHandler<CreateProblemCommand , CreateProblemResult>
-//{
-//    private readonly IRepository<Problem> _repo;
+    public CreateProblemHandler(
+        IWriteRepository<Problem , Guid> repo ,
+        IUnitOfWork uow)
+    {
+        _repo = repo;
+        _uow = uow;
+    }
 
-//    public CreateProblemHandler(IRepository<Problem> repo)
-//    {
-//        _repo = repo;
-//    }
+    public async Task<Guid> Handle(
+        CreateProblemCommand request ,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
 
-//    public async Task<CreateProblemResult> Handle(CreateProblemCommand request , CancellationToken ct)
-//    {
-//        //  Mapster CodeGen extension
-//        var problem = request.ToProblem();      // cần build ngay khi có CreateProblemMapping mới có
+        var entity = new Problem
+        {
+            Id = Guid.NewGuid() ,
+            Title = request.Title ,
+            Slug = request.Slug ,
+            Difficulty = request.Difficulty ,
+            TypeCode = request.TypeCode ,
+            VisibilityCode = request.VisibilityCode ,
+            ScoringCode = request.ScoringCode ,
+            StatusCode = request.StatusCode ,
+            DescriptionMd = request.DescriptionMd ,
+            TimeLimitMs = request.TimeLimitMs ,
+            MemoryLimitKb = request.MemoryLimitKb ,
+            IsActive = true ,
+            CreatedAt = now ,
+            PublishedAt = request.StatusCode == "published"
+                ? now
+                : null
+        };
 
-//        await _repo.AddAsync(problem , ct);
+        await _repo.AddAsync(entity , ct);
 
-//        return new CreateProblemResult(problem.Id);
-//        //  return new CreateProblemResult(problem.Id, problem.slug);   //ver 2
-//    }
-//}
+        await _uow.SaveChangesAsync(ct);
 
-
-////  🔥🔥🔥
-
-//public interface IRepository<T>
-//{
-//    Task<T> AddAsync(T entity , CancellationToken ct = default);
-//    Task<T?> GetByIdAsync(Guid id , CancellationToken ct = default);
-//    Task<List<T>> ListAsync(CancellationToken ct = default);
-//}
-
-////  Giả sử đã build rồi thì sẽ có thêm file này (Application\Generated\CreateProblemCommand.g.cs)
-//public static partial class CreateProblemCommandMapper
-//{
-//    public static Problem ToProblem(this CreateProblemCommand src)
-//    {
-//        return Problem.Create(
-//            src.Title ,
-//            src.Slug ,
-//            //src.Content ,
-//            src.Difficulty,
-//            src.IsPublic
-//        );
-//    }
-//}
+        return entity.Id;
+    }
+}

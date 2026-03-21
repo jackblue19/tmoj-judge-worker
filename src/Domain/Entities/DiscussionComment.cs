@@ -19,6 +19,12 @@ public partial class DiscussionComment
 
     public DateTime? UpdatedAt { get; set; }
 
+    public int VoteCount { get; set; }
+
+    public bool? IsHidden { get; set; }
+
+    public virtual ICollection<CommentVote> CommentVotes { get; set; } = new List<CommentVote>();
+
     public virtual ProblemDiscussion Discussion { get; set; } = null!;
 
     public virtual ICollection<DiscussionComment> InverseParent { get; set; } = new List<DiscussionComment>();

@@ -1,4 +1,5 @@
 ﻿using Domain.Abstractions;
+using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -15,10 +16,10 @@ namespace Infrastructure.Persistence.Common;
 public class EfWriteRepository<TEntity, TKey> : IWriteRepository<TEntity , TKey>
     where TEntity : class
 {
-    private readonly DbContext _db;
+    private readonly TmojDbContext _db;
     private readonly DbSet<TEntity> _set;
 
-    public EfWriteRepository(DbContext db)
+    public EfWriteRepository(TmojDbContext db)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _set = _db.Set<TEntity>();

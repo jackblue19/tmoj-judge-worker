@@ -8,5 +8,6 @@
 //{
 //    internal class GetProblemByIdQuery
 //    {
+//          đây chính là DTO
 //    }
 //}

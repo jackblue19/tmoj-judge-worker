@@ -1,0 +1,31 @@
+@token = 
+
+### Create C++ (g++)
+POST https://localhost:7210/api/v1/runtimes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "runtimeName": "C++ (g++)",
+  "runtimeVersion": "local",
+  "defaultTimeLimitMs": 1000,
+  "defaultMemoryLimitKb": 262144,
+  "isActive": true
+}
+
+### Create C (gcc)
+POST https://localhost:7210/api/v1/runtimes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "runtimeName": "C (gcc)",
+  "runtimeVersion": "local",
+  "defaultTimeLimitMs": 1000,
+  "defaultMemoryLimitKb": 262144,
+  "isActive": true
+}
+
+### List
+GET https://localhost:7210/api/v1/runtimes
+Authorization: Bearer {{token}}

@@ -2,7 +2,7 @@ name: Next Deployment
 
 on:
   push:
-    branches: [production]
+    branches: [main]
 
 jobs:
   deploy:
@@ -17,8 +17,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cd /root/services/testcicd/TMOJ-BE
+            cd /root/TMOJ-BE
             git fetch origin
-            git checkout production
-            git pull
-          
+            git checkout main
+            git pull origin develop
+            sudo systemctl daemon-reload
+            sudo systemctl enable tmoj-api
+            sudo systemctl start tmoj-api

@@ -221,7 +221,9 @@ app.UseMiddleware<RequestLogScopeMiddleware>();
 app.MapGet("/health" , () => Results.Ok(new
 {
     status = "Healthy" ,
-    timestamp = DateTime.UtcNow
+    timestamp = DateTime.UtcNow,
+    author = "Jack Blue",
+    apiVersion = "ver_2"
 }));
 
 

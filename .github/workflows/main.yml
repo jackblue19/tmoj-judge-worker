@@ -1,0 +1,28 @@
+name: Next Deployment
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy using ssh
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /root/tmoj-sys/TMOJ-BE
+            git fetch origin
+            git checkout main
+            git pull origin main
+            cd /root/tmoj-sys/TMOJ-BE/src/WebAPI
+            dotnet clean
+            dotnet publish WebAPI.csproj -c Release -o /var/www/tmoj-api
+            sudo systemctl daemon-reload
+            sudo systemctl restart tmoj-api

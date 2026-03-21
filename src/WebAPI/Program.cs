@@ -211,7 +211,8 @@ app.MapGet("/health" , () => Results.Ok(new
 {
     status = "Healthy" ,
     timestamp = DateTime.UtcNow,
-    author = "Jack Blue"
+    author = "Jack Blue",
+    apiVersion = "ver_2"
 }));
 
 

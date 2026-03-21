@@ -49,7 +49,7 @@ public class UserController : ControllerBase
                 Email = email ,
                 Password = _passwordHasher.Hash(req.Password) ,
                 Username = req.Username ?? (email.Split('@')[0] + Random.Shared.Next(1000 , 9999).ToString()) ,
-                DisplayName = $"{req.FirstName} {req.LastName}" ,
+                DisplayName = $"{req.LastName} {req.FirstName}" ,
                 LanguagePreference = "vi" ,
                 Status = true ,
                 EmailVerified = true // Admin created users are verified by default
@@ -270,6 +270,8 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
                 message = "An error occurred while fetching users."
             });
         }
+    }
+
     // ──────────────────────────────────────────
     // GET api/v1/User/import/template
     // Template cho admin thêm sinh viên vào hệ thống
@@ -284,10 +286,12 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
             var worksheet = workbook.Worksheets.Add("Template");
 
             var headers = new List<string>
-            {
-                "FullName",
-                "Email"
-            };
+        {
+            "FullName",
+            "Email",
+            "RollNumber",
+            "MemberCode"
+        };
 
             for (int i = 0; i < headers.Count; i++)
             {
@@ -300,6 +304,8 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
             // Sample row
             worksheet.Cell(2, 1).Value = "Nguyen Van A";
             worksheet.Cell(2, 2).Value = "nguyenva@domain.com";
+            worksheet.Cell(2, 3).Value = "SE123456";
+            worksheet.Cell(2, 4).Value = "A_NV";
 
             worksheet.Columns().AdjustToContents();
 
@@ -315,111 +321,116 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
         }
     }
 
-    // ──────────────────────────────────────────
-    // POST api/v1/User/import
-    // Admin import sinh viên hàng loạt từ Excel
-    // ──────────────────────────────────────────
-    [Authorize(Roles = "admin")]
-    [HttpPost("import")]
-    public async Task<IActionResult> ImportStudents(IFormFile file, CancellationToken ct)
-    {
-        if (file == null || file.Length == 0)
-            return BadRequest(new { Message = "File is missing." });
-
-        try
+        // ──────────────────────────────────────────
+        // POST api/v1/User/import
+        // Admin import sinh viên hàng loạt từ Excel
+        // ──────────────────────────────────────────
+        [Authorize(Roles = "admin")]
+        [HttpPost("import")]
+        public async Task<IActionResult> ImportStudents(IFormFile file, CancellationToken ct)
         {
-            int successCount = 0;
-            int failedCount = 0;
-            var errors = new List<string>();
-            int totalProcessed = 0;
+            if (file == null || file.Length == 0)
+                return BadRequest(new { Message = "File is missing." });
 
-            using var stream = new MemoryStream();
-            await file.CopyToAsync(stream, ct);
-            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
-            var worksheet = workbook.Worksheet(1);
-            var rows = worksheet.RowsUsed().Skip(1); // skip header
-
-            var headerRow = worksheet.Row(1);
-            var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var cell in headerRow.CellsUsed())
+            try
             {
-                headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
-            }
+                int successCount = 0;
+                int failedCount = 0;
+                var errors = new List<string>();
+                int totalProcessed = 0;
 
-            foreach (var row in rows)
-            {
-                totalProcessed++;
-                try
+                using var stream = new MemoryStream();
+                await file.CopyToAsync(stream, ct);
+                using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+                var worksheet = workbook.Worksheet(1);
+                var rows = worksheet.RowsUsed().Skip(1); // skip header
+
+                var headerRow = worksheet.Row(1);
+                var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var cell in headerRow.CellsUsed())
                 {
-                    string email = GetCellString(row, headers, "Email");
-                    string fullName = GetCellString(row, headers, "FullName");
+                    headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
+                }
 
-                    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
+                foreach (var row in rows)
+                {
+                    totalProcessed++;
+                    try
                     {
-                        errors.Add($"Row {row.RowNumber()}: Missing Email or FullName.");
-                        failedCount++;
-                        continue;
-                    }
+                        string fullName = GetCellString(row, headers, "FullName");
+                        string email = GetCellString(row, headers, "Email");             
+                        string rollNumber = GetCellString(row, headers, "RollNumber");
+                        string memberCode = GetCellString(row, headers, "MemberCode");
 
-                    email = email.Trim().ToLowerInvariant();
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
-
-                    if (user == null)
-                    {
-                        var names = SplitFullName(fullName);
-                        user = new User
+                        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
                         {
-                            FirstName = names.FirstName,
-                            LastName = names.LastName,
-                            Email = email,
-                            Username = email.Split('@')[0] + "_" + Guid.NewGuid().ToString("N").Substring(0, 4),
-                            DisplayName = fullName,
-                            Status = true,
-                            EmailVerified = true,
-                            LanguagePreference = "en",
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        };
-
-                        // Assign student role by default
-                        var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student", ct);
-                        if (studentRole != null)
-                        {
-                            user.RoleId = studentRole.RoleId;
+                            errors.Add($"Row {row.RowNumber()}: Missing Email or FullName.");
+                            failedCount++;
+                            continue;
                         }
 
-                        _db.Users.Add(user);
-                        await _db.SaveChangesAsync(ct);
-                        successCount++;
+                        email = email.Trim().ToLowerInvariant();
+                        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+
+                        if (user == null)
+                        {
+                            var names = SplitFullName(fullName);
+                            user = new User
+                            {
+                                FirstName = names.FirstName,
+                                LastName = names.LastName,
+                                Email = email,
+                                Username = email.Split('@')[0] + "_" + Guid.NewGuid().ToString("N").Substring(0, 4),
+                                DisplayName = fullName,
+                                RollNumber = rollNumber,
+                                MemberCode = memberCode,
+                                Status = true,
+                                EmailVerified = true,
+                                LanguagePreference = "en",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+
+                            // Assign student role by default
+                            var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student", ct);
+                            if (studentRole != null)
+                            {
+                                user.RoleId = studentRole.RoleId;
+                            }
+
+                            _db.Users.Add(user);
+                            await _db.SaveChangesAsync(ct);
+                            successCount++;
+                        }
+                        else
+                        {
+                            // User đã tồn tại — bỏ qua, không tạo mới
+                            successCount++;
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        // User đã tồn tại — bỏ qua, không tạo mới
-                        successCount++;
+                        errors.Add($"Row {row.RowNumber()}: {ex.Message}");
+                        failedCount++;
                     }
                 }
-                catch (Exception ex)
+
+                var result = new
                 {
-                    errors.Add($"Row {row.RowNumber()}: {ex.Message}");
-                    failedCount++;
-                }
+                    TotalProcessed = totalProcessed,
+                    SuccessCount = successCount,
+                    FailedCount = failedCount,
+                    Errors = errors
+                };
+
+                return Ok(ApiResponse<object>.Ok(result, "Import processed successfully"));
             }
-
-            var result = new
+            catch (Exception ex)
             {
-                TotalProcessed = totalProcessed,
-                SuccessCount = successCount,
-                FailedCount = failedCount,
-                Errors = errors
-            };
+                return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
+            }
+        } 
 
-            return Ok(ApiResponse<object>.Ok(result, "Import processed successfully"));
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
-        }
-    }
 
     private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string columnName)
     {

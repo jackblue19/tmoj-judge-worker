@@ -104,8 +104,10 @@ public class AuthController : ControllerBase
                 // Ghi đè thông tin đăng ký lên tài khoản import chưa có password
                 existingUser.FirstName = req.FirstName;
                 existingUser.LastName = req.LastName;
-                existingUser.DisplayName = $"{req.FirstName} {req.LastName}";
+                existingUser.DisplayName = $"{req.LastName} {req.FirstName}";
+                existingUser.AvatarUrl = req.Avatar;
                 existingUser.Password = _passwordHasher.Hash(req.Password);
+                existingUser.LanguagePreference = "vi";
                 existingUser.EmailVerified = false;
 
                 if ( existingUser.RoleId == null )
@@ -136,7 +138,8 @@ public class AuthController : ControllerBase
                 Email = email ,
                 Password = _passwordHasher.Hash(req.Password) ,
                 Username = email.Split('@')[0] + Random.Shared.Next(1000 , 9999).ToString() ,
-                DisplayName = $"{req.FirstName} {req.LastName}" ,
+                DisplayName = $"{req.LastName} {req.FirstName}" ,
+                AvatarUrl = req.Avatar ,
                 LanguagePreference = "vi" ,
                 Status = true ,
                 EmailVerified = false ,

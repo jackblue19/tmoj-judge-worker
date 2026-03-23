@@ -412,11 +412,4 @@ public class ProblemsController : ControllerBase
         await _db.SaveChangesAsync(ct);
         return Ok(ToDto(problem));
     }
-
-    private Guid? GetUserId()
-    {
-        var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                 ?? User.FindFirst("sub")?.Value;
-        return Guid.TryParse(idStr, out var id) ? id : null;
-    }
 }

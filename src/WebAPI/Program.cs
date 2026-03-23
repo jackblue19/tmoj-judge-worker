@@ -1,4 +1,4 @@
-﻿using Application;
+using Application;
 using Application.UseCases.Problems.Queries.GetAllProblems;
 using Domain.Abstractions;
 using Infrastructure;
@@ -52,6 +52,7 @@ builder.Services.AddScoped(
     typeof(IWriteRepository<,>) ,
     typeof(EfWriteRepository<,>));
 builder.Services.AddScoped<IUnitOfWork , EfUnitOfWork>();
+builder.Services.AddExternalServices(builder.Configuration);
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);

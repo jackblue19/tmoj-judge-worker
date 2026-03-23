@@ -1,4 +1,4 @@
-﻿using Ardalis.Specification.EntityFrameworkCore;
+using Ardalis.Specification.EntityFrameworkCore;
 using Ardalis.Specification;
 using Domain.Abstractions;
 using Microsoft.Extensions.Configuration;
@@ -41,6 +41,14 @@ public static class InfrastructureRegistration
         IConfiguration config)
     {
         //  repos
+
+        return services;
+    }
+
+    public static IServiceCollection AddExternalServices(this IServiceCollection services, IConfiguration config)
+    {
+        services.Configure<Infrastructure.Configurations.Auth.EmailSettings>(config.GetSection("EmailSettings"));
+        services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService, Infrastructure.ExternalServices.Mailing.EmailService>();
 
         return services;
     }

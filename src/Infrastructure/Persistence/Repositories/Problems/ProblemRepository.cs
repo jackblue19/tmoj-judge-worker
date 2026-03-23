@@ -8,16 +8,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Domain.Entities;
+using Infrastructure.Persistence.Scaffolded.Context;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence.Repositories.Problems;
 
 public sealed class ProblemRepository : IProblemRepository
 {
     private readonly IReadRepository<Problem , Guid> _problemReadRepository;
+    private readonly TmojDbContext _db;
 
-    public ProblemRepository(IReadRepository<Problem , Guid> problemReadRepository)
+    public ProblemRepository(
+        IReadRepository<Problem , Guid> problemReadRepository ,
+        TmojDbContext db)
     {
         _problemReadRepository = problemReadRepository;
+        _db = db;
     }
 
     public async Task<bool> SlugExistsAsync(string slug , Guid? excludingProblemId , CancellationToken ct = default)
@@ -32,16 +38,16 @@ public sealed class ProblemRepository : IProblemRepository
         bool isAdmin ,
         CancellationToken ct = default)
     {
-        var spec = new ProblemForManagementSpec(problemId);
-        var entity = await _problemReadRepository.FirstOrDefaultAsync(spec , ct);
+        var query = _db.Problems
+            .Include(x => x.Tags)
+            .Where(x => x.Id == problemId);
 
-        if ( entity is null )
-            return null;
+        if ( !isAdmin )
+        {
+            query = query.Where(x => x.CreatedBy == currentUserId);
+        }
 
-        if ( isAdmin )
-            return entity;
-
-        return entity.CreatedBy == currentUserId ? entity : null;
+        return await query.FirstOrDefaultAsync(ct);
     }
 
     public async Task<ProblemDetailDto?> GetProblemDetailForManagementAsync(
@@ -50,8 +56,13 @@ public sealed class ProblemRepository : IProblemRepository
         bool isAdmin ,
         CancellationToken ct = default)
     {
-        var entity = await GetProblemForManagementAsync(problemId , currentUserId , isAdmin , ct);
-        if ( entity is null )
+        var exists = await _db.Problems
+            .Where(x => x.Id == problemId)
+            .Where(x => isAdmin || x.CreatedBy == currentUserId)
+            .Select(x => x.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if ( exists == Guid.Empty )
             return null;
 
         var spec = new ProblemDetailForManagementSpec(problemId);

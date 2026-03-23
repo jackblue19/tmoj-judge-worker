@@ -1,4 +1,5 @@
 ﻿using Application.UseCases.Problems.Commands.CreateProblem;
+using Application.UseCases.Problems.Commands.CreateTag;
 using Application.UseCases.Problems.Commands.UpdateProblem;
 using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Mappings;
@@ -116,6 +117,31 @@ public class ProblemsController : ControllerBase
     {
         var result = await _mediator.Send(
             new SetProblemDifficultyCommand(problemId , request.Difficulty) ,
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpPost("tags")]
+    public async Task<ActionResult<ProblemTagDto>> CreateTag(
+        [FromBody] CreateTagRequestDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateTagCommand(request.Name , request.Slug) ,
+            ct);
+
+        return Ok(result);
+    }
+
+    [HttpPost("{problemId:guid}/tags/attach")]
+    public async Task<ActionResult<ProblemDetailDto>> AttachTags(
+        Guid problemId ,
+        [FromBody] AttachProblemTagsRequestDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new AttachProblemTagsCommand(problemId , request.TagIds) ,
             ct);
 
         return Ok(result);

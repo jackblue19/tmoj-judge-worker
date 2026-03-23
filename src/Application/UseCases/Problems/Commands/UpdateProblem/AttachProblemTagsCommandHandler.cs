@@ -9,15 +9,14 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace Application.UseCases.Problems.Commands.UpdateProblem;
-
-public sealed class ReplaceProblemTagsCommandHandler : IRequestHandler<ReplaceProblemTagsCommand , ProblemDetailDto>
+public sealed class AttachProblemTagsCommandHandler : IRequestHandler<AttachProblemTagsCommand , ProblemDetailDto>
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IProblemRepository _problemRepository;
     private readonly ITagRepository _tagRepository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public ReplaceProblemTagsCommandHandler(
+    public AttachProblemTagsCommandHandler(
         ICurrentUserService currentUser ,
         IProblemRepository problemRepository ,
         ITagRepository tagRepository ,
@@ -29,7 +28,7 @@ public sealed class ReplaceProblemTagsCommandHandler : IRequestHandler<ReplacePr
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<ProblemDetailDto> Handle(ReplaceProblemTagsCommand request , CancellationToken ct)
+    public async Task<ProblemDetailDto> Handle(AttachProblemTagsCommand request , CancellationToken ct)
     {
         if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
             throw new UnauthorizedAccessException("User is not authenticated.");
@@ -51,16 +50,24 @@ public sealed class ReplaceProblemTagsCommandHandler : IRequestHandler<ReplacePr
             .Distinct()
             .ToArray() ?? [];
 
+        if ( incomingIds.Length == 0 )
+            throw new ArgumentException("At least one tag id is required.");
+
         var tags = await _tagRepository.GetTrackedByIdsAsync(incomingIds , ct);
 
         if ( incomingIds.Length != tags.Count )
             throw new InvalidOperationException("One or more tag ids do not exist.");
 
-        entity.Tags.Clear();
+        var existingIds = entity.Tags
+            .Select(x => x.Id)
+            .ToHashSet();
 
         foreach ( var tag in tags )
         {
-            entity.Tags.Add(tag);
+            if ( !existingIds.Contains(tag.Id) )
+            {
+                entity.Tags.Add(tag);
+            }
         }
 
         entity.UpdatedAt = DateTime.UtcNow;
@@ -74,6 +81,6 @@ public sealed class ReplaceProblemTagsCommandHandler : IRequestHandler<ReplacePr
             isAdmin ,
             ct);
 
-        return detail ?? throw new KeyNotFoundException("Problem detail not found after replace.");
+        return detail ?? throw new KeyNotFoundException("Problem detail not found after attach.");
     }
 }

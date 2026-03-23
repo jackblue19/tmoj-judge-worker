@@ -1,6 +1,6 @@
 ﻿namespace WebAPI.Judging;
 
-public sealed class SubmissionRequestModel
+public sealed class SubmissionRequestModel      // vnoj-docker
 {
     public int SubmissionId { get; set; }
     public string ProblemId { get; set; } = default!;

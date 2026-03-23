@@ -24,6 +24,7 @@ public partial class Class
     [Column("class_code")]
     public string ClassCode { get; set; } = null!;
 
+    [Column("description")]
     public string? Description { get; set; }
 
     [Column("start_date")]

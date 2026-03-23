@@ -25,9 +25,11 @@ public partial class User
     public string Username { get; set; } = null!;
 
     [Column("roll_number")]
+    [StringLength(255)]
     public string? RollNumber { get; set; }
 
     [Column("member_code")]
+    [StringLength(255)]
     public string? MemberCode { get; set; }
 
     [Column("email")]
@@ -66,13 +68,6 @@ public partial class User
     [Column("role_id")]
     public Guid? RoleId { get; set; }
 
-    [Column("roll_number")]
-    [StringLength(255)]
-    public string? RollNumber { get; set; }
-
-    [Column("member_code")]
-    [StringLength(255)]
-    public string? MemberCode { get; set; }
 
     [InverseProperty("Author")]
     public virtual ICollection<Announcement> Announcements { get; set; } = new List<Announcement>();

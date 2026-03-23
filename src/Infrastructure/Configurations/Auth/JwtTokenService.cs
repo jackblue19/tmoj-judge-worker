@@ -51,6 +51,8 @@ public sealed class JwtTokenService : ITokenService
                 claims.Add(new Claim(kv.Key , kv.Value));
         }
 
+        claims.Add(new Claim(ClaimTypes.NameIdentifier , userId));      // refactor v2
+
         var token = new JwtSecurityToken(
             issuer: _opt.Issuer ,
             audience: _opt.Audience ,

@@ -74,26 +74,63 @@ public class AuthController : ControllerBase
         try
         {
             var email = req.Email.ToLowerInvariant();
-            if ( await _db.Users.AnyAsync(u => u.Email == email , ct) )
-            {
-                return BadRequest(new { Message = "Email already exists" });
-            }
-            bool IsFptEmail(string email)
-            {
-                if ( string.IsNullOrWhiteSpace(email) )
-                    return false;
 
-                return email
-                    .ToLowerInvariant()
-                    .EndsWith("@fe.edu.vn");
+            if ( _google.AllowedDomains.Any() && !_google.AllowedDomains.Any(d => email.EndsWith($"@{d}" , StringComparison.OrdinalIgnoreCase)) )
+            {
+                return BadRequest(new { Message = "Registration with this email domain is not allowed." });
             }
+
+            var existingUser = await _db.Users
+                .FirstOrDefaultAsync(u => u.Email == email , ct);
+
+            bool IsFptEmail(string eml)
+            {
+                if ( string.IsNullOrWhiteSpace(eml) ) return false;
+                // fe.edu.vn là domain riêng của cán bộ giảng viên FPT
+                return eml.ToLowerInvariant().EndsWith("@fe.edu.vn");
+            }
+
             var roleCode = IsFptEmail(email) ? "teacher" : "student";
+            var selectedRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == roleCode , ct);
+            if ( selectedRole == null ) throw new Exception("Role not found");
 
-            var role = await _db.Roles
-                .FirstOrDefaultAsync(r => r.RoleCode == roleCode , ct);
+            if ( existingUser != null )
+            {
+                if ( !string.IsNullOrEmpty(existingUser.Password) )
+                {
+                    return BadRequest(new { Message = "Email already exists" });
+                }
 
-            if ( role == null )
-                throw new Exception("Role not found");
+                // Ghi đè thông tin đăng ký lên tài khoản import chưa có password
+                existingUser.FirstName = req.FirstName;
+                existingUser.LastName = req.LastName;
+                existingUser.DisplayName = $"{req.LastName} {req.FirstName}";
+                existingUser.AvatarUrl = req.Avatar;
+                existingUser.Password = _passwordHasher.Hash(req.Password);
+                existingUser.LanguagePreference = "vi";
+                existingUser.EmailVerified = false;
+
+                if ( existingUser.RoleId == null )
+                {
+                    existingUser.RoleId = selectedRole.RoleId;
+                }
+
+                var oldVerifications = await _db.EmailVerifications.Where(v => v.UserId == existingUser.UserId).ToListAsync(ct);
+                _db.EmailVerifications.RemoveRange(oldVerifications);
+
+                var verification = new EmailVerification
+                {
+                    UserId = existingUser.UserId,
+                    Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)),
+                    ExpiresAt = DateTime.UtcNow.AddHours(24)
+                };
+                
+                _db.EmailVerifications.Add(verification);
+                await _db.SaveChangesAsync(ct);
+
+                return Ok(new { Message = "Registration successful. Please check your email to verify your account.", Token = verification.Token });
+            }
+
             var user = new User
             {
                 FirstName = req.FirstName ,
@@ -101,25 +138,15 @@ public class AuthController : ControllerBase
                 Email = email ,
                 Password = _passwordHasher.Hash(req.Password) ,
                 Username = email.Split('@')[0] + Random.Shared.Next(1000 , 9999).ToString() ,
-                DisplayName = $"{req.FirstName} {req.LastName}" ,
+                DisplayName = $"{req.LastName} {req.FirstName}" ,
+                AvatarUrl = req.Avatar ,
                 LanguagePreference = "vi" ,
                 Status = true ,
                 EmailVerified = false ,
-                RoleId = role.RoleId
+                RoleId = selectedRole.RoleId
             };
 
-            var selectedRole = await _db.Roles
-     .FirstOrDefaultAsync(r => r.RoleCode == roleCode , ct);
-
-            if ( selectedRole == null )
-                throw new Exception("Role not found");
-
-            user.UserRoleUsers.Add(new UserRole
-            {
-                RoleId = selectedRole.RoleId
-            });
-
-            var verification = new EmailVerification
+            var newVerification = new EmailVerification
             {
                 User = user ,
                 Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) ,
@@ -127,12 +154,12 @@ public class AuthController : ControllerBase
             };
 
             _db.Users.Add(user);
-            _db.EmailVerifications.Add(verification);
+            _db.EmailVerifications.Add(newVerification);
             await _db.SaveChangesAsync(ct);
 
             // TODO: Send email with verification.Token
 
-            return Ok(new { Message = "Registration successful. Please check your email to verify your account." , Token = verification.Token });
+            return Ok(new { Message = "Registration successful. Please check your email to verify your account." , Token = newVerification.Token });
         }
         catch ( Exception )
         {
@@ -150,7 +177,7 @@ public class AuthController : ControllerBase
         {
             var email = req.Email.ToLowerInvariant();
             var verification = await _db.EmailVerifications
-                .Include(v => v.User).ThenInclude(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(v => v.User).ThenInclude(u => u.Role)
                 .FirstOrDefaultAsync(v => v.User.Email == email && v.Token == req.Token , ct);
 
             if ( verification == null || verification.ExpiresAt < DateTime.UtcNow )
@@ -208,39 +235,9 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var adminEmail = _config["Authentication:Admin:Email"];
-            var adminPassword = _config["Authentication:Admin:Password"];
-
-            // Admin defined in appsettings override bypasses database completely
-            if ( !string.IsNullOrEmpty(adminEmail) &&
-                req.Email.Equals(adminEmail , StringComparison.OrdinalIgnoreCase) &&
-                req.Password == adminPassword )
-            {
-                var roles = new List<string> { "admin" };
-                var adminToken = _tokenService.CreateAccessToken(Guid.Empty.ToString() , "Super Admin" , roles);
-                var adminUserDto = new UserDto(
-                    UserId: Guid.Empty, 
-                    Email: adminEmail, 
-                    FirstName: "Super", 
-                    LastName: "Admin", 
-                    DisplayName: "Super Admin", 
-                    Username: "superadmin", 
-                    AvatarUrl: null, 
-                    emailVerified: true,
-                    Roles: roles);
-
-                var adminAuthResponse = new AuthResponse(
-                    AccessToken: adminToken ,
-                    RefreshToken: "admin-no-refresh" ,
-                    ExpiresIn: _jwt.AccessTokenMinutes * 60 ,
-                    User: adminUserDto);
-
-                return Ok(ApiResponse<AuthResponse>.Ok(adminAuthResponse , "Login successful"));
-            }
-
             var email = req.Email.ToLowerInvariant();
             var user = await _db.Users
-                .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email , ct);
 
             if ( user == null || string.IsNullOrEmpty(user.Password) || !_passwordHasher.Verify(req.Password , user.Password) )
@@ -288,8 +285,21 @@ public class AuthController : ControllerBase
 
             var user = await _db.Users
                 .Include(u => u.UserProviders)
-                .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email , ct);
+
+            var provider = await _db.Providers.FirstOrDefaultAsync(p => p.ProviderCode == "google" , ct);
+            if ( provider == null )
+            {
+                provider = new Provider
+                {
+                    ProviderCode = "google" ,
+                    ProviderDisplayName = "Google" ,
+                    Enabled = true
+                };
+                _db.Providers.Add(provider);
+                await _db.SaveChangesAsync(ct);
+            }
 
             if ( user == null )
             {
@@ -306,24 +316,8 @@ public class AuthController : ControllerBase
                     EmailVerified = payload.EmailVerified ,
                     LanguagePreference = "vi" ,
                     Status = true ,
-                    UserProviders = new List<UserProvider>() ,
-                    UserRoleUsers = new List<UserRole>()
+                    UserProviders = new List<UserProvider>()
                 };
-
-                var provider = await _db.Providers
-                    .FirstOrDefaultAsync(p => p.ProviderCode == "google" , ct);
-
-                if ( provider == null )
-                {
-                    provider = new Provider
-                    {
-                        ProviderCode = "google" ,
-                        ProviderDisplayName = "Google" ,
-                        Enabled = true
-                    };
-
-                    _db.Providers.Add(provider);
-                }
 
                 user.UserProviders.Add(new UserProvider
                 {
@@ -334,14 +328,34 @@ public class AuthController : ControllerBase
 
                 if ( studentRole != null )
                 {
-                    user.UserRoleUsers.Add(new UserRole
-                    {
-                        RoleId = studentRole.RoleId ,
-                    });
+                    user.RoleId = studentRole.RoleId;
                 }
 
                 _db.Users.Add(user);
                 await _db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                // Nếu User đã tồn tại (ví dụ import từ Excel) nhưng chưa liên kết Google
+                if (!user.UserProviders.Any(p => p.ProviderId == provider.ProviderId))
+                {
+                    user.UserProviders.Add(new UserProvider
+                    {
+                        ProviderId = provider.ProviderId,
+                        ProviderSubject = payload.Subject,
+                        ProviderEmail = email,
+                    });
+
+                    // Cập nhật thông tin bổ sung nếu đang bị trống do import
+                    if (string.IsNullOrEmpty(user.AvatarUrl)) user.AvatarUrl = payload.Picture;
+                    if (string.IsNullOrEmpty(user.FirstName)) user.FirstName = payload.GivenName ?? "";
+                    if (string.IsNullOrEmpty(user.LastName)) user.LastName = payload.FamilyName ?? "";
+                    if (string.IsNullOrEmpty(user.DisplayName)) user.DisplayName = payload.Name ?? "";
+                    
+                    if (payload.EmailVerified) user.EmailVerified = true;
+
+                    await _db.SaveChangesAsync(ct);
+                }
             }
 
             var authResponse = await CreateAuthResponseAsync(user , ct);
@@ -406,8 +420,16 @@ public class AuthController : ControllerBase
 
             var user = await _db.Users
                 .Include(u => u.UserProviders)
-                .Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email == email , ct);
+
+            var provider = await _db.Providers.FirstOrDefaultAsync(p => p.ProviderCode == "github" , ct);
+            if ( provider == null )
+            {
+                provider = new Provider { ProviderCode = "github" , ProviderDisplayName = "GitHub" , Enabled = true };
+                _db.Providers.Add(provider);
+                await _db.SaveChangesAsync(ct);
+            }
 
             if ( user == null )
             {
@@ -421,16 +443,8 @@ public class AuthController : ControllerBase
                     EmailVerified = true , // GitHub verified
                     LanguagePreference = "vi" ,
                     Status = true ,
-                    UserProviders = new List<UserProvider>() ,
-                    UserRoleUsers = new List<UserRole>()
+                    UserProviders = new List<UserProvider>()
                 };
-
-                var provider = await _db.Providers.FirstOrDefaultAsync(p => p.ProviderCode == "github" , ct);
-                if ( provider == null )
-                {
-                    provider = new Provider { ProviderCode = "github" , ProviderDisplayName = "GitHub" , Enabled = true };
-                    _db.Providers.Add(provider);
-                }
 
                 user.UserProviders.Add(new UserProvider
                 {
@@ -439,10 +453,31 @@ public class AuthController : ControllerBase
                     ProviderEmail = email
                 });
 
-                if ( studentRole != null ) user.UserRoleUsers.Add(new UserRole { RoleId = studentRole.RoleId });
+                if ( studentRole != null ) 
+                {
+                    user.RoleId = studentRole.RoleId;
+                }
 
                 _db.Users.Add(user);
                 await _db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                if (!user.UserProviders.Any(p => p.ProviderId == provider.ProviderId))
+                {
+                    user.UserProviders.Add(new UserProvider
+                    {
+                        ProviderId = provider.ProviderId,
+                        ProviderSubject = githubId,
+                        ProviderEmail = email
+                    });
+
+                    if (string.IsNullOrEmpty(user.AvatarUrl)) user.AvatarUrl = avatarUrl;
+                    if (string.IsNullOrEmpty(user.DisplayName)) user.DisplayName = name ?? "";
+                    user.EmailVerified = true;
+
+                    await _db.SaveChangesAsync(ct);
+                }
             }
 
             var authResponse = await CreateAuthResponseAsync(user , ct);
@@ -462,7 +497,7 @@ public class AuthController : ControllerBase
         {
             var hash = _refreshTokenService.HashToken(req.RefreshToken);
             var token = await _db.RefreshTokens
-                .Include(t => t.Session).ThenInclude(s => s.User).ThenInclude(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+                .Include(t => t.Session).ThenInclude(s => s.User).ThenInclude(u => u.Role)
                 .FirstOrDefaultAsync(t => t.TokenHash == hash , ct);
 
             if ( token == null || token.ExpireAt < DateTime.UtcNow || token.RevokedAt != null )
@@ -615,15 +650,15 @@ public class AuthController : ControllerBase
     [HttpPost("users/{id}/assign-role")]
     public async Task<IActionResult> AssignRole(Guid id , [FromBody] AssignRoleRequest req , CancellationToken ct)
     {
-        var user = await _db.Users.Include(u => u.UserRoleUsers).FirstOrDefaultAsync(u => u.UserId == id , ct);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id , ct);
         if ( user == null ) return NotFound();
 
         var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant() , ct);
         if ( role == null ) return BadRequest(new { Message = "Role not found." });
 
-        if ( !user.UserRoleUsers.Any(ur => ur.RoleId == role.RoleId) )
+        if ( user.RoleId != role.RoleId )
         {
-            user.UserRoleUsers.Add(new UserRole { RoleId = role.RoleId });
+            user.RoleId = role.RoleId;
             await _db.SaveChangesAsync(ct);
         }
 
@@ -634,14 +669,13 @@ public class AuthController : ControllerBase
     [HttpDelete("users/{id}/roles/{roleCode}")]
     public async Task<IActionResult> RemoveRole(Guid id , string roleCode , CancellationToken ct)
     {
-        var user = await _db.Users.Include(u => u.UserRoleUsers).ThenInclude(ur => ur.Role)
+        var user = await _db.Users.Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.UserId == id , ct);
         if ( user == null ) return NotFound();
 
-        var userRole = user.UserRoleUsers.FirstOrDefault(ur => ur.Role.RoleCode == roleCode.ToLowerInvariant());
-        if ( userRole != null )
+        if ( user.Role != null && user.Role.RoleCode == roleCode.ToLowerInvariant() )
         {
-            _db.UserRoles.Remove(userRole);
+            user.RoleId = null;
             await _db.SaveChangesAsync(ct);
         }
 
@@ -670,7 +704,8 @@ public class AuthController : ControllerBase
         _db.UserSessions.Add(session);
         await _db.SaveChangesAsync(ct);
 
-        var roles = user.UserRoleUsers.Select(ur => ur.Role.RoleCode).ToList();
+        var roles = new List<string>();
+        if ( user.Role != null ) roles.Add(user.Role.RoleCode);
         if ( !roles.Any() ) roles.Add("user");
 
         var accessToken = _tokenService.CreateAccessToken(

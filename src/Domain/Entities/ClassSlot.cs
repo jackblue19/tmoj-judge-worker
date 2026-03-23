@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -64,7 +64,7 @@ public partial class ClassSlot
     public virtual Class Class { get; set; } = null!;
 
     [InverseProperty("Slot")]
-    public virtual ICollection<ClassSlotProblem> ClassSlotProblems { get; set; } = new List<ClassSlotProblem>();
+    public virtual ICollection<ClassSlotProblem>? ClassSlotProblems { get; set; }
 
     [ForeignKey("ContestId")]
     [InverseProperty("ClassSlots")]

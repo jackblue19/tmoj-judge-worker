@@ -8,7 +8,7 @@ namespace Domain.Entities;
 
 [Table("announcements")]
 public partial class Announcement
-{
+{   
     [Key]
     [Column("announcement_id")]
     public Guid AnnouncementId { get; set; }

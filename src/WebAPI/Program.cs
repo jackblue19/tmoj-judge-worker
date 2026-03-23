@@ -17,6 +17,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Application.UseCases.Auth;
 using Infrastructure.ExternalServices.Identity;
 using Microsoft.AspNetCore.Http.Features;
+using Application.Common.Interfaces;
+using Infrastructure.ExternalServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,13 +47,15 @@ builder.Services.AddControllers().AddOData(opt =>
         .SetMaxTop(100);
 });
 
-builder.Services.AddScoped(
-    typeof(IReadRepository<,>) ,
-    typeof(EfReadRepository<,>));
-builder.Services.AddScoped(
-    typeof(IWriteRepository<,>) ,
-    typeof(EfWriteRepository<,>));
-builder.Services.AddScoped<IUnitOfWork , EfUnitOfWork>();
+//builder.Services.AddScoped(
+//    typeof(IReadRepository<,>) ,
+//    typeof(EfReadRepository<,>));
+//builder.Services.AddScoped(
+//    typeof(IWriteRepository<,>) ,
+//    typeof(EfWriteRepository<,>));
+//builder.Services.AddScoped<IUnitOfWork , EfUnitOfWork>();
+
+builder.Services.AddPersistence();
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);
@@ -80,7 +84,7 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 //  DI TEMP SERVICES
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
+builder.Services.AddScoped<ICurrentUserService ,    CurrentUserService>();
 
 //  DI LOCAL JUDGE
 

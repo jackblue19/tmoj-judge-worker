@@ -1,4 +1,5 @@
-﻿using Application.UseCases.Auth;
+﻿using Application.Common.Interfaces;
+using Application.UseCases.Auth;
 using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -116,8 +117,8 @@ public class ProblemsController : ControllerBase
         //}
 
         //  fetch userId ver2
-        dto.CreatedBy = _currentUser.GetUserIdAsGuid();
-        //dto.CreatedBy = GetUserId();
+        //dto.CreatedBy = _currentUser.GetUserIdAsGuid();
+        dto.CreatedBy = GetUserId();
         if ( dto.CreatedBy == null ) Console.WriteLine("del co userid");
         if ( string.IsNullOrEmpty(dto.CreatedBy.ToString()) ) Console.WriteLine("notfound404040404004");
         Console.WriteLine(dto.CreatedBy);

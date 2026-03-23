@@ -1,0 +1,60 @@
+@host = https://localhost:7210
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJqdGkiOiI5Y2JlYWUwNDFjOTE0Y2Y3ODQxNWEwMWQxYzg5Mjc5ZiIsImlhdCI6MTc3NDI2Mzk1NSwibmFtZSI6IkphY2sgYkxVRSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InN0dWRlbnQiLCJyb2xlIjoic3R1ZGVudCIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWVpZGVudGlmaWVyIjoiMzE2NGUxNjQtYjNmMi00NmJjLTg4YjEtMzQ4NWVjZjA4YWY0IiwibmJmIjoxNzc0MjYzOTU1LCJleHAiOjE3NzQ4Njg3NTUsImlzcyI6ImZwdHUtdG1vai1hcGkiLCJhdWQiOiJ0bW9qLXVzZXJzIn0.kuiZAkJlcW1oQ6aQq4ihn8kz5NG_YJr8Ln65-QP4rwQ
+@problemId = 8c54a739-8a7f-4bad-9da3-112df4b607b8
+
+### Create problem draft
+POST {{host}}/api/v2/problems/drafts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Two Sum Basic",
+  "slug": "two-sum-basic",
+  "timeLimitMs": 1000,
+  "memoryLimitKb": 262144,
+  "typeCode": "algorithm",
+  "scoringCode": "icpc",
+  "visibilityCode": "private",
+  "descriptionMd": "# Two Sum\n\nGiven an array of integers..."
+}
+
+### Get problem detail
+GET {{host}}/api/v2/problems/{{problemId}}
+Authorization: Bearer {{token}}
+
+### Update content
+PUT {{host}}/api/v2/problems/{{problemId}}/content
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Two Sum Basic Updated",
+  "slug": "two-sum-basic",
+  "timeLimitMs": 1500,
+  "memoryLimitKb": 262144,
+  "typeCode": "algorithm",
+  "scoringCode": "icpc",
+  "visibilityCode": "private",
+  "descriptionMd": "# Two Sum\n\n## Statement\nFind two numbers..."
+}
+
+### Set difficulty
+PUT {{host}}/api/v2/problems/{{problemId}}/difficulty
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "difficulty": "easy"
+}
+
+### Replace tags
+PUT {{host}}/api/problems/{{problemId}}/tags
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tagIds": [
+    "11111111-1111-1111-1111-111111111111",
+    "22222222-2222-2222-2222-222222222222"
+  ]
+}

@@ -78,8 +78,8 @@ Content-Type: application/json
 
 {
   "tagIds": [
-    "{{tagId1}}",
-    "{{tagId2}}"
+    "{{tagId2}}",
+    "{{tagId1}}"
   ]
 }
 

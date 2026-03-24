@@ -18,130 +18,44 @@ public sealed class FileUploadDebugController : ControllerBase
         _cloudinary = cloudinary;
     }
 
-    // ─── R2: Upload (dùng GUID có sẵn) ──────────────────────────────
+    // ─── R2: API ─────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Upload a file to the Testset R2 bucket using an existing GUID as the object key.
-    /// </summary>
-    [HttpPost("r2/testset/{id}")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(50_000_000)] // 50 MB
-    public async Task<IActionResult> UploadTestset(Guid id, IFormFile file, CancellationToken ct)
-    {
-        if (file is null || file.Length == 0)
-            return BadRequest(new { Message = "File is required." });
-
-        var ext = Path.GetExtension(file.FileName);
-        var objectKey = $"{id}{ext}";
-        await using var stream = file.OpenReadStream();
-        await _r2.UploadAsync("Testset", objectKey, stream, file.ContentType, ct);
-
-        return Ok(new { Message = "Testset file uploaded.", Id = id, ObjectKey = objectKey });
-    }
-
-    /// <summary>
-    /// Upload a file to the Problem R2 bucket using an existing GUID (problemId) as the object key.
-    /// </summary>
-    [HttpPost("r2/problem/{id}")]
+    [HttpPost("r2/{type}/{id}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(50_000_000)]
-    public async Task<IActionResult> UploadProblem(Guid id, IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> UploadR2(string type, Guid id, IFormFile file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { Message = "File is required." });
 
         var ext = Path.GetExtension(file.FileName);
-        var objectKey = $"{id}{ext}";
+        
         await using var stream = file.OpenReadStream();
-        await _r2.UploadAsync("Problem", objectKey, stream, file.ContentType, ct);
+        await _r2.UploadAsync(type, id, ext, stream, file.ContentType, ct);
 
-        return Ok(new { Message = "Problem file uploaded.", Id = id, ObjectKey = objectKey });
+        return Ok(new { Message = "File uploaded successfully.", Id = id });
     }
 
-    /// <summary>
-    /// Upload a file to the Submission R2 bucket using an existing GUID (submissionId) as the object key.
-    /// </summary>
-    [HttpPost("r2/submission/{id}")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(50_000_000)]
-    public async Task<IActionResult> UploadSubmission(Guid id, IFormFile file, CancellationToken ct)
+    [HttpGet("r2/{type}/{id}")]
+    public async Task<IActionResult> GetR2PresignedUrl(string type, Guid id, CancellationToken ct = default)
     {
-        if (file is null || file.Length == 0)
-            return BadRequest(new { Message = "File is required." });
+        var url = await _r2.GetPresignedUrlAsync(type, id, null, ct);
+        
+        if (url == null) 
+            return NotFound(new { Message = $"File with ID {id} not found." });
 
-        var ext = Path.GetExtension(file.FileName);
-        var objectKey = $"{id}{ext}";
-        await using var stream = file.OpenReadStream();
-        await _r2.UploadAsync("Submission", objectKey, stream, file.ContentType, ct);
-
-        return Ok(new { Message = "Submission file uploaded.", Id = id, ObjectKey = objectKey });
+        return Ok(new { Url = url });
     }
 
-    // ─── R2: Download ────────────────────────────────────────────────
-
-    [HttpGet("r2/testset/{id}")]
-    public async Task<IActionResult> DownloadTestset(Guid id, [FromQuery] string ext = ".txt", CancellationToken ct = default)
+    [HttpDelete("r2/{type}/{id}")]
+    public async Task<IActionResult> DeleteR2(string type, Guid id, CancellationToken ct = default)
     {
-        var objectKey = $"{id}{ext}";
-        var stream = await _r2.DownloadAsync("Testset", objectKey, ct);
-        return File(stream, "application/octet-stream", objectKey);
-    }
+        var fullKey = await _r2.DeleteAsync(type, id, ct);
+        
+        if (fullKey == null) 
+            return NotFound(new { Message = $"File with ID {id} not found." });
 
-    [HttpGet("r2/problem/{id}")]
-    public async Task<IActionResult> DownloadProblem(Guid id, [FromQuery] string ext = ".txt", CancellationToken ct = default)
-    {
-        var objectKey = $"{id}{ext}";
-        var stream = await _r2.DownloadAsync("Problem", objectKey, ct);
-        return File(stream, "application/octet-stream", objectKey);
-    }
-
-    [HttpGet("r2/submission/{id}")]
-    public async Task<IActionResult> DownloadSubmission(Guid id, [FromQuery] string ext = ".txt", CancellationToken ct = default)
-    {
-        var objectKey = $"{id}{ext}";
-        var stream = await _r2.DownloadAsync("Submission", objectKey, ct);
-        return File(stream, "application/octet-stream", objectKey);
-    }
-
-    // ─── R2: Delete ──────────────────────────────────────────────────
-
-    [HttpDelete("r2/testset/{id}")]
-    public async Task<IActionResult> DeleteTestset(Guid id, [FromQuery] string ext = ".txt", CancellationToken ct = default)
-    {
-        var objectKey = $"{id}{ext}";
-        await _r2.DeleteAsync("Testset", objectKey, ct);
-        return Ok(new { Message = "Testset file deleted.", Id = id, ObjectKey = objectKey });
-    }
-
-    [HttpDelete("r2/problem/{id}")]
-    public async Task<IActionResult> DeleteProblem(Guid id, [FromQuery] string ext = ".txt", CancellationToken ct = default)
-    {
-        var objectKey = $"{id}{ext}";
-        await _r2.DeleteAsync("Problem", objectKey, ct);
-        return Ok(new { Message = "Problem file deleted.", Id = id, ObjectKey = objectKey });
-    }
-
-    [HttpDelete("r2/submission/{id}")]
-    public async Task<IActionResult> DeleteSubmission(Guid id, [FromQuery] string ext = ".txt", CancellationToken ct = default)
-    {
-        var objectKey = $"{id}{ext}";
-        await _r2.DeleteAsync("Submission", objectKey, ct);
-        return Ok(new { Message = "Submission file deleted.", Id = id, ObjectKey = objectKey });
-    }
-
-    // ─── R2: Pre-signed URL ─────────────────────────────────────────
-
-    [HttpGet("r2/presigned-url")]
-    public async Task<IActionResult> GetPresignedUrl(
-        [FromQuery] string bucket,
-        [FromQuery] Guid id,
-        [FromQuery] string ext = ".txt",
-        [FromQuery] int expiresInMinutes = 60,
-        CancellationToken ct = default)
-    {
-        var objectKey = $"{id}{ext}";
-        var url = await _r2.GetPresignedUrlAsync(bucket, objectKey, TimeSpan.FromMinutes(expiresInMinutes), ct);
-        return Ok(new { Url = url, ObjectKey = objectKey, ExpiresInMinutes = expiresInMinutes });
+        return Ok(new { Message = "File deleted successfully.", Id = id, ObjectKey = fullKey });
     }
 
     // ─── Cloudinary: Avatar (dùng userId làm publicId) ──────────────

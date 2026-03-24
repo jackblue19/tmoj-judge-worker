@@ -1,4 +1,4 @@
-﻿using Application;
+using Application;
 using Application.Common.Interfaces;
 using Application.UseCases.Problems.Queries.GetAllProblems;
 using Domain.Abstractions;
@@ -9,10 +9,18 @@ using Infrastructure.Persistence.Common.Repositories;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
+using System.Net.WebSockets;
+using System.Text;
 using WebAPI.Extensions;
 using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
+using Microsoft.AspNetCore.HttpOverrides;
+using Application.UseCases.Auth;
+using Infrastructure.ExternalServices.Identity;
+using Microsoft.AspNetCore.Http.Features;
+using Application.Common.Interfaces;
+using Infrastructure.ExternalServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,13 +50,7 @@ builder.Services.AddControllers().AddOData(opt =>
         .SetMaxTop(100);
 });
 
-builder.Services.AddScoped(
-    typeof(IReadRepository<,>) ,
-    typeof(EfReadRepository<,>));
-builder.Services.AddScoped(
-    typeof(IWriteRepository<,>) ,
-    typeof(EfWriteRepository<,>));
-builder.Services.AddScoped<IUnitOfWork , EfUnitOfWork>();
+builder.Services.AddPersistence();
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);
@@ -74,8 +76,21 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 
-//  DI
-builder.Services.AddSingleton<LocalJudgeService>();
+//  DI TEMP SERVICES
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService ,    CurrentUserService>();
+
+//  DI LOCAL JUDGE
+
+builder.Services.AddSingleton<JudgeConnectionRegistry>();
+builder.Services.AddSingleton<JudgeDispatchService>();
+builder.Services.AddScoped<LocalJudgeService>();
+builder.Services.AddHostedService<JudgeBridgeBackgroundService>();
+builder.Services.AddControllers();
+
+//builder.WebHost.UseUrls("http://+:8080"); //  comment cái này là test local được deploy thì mở ra
+
 
 //  mediatr -> sau này refactor thì sẽ dùng
 //builder.Services.AddMediatR(cfg =>
@@ -123,17 +138,41 @@ builder.Services.AddOutputCache(options =>
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(ValidationBehavior<,>));
 //builder.Services.AddTransient(typeof(IPipelineBehavior<,>) , typeof(LoggingBehavior<,>));
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
+});
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if ( app.Environment.IsDevelopment() )
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-    app.UseScalarUI();
-}
+//if ( app.Environment.IsDevelopment() )
+//{
+app.UseSwagger();
+app.UseSwaggerUI();
+app.UseScalarUI();
+//}
 
-app.UseHttpsRedirection();
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
+//app.UseHttpsRedirection();
+//if ( app.Environment.IsDevelopment() )
+//{
+//    app.UseHttpsRedirection();
+//}
 app.UseExceptionHandler();
 app.UseRouting();
 
@@ -147,16 +186,51 @@ app.UseAuthorization();
 
 app.UseOutputCache();
 
+//app.UseWebSockets();
+
+
+app.Map("/bridge" , async context =>
+{
+    if ( !context.WebSockets.IsWebSocketRequest )
+    {
+        context.Response.StatusCode = 400;
+        await context.Response.WriteAsync("WebSocket expected");
+        return;
+    }
+
+    using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    Console.WriteLine("JUDGE CONNECTED");
+
+    var buffer = new byte[8192];
+    while ( socket.State == WebSocketState.Open )
+    {
+        var result = await socket.ReceiveAsync(buffer , CancellationToken.None);
+        if ( result.MessageType == WebSocketMessageType.Close )
+        {
+            Console.WriteLine("JUDGE DISCONNECTED");
+            break;
+        }
+
+        var msg = Encoding.UTF8.GetString(buffer , 0 , result.Count);
+        Console.WriteLine($"FROM JUDGE: {msg}");
+    }
+});
+
 app.MapControllers();
 app.UseStatusCodePages();
 app.UseHttpLogging();
 app.UseMiddleware<RequestLogScopeMiddleware>();
 
-//  minimal apis
+
+
+//  minimal apis    +   judge-server (vnoj-tier)
 app.MapGet("/health" , () => Results.Ok(new
 {
     status = "Healthy" ,
-    timestamp = DateTime.UtcNow
+    timestamp = DateTime.UtcNow ,
+    author = "Jack Blue" ,
+    apiVersion = "ver_2"
 }));
+
 
 app.Run();

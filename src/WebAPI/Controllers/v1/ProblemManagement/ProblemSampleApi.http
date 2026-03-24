@@ -1,17 +1,16 @@
-@WebAPI_HostAddress = http://localhost:5161
+@WebAPI_HostAddress = https://localhost:7210
 
-POST {{WebAPI_HostAddress}}/api/v1/Problems
+POST {{WebAPI_HostAddress}}/api/v1/Problems/drafts
 Content-Type: application/json
 Accept: application/json
 {
-  "slug": "two-sum",
+  "slug": "two-saum4s444", 
   "title": "Two Sum",
   "difficulty": "easy",
   "typeCode": "algorithm",
   "visibilityCode": "public",
   "scoringCode": "acm",
   "descriptionMd": "Given an array of integers nums and an integer target...",
-  "acceptancePercent": 52.34,
   "displayIndex": 1,
   "timeLimitMs": 1000,
   "memoryLimitKb": 262144,

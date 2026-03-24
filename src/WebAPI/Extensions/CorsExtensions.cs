@@ -19,7 +19,7 @@ public static class CorsExtensions
                       .SetPreflightMaxAge(TimeSpan.FromHours(12));
 
                 // Nếu code auth có dùng cookie auth (credentials) thì bật dòng dưới
-                // policy.AllowCredentials();
+                 policy.AllowCredentials();
             });
         });
 

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace WebAPI.Controllers.v1.ProblemManagement;  
+namespace WebAPI.Controllers.v1.ProblemManagement;
 
 public class ProblemDtos
 {
@@ -59,6 +59,7 @@ public sealed class ProblemResponseDto
     public string? Difficulty { get; set; }
     public string? StatusCode { get; set; }
     public bool IsActive { get; set; }
+    public string? Content { get; set; }
 
     public decimal? AcceptancePercent { get; set; }
 

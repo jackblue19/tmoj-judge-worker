@@ -27,6 +27,7 @@ public class ProblemUploadsController : ControllerBase
         _storage = storage.Value;
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("{id:guid}/uploads/request")]
     public async Task<ActionResult<ProblemUploadRequestResponseDto>> RequestUpload(
         Guid id ,
@@ -99,6 +100,7 @@ public class ProblemUploadsController : ControllerBase
         );
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpGet("{id:guid}/testsets/{testsetId:guid}")]
     public async Task<ActionResult<ProblemTestsetResponseDto>> GetTestset(Guid id , Guid testsetId , CancellationToken ct)
     {
@@ -109,6 +111,7 @@ public class ProblemUploadsController : ControllerBase
         return Ok(ToDto(testset));
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("{id:guid}/testsets/{testsetId:guid}/upload")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(200_000_000)]
@@ -622,7 +625,8 @@ public class ProblemUploadsController : ControllerBase
 
         return Ok(new { deleted });
     }
-
+    
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("{id:guid}/testsets/{testsetId:guid}/testcases")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> AddSingleTestcase(

@@ -1,8 +1,12 @@
-﻿using Asp.Versioning;
+using Application.Common.Interfaces;
+using Application.UseCases.Auth;
+using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Text;
 
 namespace WebAPI.Controllers.v1.ProblemManagement;
@@ -13,10 +17,12 @@ namespace WebAPI.Controllers.v1.ProblemManagement;
 public class ProblemsController : ControllerBase
 {
     private readonly TmojDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public ProblemsController(TmojDbContext db)
+    public ProblemsController(TmojDbContext db , ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     // GET api/problems
@@ -74,6 +80,7 @@ public class ProblemsController : ControllerBase
             Difficulty = problem.Difficulty ,
             StatusCode = problem.StatusCode ,
             IsActive = problem.IsActive ,
+            Content = problem.DescriptionMd ,
             AcceptancePercent = problem.AcceptancePercent ,
             TimeLimitMs = problem.TimeLimitMs ,
             MemoryLimitKb = problem.MemoryLimitKb ,
@@ -82,8 +89,16 @@ public class ProblemsController : ControllerBase
         });
     }
 
+    private Guid? GetUserId()
+    {
+        var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? User.FindFirst("sub")?.Value;
+        return Guid.TryParse(idStr , out var id) ? id : null;
+    }
+
     // POST api/v1/problems/drafts
     [HttpPost("drafts")]
+    [Authorize]
     public async Task<ActionResult<ProblemResponseDto>> Create(
         [FromBody] ProblemCreateDto dto ,
         CancellationToken ct)
@@ -107,7 +122,7 @@ public class ProblemsController : ControllerBase
             existing.DisplayIndex = dto.DisplayIndex;
             existing.TimeLimitMs = dto.TimeLimitMs;
             existing.MemoryLimitKb = dto.MemoryLimitKb;
-
+            existing.CreatedBy = GetUserId();
             existing.IsActive = true;
             existing.StatusCode = "draft";
             existing.PublishedAt = null;
@@ -132,6 +147,7 @@ public class ProblemsController : ControllerBase
             DisplayIndex = dto.DisplayIndex ,
             TimeLimitMs = dto.TimeLimitMs ,
             MemoryLimitKb = dto.MemoryLimitKb ,
+            CreatedBy = GetUserId(),
             StatusCode = "draft" ,
             CreatedAt = DateTime.UtcNow ,
             IsActive = true
@@ -147,8 +163,10 @@ public class ProblemsController : ControllerBase
         );
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("drafts/upload")]
     [Consumes("multipart/form-data")]
+    [Authorize]
     public async Task<ActionResult<ProblemResponseDto>> CreateWithMarkdownUpload(
     [FromForm] ProblemCreateFormDto dto ,
     CancellationToken ct)
@@ -194,6 +212,7 @@ public class ProblemsController : ControllerBase
             existing.StatusCode = "draft";
             existing.PublishedAt = null;
             existing.UpdatedAt = DateTime.UtcNow;
+            existing.CreatedBy = GetUserId();
 
             await _db.SaveChangesAsync(ct);
             return Ok(ToDto(existing));
@@ -215,7 +234,8 @@ public class ProblemsController : ControllerBase
             MemoryLimitKb = dto.MemoryLimitKb ,
             StatusCode = "draft" ,
             CreatedAt = DateTime.UtcNow ,
-            IsActive = true
+            IsActive = true ,
+            CreatedBy = GetUserId()
         };
 
         _db.Problems.Add(problem);
@@ -224,6 +244,7 @@ public class ProblemsController : ControllerBase
         return CreatedAtAction(nameof(GetById) , new { id = problem.Id } , ToDto(problem));
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     // PUT api/problems
     [HttpPut]
     public async Task<ActionResult> Update([FromBody] ProblemUpdateDto dto , CancellationToken ct)
@@ -270,6 +291,7 @@ public class ProblemsController : ControllerBase
         return Ok(problem.Id);
     }
 
+
     // DELETE api/problems/{id}     (del-ver1)      -> được thì cái del-ver2 thành soft-del còn del-ver1 này thì cho thành hard-del
     [HttpDelete("{id:guid}/hard")]
     public async Task<IActionResult> HardDelete(Guid id , CancellationToken ct)
@@ -284,12 +306,13 @@ public class ProblemsController : ControllerBase
             await _db.SaveChangesAsync(ct);
             return NoContent();
         }
-        catch ( DbUpdateException ex )
+        catch ( DbUpdateException )
         {
             // thường là FK violation 23503
             return Conflict("Cannot hard delete: problem is referenced by other records (FK). Use archive or delete dependencies first.");
         }
     }
+
     // POST api/v{version}/problems/{id}/archive    (del-ver 2)
     [HttpPost("{id:guid}/archive")]
     public async Task<IActionResult> Archive(
@@ -313,6 +336,7 @@ public class ProblemsController : ControllerBase
         return NoContent();
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> SoftDelete(Guid id , CancellationToken ct)
     {

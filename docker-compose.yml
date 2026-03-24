@@ -1,0 +1,33 @@
+services:
+  webapi:
+    build:
+      context: .
+      dockerfile: src/WebAPI/Dockerfile
+    container_name: tmoj-webapi
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "8080:8080"
+      - "9999:9999"
+    networks:
+      - tmoj-net
+
+  judge:
+    image: vnoj/judge-tiervnoj:latest
+    container_name: vnoj-judge
+    restart: unless-stopped
+    cap_add:
+      - SYS_PTRACE
+    volumes:
+      - ./problems:/problems
+    depends_on:
+      - webapi
+    command: >
+      run -p 9999 -c /problems/judge.yml webapi judge1 secretkey
+    networks:
+      - tmoj-net
+
+networks:
+  tmoj-net:
+    driver: bridge

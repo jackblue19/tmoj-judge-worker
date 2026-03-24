@@ -1,4 +1,4 @@
-﻿using Ardalis.Specification.EntityFrameworkCore;
+using Ardalis.Specification.EntityFrameworkCore;
 using Ardalis.Specification;
 using Domain.Abstractions;
 using Microsoft.Extensions.Configuration;
@@ -10,6 +10,7 @@ using Application.Common.Interfaces;
 using Application.UseCases.Problems;
 using Infrastructure.Persistence.Repositories.Problems;
 using Infrastructure.ExternalServices;
+using Infrastructure.Configurations.FileStorage;
 
 namespace Infrastructure;
 
@@ -49,6 +50,23 @@ public static class InfrastructureRegistration
         IConfiguration config)
     {
         //  repos
+
+        return services;
+    }
+
+    public static IServiceCollection AddExternalServices(this IServiceCollection services, IConfiguration config)
+    {
+        // Email
+        services.Configure<Infrastructure.Configurations.Auth.EmailSettings>(config.GetSection("EmailSettings"));
+        services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService, Infrastructure.ExternalServices.Mailing.EmailService>();
+
+        // Cloudinary
+        services.Configure<CloudinarySettings>(config.GetSection("FileStorage:CloudinarySettings"));
+        services.AddScoped<Application.Abstractions.Outbound.Services.ICloudinaryService, Infrastructure.ExternalServices.FileStorage.CloudinaryService>();
+
+        // Cloudflare R2
+        services.Configure<R2Settings>(config.GetSection("FileStorage:R2Settings"));
+        services.AddScoped<Application.Abstractions.Outbound.Services.IR2Service, Infrastructure.ExternalServices.FileStorage.R2Service>();
 
         return services;
     }

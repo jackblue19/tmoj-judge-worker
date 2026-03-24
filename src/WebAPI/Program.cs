@@ -1,4 +1,4 @@
-﻿using Application;
+using Application;
 using Application.UseCases.Problems.Queries.GetAllProblems;
 using Domain.Abstractions;
 using Infrastructure;

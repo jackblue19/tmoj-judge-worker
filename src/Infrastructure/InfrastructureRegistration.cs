@@ -6,6 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using Infrastructure.Persistence.Common;
+using Application.Common.Interfaces;
+using Application.UseCases.Problems;
+using Infrastructure.Persistence.Repositories.Problems;
+using Infrastructure.ExternalServices;
 
 namespace Infrastructure;
 
@@ -34,6 +38,10 @@ public static class InfrastructureRegistration
         services.AddScoped(typeof(IWriteRepository<,>) , typeof(EfWriteRepository<,>));
         services.AddScoped<IUnitOfWork , EfUnitOfWork>();
 
+        services.AddScoped<ICurrentUserService , CurrentUserService>();
+
+        services.AddScoped<IProblemRepository , ProblemRepository>();
+        services.AddScoped<ITagRepository , TagRepository>();
         return services;
     }
 

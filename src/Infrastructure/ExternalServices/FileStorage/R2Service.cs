@@ -18,7 +18,9 @@ public class R2Service : IR2Service
         var config = new AmazonS3Config
         {
             ServiceURL = _settings.ServiceUrl,
-            ForcePathStyle = true // R2 requires path-style addressing
+            ForcePathStyle = true, // R2 requires path-style addressing
+            SignatureVersion = "4", // Cloudflare R2 strictly uses Signature Version 4
+            AuthenticationRegion = "auto" // Required for SigV4 signing with R2
         };
 
         _s3Client = new AmazonS3Client(_settings.AccessKey, _settings.SecretKey, config);
@@ -65,6 +67,18 @@ public class R2Service : IR2Service
             Verb = HttpVerb.GET,
             Expires = DateTime.UtcNow.Add(expiresIn ?? TimeSpan.FromMinutes(3))
         };
+
+        // Ghi đè header Content-Type thành utf-8 khi generate URL (chỉ áp dụng với file text, code, document)
+        var ext = Path.GetExtension(fullKey).ToLowerInvariant();
+        var textExtensions = new[] { ".txt", ".md", ".json", ".cpp", ".py", ".cs", ".java", ".c", ".h", ".html", ".css", ".xml" };
+        
+        if (textExtensions.Contains(ext))
+        {
+            request.ResponseHeaderOverrides = new ResponseHeaderOverrides
+            {
+                ContentType = "text/plain; charset=utf-8"
+            };
+        }
 
         return _s3Client.GetPreSignedURL(request);
     }

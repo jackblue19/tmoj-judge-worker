@@ -56,6 +56,7 @@ builder.Services.AddControllers().AddOData(opt =>
 //builder.Services.AddScoped<IUnitOfWork , EfUnitOfWork>();
 
 builder.Services.AddPersistence();
+builder.Services.AddExternalServices(builder.Configuration);
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);

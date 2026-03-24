@@ -2,14 +2,10 @@
 using Application.UseCases.Problems.Dtos;
 using Domain.Abstractions;
 using MediatR;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.UseCases.Problems.Commands.UpdateProblem;
-public sealed class AttachProblemTagsCommandHandler : IRequestHandler<AttachProblemTagsCommand , ProblemDetailDto>
+
+public sealed class AttachProblemTagsCommandHandler : IRequestHandler<AttachProblemTagsCommand, ProblemDetailDto>
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IProblemRepository _problemRepository;
@@ -17,9 +13,9 @@ public sealed class AttachProblemTagsCommandHandler : IRequestHandler<AttachProb
     private readonly IUnitOfWork _unitOfWork;
 
     public AttachProblemTagsCommandHandler(
-        ICurrentUserService currentUser ,
-        IProblemRepository problemRepository ,
-        ITagRepository tagRepository ,
+        ICurrentUserService currentUser,
+        IProblemRepository problemRepository,
+        ITagRepository tagRepository,
         IUnitOfWork unitOfWork)
     {
         _currentUser = currentUser;
@@ -28,21 +24,21 @@ public sealed class AttachProblemTagsCommandHandler : IRequestHandler<AttachProb
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<ProblemDetailDto> Handle(AttachProblemTagsCommand request , CancellationToken ct)
+    public async Task<ProblemDetailDto> Handle(AttachProblemTagsCommand request, CancellationToken ct)
     {
-        if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId is null)
             throw new UnauthorizedAccessException("User is not authenticated.");
 
         var currentUserId = _currentUser.UserId.Value;
         var isAdmin = _currentUser.IsInRole("Admin");
 
         var entity = await _problemRepository.GetProblemForManagementAsync(
-            request.ProblemId ,
-            currentUserId ,
-            isAdmin ,
+            request.ProblemId,
+            currentUserId,
+            isAdmin,
             ct);
 
-        if ( entity is null )
+        if (entity is null)
             throw new KeyNotFoundException("Problem not found or access denied.");
 
         var incomingIds = request.TagIds?
@@ -50,21 +46,21 @@ public sealed class AttachProblemTagsCommandHandler : IRequestHandler<AttachProb
             .Distinct()
             .ToArray() ?? [];
 
-        if ( incomingIds.Length == 0 )
+        if (incomingIds.Length == 0)
             throw new ArgumentException("At least one tag id is required.");
 
-        var tags = await _tagRepository.GetTrackedByIdsAsync(incomingIds , ct);
+        var tags = await _tagRepository.GetTrackedByIdsAsync(incomingIds, ct);
 
-        if ( incomingIds.Length != tags.Count )
+        if (incomingIds.Length != tags.Count)
             throw new InvalidOperationException("One or more tag ids do not exist.");
 
         var existingIds = entity.Tags
             .Select(x => x.Id)
             .ToHashSet();
 
-        foreach ( var tag in tags )
+        foreach (var tag in tags)
         {
-            if ( !existingIds.Contains(tag.Id) )
+            if (!existingIds.Contains(tag.Id))
             {
                 entity.Tags.Add(tag);
             }
@@ -76,9 +72,9 @@ public sealed class AttachProblemTagsCommandHandler : IRequestHandler<AttachProb
         await _unitOfWork.SaveChangesAsync(ct);
 
         var detail = await _problemRepository.GetProblemDetailForManagementAsync(
-            entity.Id ,
-            currentUserId ,
-            isAdmin ,
+            entity.Id,
+            currentUserId,
+            isAdmin,
             ct);
 
         return detail ?? throw new KeyNotFoundException("Problem detail not found after attach.");

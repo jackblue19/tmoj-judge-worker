@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Application.UseCases.Problems.Validators;
+﻿namespace Application.UseCases.Problems.Validators;
 
 internal class Class1
 {

@@ -26,7 +26,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 //  database
-builder.Services.AddScoped<IEditorialRepository, EditorialRepository>();
+builder.Services.AddScoped<IEditorialRepository , EditorialRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {
@@ -39,7 +39,13 @@ builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 });
 
 //  controller + odata
-builder.Services.AddControllers().AddOData(opt =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler =
+            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    })
+    .AddOData(opt =>
 {
     opt.AddRouteComponents("odata" , EdmModelBuilder.GetEdmModel())
         .Select()
@@ -79,7 +85,7 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 //  DI TEMP SERVICES
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUserService ,    CurrentUserService>();
+builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
 
 //  DI LOCAL JUDGE
 

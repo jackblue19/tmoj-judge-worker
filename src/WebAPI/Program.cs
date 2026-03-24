@@ -57,6 +57,7 @@ builder.Services.AddControllers()
 });
 
 builder.Services.AddPersistence();
+builder.Services.AddExternalServices(builder.Configuration);
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);

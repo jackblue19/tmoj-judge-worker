@@ -2,23 +2,18 @@
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.UseCases.Problems.Commands.CreateTag;
 
-public sealed class CreateTagCommandHandler : IRequestHandler<CreateTagCommand , ProblemTagDto>
+public sealed class CreateTagCommandHandler : IRequestHandler<CreateTagCommand, ProblemTagDto>
 {
     private readonly ITagRepository _tagRepository;
-    private readonly IWriteRepository<Tag , Guid> _tagWriteRepository;
+    private readonly IWriteRepository<Tag, Guid> _tagWriteRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public CreateTagCommandHandler(
-        ITagRepository tagRepository ,
-        IWriteRepository<Tag , Guid> tagWriteRepository ,
+        ITagRepository tagRepository,
+        IWriteRepository<Tag, Guid> tagWriteRepository,
         IUnitOfWork unitOfWork)
     {
         _tagRepository = tagRepository;
@@ -26,36 +21,36 @@ public sealed class CreateTagCommandHandler : IRequestHandler<CreateTagCommand ,
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<ProblemTagDto> Handle(CreateTagCommand request , CancellationToken ct)
+    public async Task<ProblemTagDto> Handle(CreateTagCommand request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
         var slug = string.IsNullOrWhiteSpace(request.Slug)
-            ? name?.Trim().ToLower().Replace(' ' , '-')
+            ? name?.Trim().ToLower().Replace(' ', '-')
             : request.Slug.Trim().ToLower();
 
-        if ( string.IsNullOrWhiteSpace(name) )
+        if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Tag name is required.");
 
-        if ( await _tagRepository.ExistsByNameAsync(name , ct) )
+        if (await _tagRepository.ExistsByNameAsync(name, ct))
             throw new InvalidOperationException($"Tag name '{name}' already exists.");
 
-        if ( !string.IsNullOrWhiteSpace(slug) && await _tagRepository.ExistsBySlugAsync(slug , ct) )
+        if (!string.IsNullOrWhiteSpace(slug) && await _tagRepository.ExistsBySlugAsync(slug, ct))
             throw new InvalidOperationException($"Tag slug '{slug}' already exists.");
 
         var entity = new Tag
         {
-            Id = Guid.NewGuid() ,
-            Name = name ,
+            Id = Guid.NewGuid(),
+            Name = name,
             Slug = slug
         };
 
-        await _tagWriteRepository.AddAsync(entity , ct);
+        await _tagWriteRepository.AddAsync(entity, ct);
         await _unitOfWork.SaveChangesAsync(ct);
 
         return new ProblemTagDto
         {
-            Id = entity.Id ,
-            Name = entity.Name ,
+            Id = entity.Id,
+            Name = entity.Name,
             Slug = entity.Slug
         };
     }

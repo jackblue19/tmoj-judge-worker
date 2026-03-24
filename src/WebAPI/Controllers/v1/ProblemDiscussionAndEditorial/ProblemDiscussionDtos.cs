@@ -52,7 +52,9 @@
     // ✅ EDIT COMMENT
     public class UpdateCommentDto
     {
-        public string Content { get; set; } = null!;
+        public Guid CommentId { get; set; }
+
+        public string Content { get; set; } = string.Empty;
     }
 
     // =====================================================
@@ -129,20 +131,5 @@
         public bool HasMore { get; set; }
     }
 
-    // =====================================================
-    // EDITORIAL
-    // =====================================================
-
-    public class CreateEditorialDto
-    {
-        public Guid ProblemId { get; set; }
-        public Guid AuthorId { get; set; }
-
-        public string Content { get; set; } = null!;
-    }
-
-    public class UpdateEditorialDto
-    {
-        public string Content { get; set; } = null!;
-    }
+   
 }

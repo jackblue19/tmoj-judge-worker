@@ -1,9 +1,11 @@
 ﻿using Application;
+using Application.Common.Interfaces;
 using Application.UseCases.Problems.Queries.GetAllProblems;
 using Domain.Abstractions;
 using Infrastructure;
 using Infrastructure.Configurations.Auth;
 using Infrastructure.Persistence.Common;
+using Infrastructure.Persistence.Common.Repositories;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
@@ -16,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 //  database
+builder.Services.AddScoped<IEditorialRepository, EditorialRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {

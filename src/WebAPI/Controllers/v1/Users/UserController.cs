@@ -1,3 +1,4 @@
+using Application.Abstractions.Outbound.Services;
 using Application.UseCases.Auth;
 using Asp.Versioning;
 using Domain.Entities;
@@ -6,6 +7,7 @@ using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using WebAPI.Controllers.v1.Auth;
 using WebAPI.Models.Common;
 
@@ -20,12 +22,14 @@ public class UserController : ControllerBase
     private readonly TmojDbContext _db;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ILogger<AuthController> _logger;
+    private readonly ICloudinaryService _cloudinary;
 
-    public UserController(TmojDbContext db, IPasswordHasher passwordHasher, ILogger<AuthController> logger)
+    public UserController(TmojDbContext db, IPasswordHasher passwordHasher, ILogger<AuthController> logger, ICloudinaryService cloudinary)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _logger = logger;
+        _cloudinary = cloudinary;
     }
 
     [Authorize(Roles = "admin")]
@@ -455,5 +459,111 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
         string lastName = parts[0];
         string firstName = string.Join(" ", parts.Skip(1));
         return (lastName, firstName);
+    }
+
+    // ──────────────────────────────────────────
+    //  Avatar Upload / Delete
+    //  Uses Cloudinary with GUID as the PublicId link
+    // ──────────────────────────────────────────
+
+    /// Upload or replace the current user's avatar.
+    /// The avatar is stored in Cloudinary and linked by GUID in User.AvatarUrl.
+    [Authorize]
+    [HttpPut("me/avatar")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(5_000_000)] // 5 MB
+    public async Task<IActionResult> UploadAvatar(IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Message = "File is required." });
+
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+            return BadRequest(new { Message = $"Invalid file type. Allowed: {string.Join(", ", allowedExtensions)}" });
+
+        var userId = GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(new { Message = "Unauthorized access." });
+
+        try
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.DeletedAt == null, ct);
+            if (user == null)
+                return NotFound(new { Message = "User not found." });
+
+            // If user already has an avatar, replace it; otherwise upload new
+            if (!string.IsNullOrEmpty(user.AvatarUrl) && Guid.TryParse(user.AvatarUrl, out var existingAvatarId))
+            {
+                await _cloudinary.ReplaceAvatarAsync(existingAvatarId, file.OpenReadStream(), ext, ct);
+            }
+            else
+            {
+                var avatarId = await _cloudinary.UploadAvatarAsync(file.OpenReadStream(), ext, ct);
+                user.AvatarUrl = avatarId.ToString();
+            }
+
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            // Resolve the GUID to a full URL for the response
+            var avatarUrl = Guid.TryParse(user.AvatarUrl, out var aid)
+                ? _cloudinary.GetAvatarUrl(aid)
+                : user.AvatarUrl;
+
+            return Ok(new { Message = "Avatar uploaded successfully.", AvatarUrl = avatarUrl });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
+            return StatusCode(500, new { Message = "An error occurred while uploading the avatar." });
+        }
+    }
+
+    /// Delete the current user's avatar from Cloudinary.
+    [Authorize]
+    [HttpDelete("me/avatar")]
+    public async Task<IActionResult> DeleteAvatar(CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(new { Message = "Unauthorized access." });
+
+        try
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.DeletedAt == null, ct);
+            if (user == null)
+                return NotFound(new { Message = "User not found." });
+
+            if (string.IsNullOrEmpty(user.AvatarUrl))
+                return BadRequest(new { Message = "No avatar to delete." });
+
+            if (Guid.TryParse(user.AvatarUrl, out var avatarId))
+            {
+                await _cloudinary.DeleteAvatarAsync(avatarId, ct);
+            }
+
+            user.AvatarUrl = null;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = "Avatar deleted successfully." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting avatar for user {UserId}", userId);
+            return StatusCode(500, new { Message = "An error occurred while deleting the avatar." });
+        }
+    }
+
+    private Guid GetUserId()
+    {
+        var v =
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            User.FindFirstValue("sub") ??
+            User.FindFirstValue("user_id") ??
+            User.FindFirstValue("uid");
+
+        return Guid.TryParse(v, out var id) ? id : Guid.Empty;
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Application.UseCases.Problems.Dtos;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 
 namespace Application.UseCases.Problems.Commands.CreateProblem;
 
@@ -11,5 +12,6 @@ public sealed record CreateProblemDraftCommand(
     string? TypeCode,
     string? ScoringCode,
     string? VisibilityCode,
-    string? DescriptionMd
+    string? DescriptionMd,
+    IFormFile? StatementFile
 ) : IRequest<ProblemSummaryDto>;

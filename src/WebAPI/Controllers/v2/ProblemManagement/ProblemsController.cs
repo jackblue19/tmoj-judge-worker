@@ -60,7 +60,8 @@ public class ProblemsController : ControllerBase
     }
     */
 
-    [HttpPost("drafts")]
+    //  Create Problem Drafts version 2.1
+    /*[HttpPost("drafts")]
     public async Task<ActionResult<ProblemSummaryDto>> CreateDraft(
         [FromBody] CreateProblemDraftRequestDto request ,
         CancellationToken ct)
@@ -78,6 +79,53 @@ public class ProblemsController : ControllerBase
             ct);
 
         return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
+    }*/
+
+    [Authorize]
+    [HttpPost("drafts/json")]
+    [Consumes("application/json")]
+    public async Task<ActionResult<ProblemSummaryDto>> CreateDraftJson(
+        [FromBody] CreateProblemDraftRequestDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateProblemDraftCommand(
+                request.Title ,
+                request.Slug ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.TypeCode ,
+                request.ScoringCode ,
+                request.VisibilityCode ,
+                request.DescriptionMd ,
+                null) ,
+            ct);
+
+        return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
+    }
+
+    [Authorize]
+    [HttpPost("drafts/form")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ProblemSummaryDto>> CreateDraftForm(
+        [FromForm] CreateProblemDraftFormDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateProblemDraftCommand(
+                request.Title ,
+                request.Slug ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.TypeCode ,
+                request.ScoringCode ,
+                request.VisibilityCode ,
+                request.DescriptionMd ,
+                request.StatementFile) ,
+            ct);
+
+        return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
     }
 
     [HttpGet("{problemId:guid}")]
@@ -87,10 +135,24 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
+    [AllowAnonymous]
+    [HttpGet("{problemId:guid}/statement")]
+    public async Task<IActionResult> GetStatement(Guid problemId , CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetProblemStatementAccessQuery(problemId) , ct);
+
+        if ( result.Mode == "redirect" )
+            return Redirect(result.Url!);
+
+        return File(result.Bytes! , result.ContentType! , enableRangeProcessing: true);
+    }
+
     [HttpPut("{problemId:guid}/content")]
-    public async Task<ActionResult<ProblemDetailDto>> UpdateContent(
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ProblemDetailDto>> UpdateContentForm(
         Guid problemId ,
-        [FromBody] UpdateProblemContentRequestDto request ,
+        [FromForm] UpdateProblemContentRequestDto request ,
         CancellationToken ct)
     {
         var result = await _mediator.Send(
@@ -103,7 +165,8 @@ public class ProblemsController : ControllerBase
                 request.MemoryLimitKb ,
                 request.TypeCode ,
                 request.ScoringCode ,
-                request.VisibilityCode) ,
+                request.VisibilityCode ,
+                request.StatementFile) ,
             ct);
 
         return Ok(result);

@@ -1,4 +1,6 @@
-﻿namespace Application.UseCases.Problems.Dtos;
+﻿using Microsoft.AspNetCore.Http;
+
+namespace Application.UseCases.Problems.Dtos;
 
 public sealed class UpdateProblemContentRequestDto
 {
@@ -10,4 +12,5 @@ public sealed class UpdateProblemContentRequestDto
     public string? TypeCode { get; init; }
     public string? ScoringCode { get; init; }
     public string? VisibilityCode { get; init; }
+    public IFormFile? StatementFile { get; init; }
 }

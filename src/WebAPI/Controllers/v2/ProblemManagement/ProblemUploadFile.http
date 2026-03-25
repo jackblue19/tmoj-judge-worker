@@ -1,0 +1,53 @@
+# For more info on HTTP files go to https://aka.ms/vs/httpfile
+@host = https://localhost:7210
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJqdGkiOiI0MDk4ZTRmMzhkZDI0OGVlOThmZGFiOTNiMDQwMTE5MCIsImlhdCI6MTc3NDQzMjczOCwibmFtZSI6IkphY2sgYkxVRSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJuYmYiOjE3NzQ0MzI3MzgsImV4cCI6MTc3NTAzNzUzOCwiaXNzIjoiZnB0dS10bW9qLWFwaSIsImF1ZCI6InRtb2otdXNlcnMifQ.hUQ_n0rk3bYqFRHnSIud49hm0PWywCd-mIJT5qxMWbI
+# @problemId = 8c54a739-8a7f-4bad-9da3-112df4b607b8
+@problemId = 8038bcf3-aaa2-45ba-bc75-5454899e1c71
+
+###
+POST {{host}}/api/v2/problems/drafts/json
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Two Sum",
+  "slug": "two-sum-v5",
+  "timeLimitMs": 1000,
+  "memoryLimitKb": 262144,
+  "visibilityCode": "public",
+  "descriptionMd": "# Two Sum\nFind 2 numbers..."
+}
+
+###
+POST {{host}}/api/v2/problems/drafts
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data
+
+title=Two Sum PDF
+slug=two-sum-pdf
+visibilityCode=private
+StatementFile=@two-sum.pdf
+
+###
+POST {{host}}/api/v2/problems/drafts
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data
+
+title=Two Sum MD File
+slug=two-sum-md
+visibilityCode=public
+StatementFile=@two-sum.md
+
+###
+GET {{host}}/api/v2/problems/{{problemId}}
+
+###
+GET {{host}}/api/v2/problems/{{problemId}}/statement
+
+###
+PUT {{host}}/api/v2/problems/{{problemId}}/content
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data
+
+title=Updated Title
+StatementFile=@new.pdf

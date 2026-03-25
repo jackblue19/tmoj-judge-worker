@@ -10,26 +10,24 @@ using System.Threading.Tasks;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
+using Infrastructure.Persistence.Common;
 
 namespace Infrastructure.Persistence.Repositories.Problems;
 
-public sealed class ProblemRepository : IProblemRepository
+public sealed class ProblemRepository : EfRepository<Problem , Guid>, IProblemRepository
 {
-    private readonly IReadRepository<Problem , Guid> _problemReadRepository;
-    private readonly TmojDbContext _db;
+    //private readonly TmojDbContext _db;   
 
-    public ProblemRepository(
-        IReadRepository<Problem , Guid> problemReadRepository ,
-        TmojDbContext db)
+    public ProblemRepository(TmojDbContext db) : base(db)
     {
-        _problemReadRepository = problemReadRepository;
-        _db = db;
+        //_db = db;
     }
 
     public async Task<bool> SlugExistsAsync(string slug , Guid? excludingProblemId , CancellationToken ct = default)
     {
         var spec = new ProblemBySlugSpec(slug , excludingProblemId);
-        return await _problemReadRepository.AnyAsync(spec , ct);
+        //return await _problemReadRepository.AnyAsync(spec , ct);
+        return await AnyAsync(spec , ct);
     }
 
     public async Task<Problem?> GetProblemForManagementAsync(
@@ -38,9 +36,9 @@ public sealed class ProblemRepository : IProblemRepository
         bool isAdmin ,
         CancellationToken ct = default)
     {
-        var query = _db.Problems
-            .Include(x => x.Tags)
-            .Where(x => x.Id == problemId);
+        var query = _set            //  protected -> _set = _db.Set<TEntity>(); => _db.Set<Problems> 
+                    .Include(x => x.Tags)
+                    .Where(x => x.Id == problemId);
 
         if ( !isAdmin )
         {
@@ -66,6 +64,6 @@ public sealed class ProblemRepository : IProblemRepository
             return null;
 
         var spec = new ProblemDetailForManagementSpec(problemId);
-        return await _problemReadRepository.FirstOrDefaultAsync(spec , ct);
+        return await FirstOrDefaultAsync(spec , ct);
     }
 }

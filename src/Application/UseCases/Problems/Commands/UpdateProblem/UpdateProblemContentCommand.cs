@@ -1,16 +1,18 @@
 ﻿using Application.UseCases.Problems.Dtos;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 
 namespace Application.UseCases.Problems.Commands.UpdateProblem;
 
 public sealed record UpdateProblemContentCommand(
-    Guid ProblemId,
-    string Title,
-    string Slug,
-    string? DescriptionMd,
-    int? TimeLimitMs,
-    int? MemoryLimitKb,
-    string? TypeCode,
-    string? ScoringCode,
-    string? VisibilityCode
+    Guid ProblemId ,
+    string Title ,
+    string Slug ,
+    string? DescriptionMd ,
+    int? TimeLimitMs ,
+    int? MemoryLimitKb ,
+    string? TypeCode ,
+    string? ScoringCode ,
+    string? VisibilityCode ,
+    IFormFile? StatementFile
 ) : IRequest<ProblemDetailDto>;

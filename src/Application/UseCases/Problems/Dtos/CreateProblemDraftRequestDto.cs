@@ -1,4 +1,6 @@
-﻿namespace Application.UseCases.Problems.Dtos;
+﻿using Microsoft.AspNetCore.Http;
+
+namespace Application.UseCases.Problems.Dtos;
 
 public sealed class CreateProblemDraftRequestDto
 {
@@ -10,4 +12,18 @@ public sealed class CreateProblemDraftRequestDto
     public string? ScoringCode { get; init; }
     public string? VisibilityCode { get; init; }
     public string? DescriptionMd { get; init; }
+}
+
+public sealed class CreateProblemDraftFormDto
+{
+    public string Title { get; init; } = null!;
+    public string Slug { get; init; } = null!;
+    public int? TimeLimitMs { get; init; }
+    public int? MemoryLimitKb { get; init; }
+    public string? TypeCode { get; init; }
+    public string? ScoringCode { get; init; }
+    public string? VisibilityCode { get; init; }
+
+    public string? DescriptionMd { get; init; }   // optional
+    public IFormFile? StatementFile { get; init; } // optional: .md or .pdf
 }

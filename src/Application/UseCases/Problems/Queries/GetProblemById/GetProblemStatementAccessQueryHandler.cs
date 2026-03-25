@@ -1,6 +1,7 @@
 ﻿using Application.Abstractions.Outbound.Services;
 using Application.UseCases.Problems.Dtos;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,11 +15,14 @@ public sealed class GetProblemStatementAccessQueryHandler
 {
     private readonly IProblemRepository _repo;
     private readonly IR2Service _r2;
+    private readonly ILogger<IR2Service> _logger;
 
     public GetProblemStatementAccessQueryHandler(
+        ILogger<IR2Service> logger ,
         IProblemRepository repo ,
         IR2Service r2)
     {
+        _logger = logger;
         _repo = repo;
         _r2 = r2;
     }
@@ -49,6 +53,8 @@ public sealed class GetProblemStatementAccessQueryHandler
             problem.StatementFileId!.Value ,
             TimeSpan.FromMinutes(3) ,
             ct);
+
+        _logger.LogInformation("Problem statement presigned url: {Url}" , url);
 
         return new GetProblemStatementAccessDto
         {

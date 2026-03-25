@@ -1,9 +1,9 @@
 @host = https://localhost:7210
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJqdGkiOiI0NTM2OGVhYWQ5ZDM0OGYxOWY0ZjFiMGI1NjFlOTg2ZCIsImlhdCI6MTc3NDI2NzM3NywibmFtZSI6IkphY2sgYkxVRSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6InN0dWRlbnQiLCJyb2xlIjoic3R1ZGVudCIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWVpZGVudGlmaWVyIjoiMzE2NGUxNjQtYjNmMi00NmJjLTg4YjEtMzQ4NWVjZjA4YWY0IiwibmJmIjoxNzc0MjY3Mzc3LCJleHAiOjE3NzQ4NzIxNzcsImlzcyI6ImZwdHUtdG1vai1hcGkiLCJhdWQiOiJ0bW9qLXVzZXJzIn0.jgaUOa5Ssig1SoTP7pBOFoZHYjWKJFo-1hs_ds0FtiA
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJqdGkiOiI4NTUwYTJjMDFmMmI0OTBkYjBjMWZlYWI3ZDc3NGJkYiIsImlhdCI6MTc3NDQwMDkwNywibmFtZSI6IkphY2sgYkxVRSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJuYmYiOjE3NzQ0MDA5MDcsImV4cCI6MTc3NTAwNTcwNywiaXNzIjoiZnB0dS10bW9qLWFwaSIsImF1ZCI6InRtb2otdXNlcnMifQ.0NP8J3FAxx3vHp88pCtrgHSyGzMOv-iKrAJM4EP42I8
 # @problemId = 8c54a739-8a7f-4bad-9da3-112df4b607b8
-@problemId = 72b6514a-27c0-47b0-bb78-875967bf7fe0
-@tagId1 = ddb3eac4-62d2-40af-98af-50c245887e54
-@tagId2 = ddb3eac4-62d2-40af-98af-50c245887e54
+@problemId = cbc19a54-35aa-41ac-987c-2454d088e83f
+@tagId1 = 796e83fe-b1dd-4210-a9b7-b2ade982e407
+@tagId2 = bcbffd41-6f60-4ac4-be48-8327a0cfc371
 
 ### Create problem draft
 POST {{host}}/api/v2/problems/drafts
@@ -11,8 +11,8 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "title": "Two Sum Basic",
-  "slug": "two-sum-basic-v2",
+  "title": "Two Sum Basic v3",
+  "slug": "two-sum-basic-v3",
   "timeLimitMs": 1000,
   "memoryLimitKb": 262144,
   "typeCode": "algorithm",
@@ -31,8 +31,8 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "title": "Two Sum Basic Updated",
-  "slug": "two-sum-basic-v2",
+  "title": "Two Sum Basic Updated into v3",
+  "slug": "two-sum-basic-v3",
   "timeLimitMs": 1500,
   "memoryLimitKb": 262144,
   "typeCode": "algorithm",
@@ -47,8 +47,8 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "name": "Dynamic Programming v2",
-  "slug": "dynamic-programming-v2"
+  "name": "Dynamic Programming v3",
+  "slug": "dynamic-programming-v3"
 }
 
 ### Create tag 2
@@ -57,8 +57,8 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "name": "Two Pointers v2",
-  "slug": "two-pointers-v2"
+  "name": "Two Pointers v3",
+  "slug": "two-pointers-v3"
 }
 
 
@@ -83,7 +83,7 @@ Content-Type: application/json
   ]
 }
 
-### Replace tags
+### Replace tags  ( >= 1 Ok)
 PUT {{host}}/api/v2/problems/{{problemId}}/tags
 Authorization: Bearer {{token}}
 Content-Type: application/json

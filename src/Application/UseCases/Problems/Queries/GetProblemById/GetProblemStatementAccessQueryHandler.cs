@@ -51,10 +51,15 @@ public sealed class GetProblemStatementAccessQueryHandler
         if ( problem.StatementFileId is null )
             throw new KeyNotFoundException("Problem does not have a statement file.");
 
-        var url = await _r2.GetPresignedUrlAsync(
+        //var url = await _r2.GetPresignedUrlAsync(
+        //    "Problem" ,
+        //    problem.StatementFileId.Value ,
+        //    TimeSpan.FromMinutes(3) ,
+        //    ct);
+        var url = await _r2.GetPresignedUrlForDownloadAsync(
             "Problem" ,
             problem.StatementFileId.Value ,
-            TimeSpan.FromMinutes(3) ,
+            3 ,
             ct);
 
         _logger.LogInformation("Problem statement presigned url: {Url}" , url);

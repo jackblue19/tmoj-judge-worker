@@ -29,6 +29,7 @@ public class R2Service : IR2Service
     public async Task UploadAsync(string type, Guid id, string fileExtension, Stream fileStream, string? contentType = null, CancellationToken cancellationToken = default)
     {
         var bucketName = ResolveBucket(type);
+
         var objectKey = BuildObjectKey(id, fileExtension);
 
         var request = new PutObjectRequest
@@ -43,7 +44,37 @@ public class R2Service : IR2Service
         await _s3Client.PutObjectAsync(request, cancellationToken);
     }
 
-    public async Task<string?> GetPresignedUrlAsync(string type, Guid id, TimeSpan? expiresIn = null, CancellationToken cancellationToken = default)
+    public async Task ReplaceIfExistsAsync(string type, Guid id, string fileExtension, Stream fileStream, string? contentType = null, CancellationToken cancellationToken = default)
+    {
+        await DeleteAsync(type, id, cancellationToken);
+
+        var bucketName = ResolveBucket(type);
+
+        var objectKey = BuildObjectKey(id, fileExtension);
+
+        var request = new PutObjectRequest
+        {
+            BucketName = bucketName,
+            Key = objectKey,
+            InputStream = fileStream,
+            ContentType = contentType ?? "application/octet-stream",
+            DisablePayloadSigning = true
+        };
+
+        await _s3Client.PutObjectAsync(request, cancellationToken);
+    }
+
+    public Task<string?> GetPresignedUrlForViewAsync(string type, Guid id, int? presignUrlMinute = null, CancellationToken cancellationToken = default)
+    {
+        return GeneratePresignedUrlAsync(type, id, presignUrlMinute, false, cancellationToken);
+    }
+
+    public Task<string?> GetPresignedUrlForDownloadAsync(string type, Guid id, int? presignUrlMinute = null, CancellationToken cancellationToken = default)
+    {
+        return GeneratePresignedUrlAsync(type, id, presignUrlMinute, true, cancellationToken);
+    }
+
+    private async Task<string?> GeneratePresignedUrlAsync(string type, Guid id, int? presignUrlMinute = null, bool forDownload = false, CancellationToken cancellationToken = default)
     {
         var bucketName = ResolveBucket(type);
 
@@ -65,22 +96,63 @@ public class R2Service : IR2Service
             BucketName = bucketName,
             Key = fullKey,
             Verb = HttpVerb.GET,
-            Expires = DateTime.UtcNow.Add(expiresIn ?? TimeSpan.FromMinutes(3))
+            Expires = DateTime.UtcNow.AddMinutes(presignUrlMinute ?? _settings.PresignedUrlExpirationMinutes)
         };
 
-        // Ghi đè header Content-Type thành utf-8 khi generate URL (chỉ áp dụng với file text, code, document)
-        var ext = Path.GetExtension(fullKey).ToLowerInvariant();
-        var textExtensions = new[] { ".txt", ".md", ".json", ".cpp", ".py", ".cs", ".java", ".c", ".h", ".html", ".css", ".xml" };
-        
-        if (textExtensions.Contains(ext))
+        request.ResponseHeaderOverrides = new ResponseHeaderOverrides();
+
+        if (forDownload)
         {
-            request.ResponseHeaderOverrides = new ResponseHeaderOverrides
+            request.ResponseHeaderOverrides.ContentDisposition = $"attachment; filename=\"{fullKey}\"";
+        }
+        else
+        {
+            request.ResponseHeaderOverrides.ContentDisposition = "inline";
+
+            // Ghi đè header Content-Type thành utf-8 khi generate URL (chỉ áp dụng với file text, code, document)
+            var ext = Path.GetExtension(fullKey).ToLowerInvariant();
+            var textExtensions = new[] { ".txt", ".md", ".json", ".cpp", ".py", ".cs", ".java", ".c", ".h", ".html", ".css", ".xml" };
+            
+            if (textExtensions.Contains(ext))
             {
-                ContentType = "text/plain; charset=utf-8"
-            };
+                request.ResponseHeaderOverrides.ContentType = "text/plain; charset=utf-8";
+            }
         }
 
         return _s3Client.GetPreSignedURL(request);
+    }
+
+    public async Task<string?> GetPublicUrlAsync(string type, Guid id, CancellationToken cancellationToken = default)
+    {
+        var bucketName = ResolveBucket(type);
+
+        var listRequest = new ListObjectsV2Request
+        {
+            BucketName = bucketName,
+            Prefix = id.ToString(),
+            MaxKeys = 1
+        };
+
+        var listResponse = await _s3Client.ListObjectsV2Async(listRequest, cancellationToken);
+        var fullKey = listResponse.S3Objects.FirstOrDefault()?.Key;
+
+        if (string.IsNullOrEmpty(fullKey))
+            return null;
+
+        var bucketKey = string.IsNullOrEmpty(type) ? "" : char.ToUpper(type[0]) + type.Substring(1).ToLower();
+
+        if (_settings.PublicDomains != null && 
+            _settings.PublicDomains.TryGetValue(bucketKey, out var publicDomain) && 
+            !string.IsNullOrEmpty(publicDomain))
+        {
+            var baseUrl = publicDomain.TrimEnd('/');
+            // R2 custom domains directly serve the bucket objects
+            return $"{baseUrl}/{fullKey}";
+        }
+
+        // Fallback: This will result in an "Authorization" error from Cloudflare R2 unless presigned
+        var fallbackBaseUrl = _settings.ServiceUrl.TrimEnd('/');
+        return $"{fallbackBaseUrl}/{bucketName}/{fullKey}";
     }
 
     public async Task<string?> DeleteAsync(string type, Guid id, CancellationToken cancellationToken = default)

@@ -1,27 +1,51 @@
+# For more info on HTTP files go to https://aka.ms/vs/httpfile
 @host = https://localhost:7210
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJqdGkiOiI4NTUwYTJjMDFmMmI0OTBkYjBjMWZlYWI3ZDc3NGJkYiIsImlhdCI6MTc3NDQwMDkwNywibmFtZSI6IkphY2sgYkxVRSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJuYmYiOjE3NzQ0MDA5MDcsImV4cCI6MTc3NTAwNTcwNywiaXNzIjoiZnB0dS10bW9qLWFwaSIsImF1ZCI6InRtb2otdXNlcnMifQ.0NP8J3FAxx3vHp88pCtrgHSyGzMOv-iKrAJM4EP42I8
-# @problemId = 8c54a739-8a7f-4bad-9da3-112df4b607b8
-@problemId = de4c347c-2c14-4776-9ab0-0c48be0ba74d
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJqdGkiOiI5ZjAzODQ1ZjdkMDU0MGI0YmY4MTNmYmUyNTE2Zjk2MiIsImlhdCI6MTc3NDUxMTk3NCwibmFtZSI6IkphY2sgYkxVRSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJuYmYiOjE3NzQ1MTE5NzQsImV4cCI6MTc3NTExNjc3NCwiaXNzIjoiZnB0dS10bW9qLWFwaSIsImF1ZCI6InRtb2otdXNlcnMifQ.808nJpSyGYRYc7MypOBIknlzSpKImAqTHm5y7WA3Y8s
+@problemId = 8ffd4f64-1d66-478e-b2ed-3c982121dec8
+# @problemId = de4c347c-2c14-4776-9ab0-0c48be0ba74d
 @tagId1 = 796e83fe-b1dd-4210-a9b7-b2ade982e407
 @tagId2 = bcbffd41-6f60-4ac4-be48-8327a0cfc371
 
-### Create problem draft
-POST {{host}}/api/v2/problems/drafts
+###
+POST {{host}}/api/v2/problems/drafts/json
 Authorization: Bearer {{token}}
 Content-Type: application/json
+
 {
-  "title": "Two Sum Basic v3",
-  "slug": "two-sum-basic-v3",
+  "title": "Two Sum",
+  "slug": "two-sum-v8971",
   "timeLimitMs": 1000,
   "memoryLimitKb": 262144,
-  "typeCode": "algorithm",
-  "scoringCode": "icpc",
-  "visibilityCode": "private",
-  "descriptionMd": "# Two Sum\n\nGiven an array of integers..."
+  "visibilityCode": "public",
+  "descriptionMd": "# Two Sum\nFind 2 numbers..."
 }
+
+###
+POST {{host}}/api/v2/problems/drafts
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data
+
+title=Two Sum PDF
+slug=two-sum-pdf
+visibilityCode=private
+StatementFile=@two-sum.pdf
+
+###
+# POST {{host}}/api/v2/problems/drafts
+# Authorization: Bearer {{token}}
+# Content-Type: multipart/form-data
+
+# title=Two Sum MD File
+# slug=two-sum-md
+# visibilityCode=public
+# StatementFile=@two-sum.md
 
 ### Get problem detail
 GET {{host}}/api/v2/problems/{{problemId}}
+Authorization: Bearer {{token}}
+
+###
+GET {{host}}/api/v2/problems/{{problemId}}/statement
 Authorization: Bearer {{token}}
 
 ### Update content
@@ -91,3 +115,11 @@ Content-Type: application/json
     "{{tagId1}}"
   ]
 }
+
+###
+PUT {{host}}/api/v2/problems/{{problemId}}/content
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data
+
+title=Updated Title
+StatementFile=@new.pdf

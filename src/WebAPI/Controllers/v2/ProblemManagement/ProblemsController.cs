@@ -18,7 +18,7 @@ namespace WebAPI.Controllers.v2.ProblemManagement;
 [ApiController]
 [ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-[Authorize]
+//[Authorize]
 public class ProblemsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -81,6 +81,8 @@ public class ProblemsController : ControllerBase
         return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
     }*/
 
+    //  old version
+    /*
     [Authorize]
     [HttpPost("drafts/json")]
     [Consumes("application/json")]
@@ -127,6 +129,31 @@ public class ProblemsController : ControllerBase
 
         return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
     }
+    */
+
+    [Authorize]
+    [HttpPost("drafts")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ProblemSummaryDto>> CreateDraft(
+    [FromForm] UpsertProblemContentRequestDto request ,
+    CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateProblemDraftCommand(
+                request.Title ,
+                request.Slug ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.TypeCode ,
+                request.ScoringCode ,
+                request.VisibilityCode ,
+                request.DescriptionMd ,
+                request.StatementFile) ,
+            ct);
+
+        return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
+    }
 
     [HttpGet("{problemId:guid}")]
     public async Task<ActionResult<ProblemDetailDto>> GetDetail(Guid problemId , CancellationToken ct)
@@ -135,18 +162,30 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
-    [AllowAnonymous]
+    [Authorize]
     [HttpGet("{problemId:guid}/statement")]
     public async Task<IActionResult> GetStatement(Guid problemId , CancellationToken ct)
     {
         var result = await _mediator.Send(new GetProblemStatementAccessQuery(problemId) , ct);
 
-        if ( result.Mode == "redirect" )
-            return Redirect(result.Url!);
+        if ( result.Bytes is null || result.Bytes.Length == 0 )
+            return NotFound();
 
-        return File(result.Bytes! , result.ContentType! , enableRangeProcessing: true);
+        var detail = await _mediator.Send(new GetProblemDetailQuery(problemId) , ct);
+
+        var fileName = !string.IsNullOrWhiteSpace(detail.StatementFileName)
+            ? detail.StatementFileName
+            : "statement.md";
+
+        return File(
+            fileContents: result.Bytes ,
+            contentType: result.ContentType ?? "application/octet-stream" ,
+            fileDownloadName: fileName ,
+            enableRangeProcessing: true);
     }
 
+    //  old-version
+    /*
     [HttpPut("{problemId:guid}/content")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
@@ -154,6 +193,33 @@ public class ProblemsController : ControllerBase
         Guid problemId ,
         [FromForm] UpdateProblemContentRequestDto request ,
         CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new UpdateProblemContentCommand(
+                problemId ,
+                request.Title ,
+                request.Slug ,
+                request.DescriptionMd ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.TypeCode ,
+                request.ScoringCode ,
+                request.VisibilityCode ,
+                request.StatementFile) ,
+            ct);
+
+        return Ok(result);
+    }
+    */
+
+    [Authorize]
+    [HttpPut("{problemId:guid}/content")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ProblemDetailDto>> UpdateContent(
+    Guid problemId ,
+    [FromForm] UpsertProblemContentRequestDto request ,
+    CancellationToken ct)
     {
         var result = await _mediator.Send(
             new UpdateProblemContentCommand(

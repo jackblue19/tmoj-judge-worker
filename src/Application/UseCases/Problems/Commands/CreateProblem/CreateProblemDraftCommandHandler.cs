@@ -31,6 +31,18 @@ public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreatePro
         _r2Service = r2Service;
     }
 
+    private static void ValidateStatementInput(string? descriptionMd , IFormFile? statementFile)
+    {
+        var hasDescription = !string.IsNullOrWhiteSpace(descriptionMd);
+        var hasFile = statementFile is not null && statementFile.Length > 0;
+
+        if ( !hasDescription && !hasFile )
+            throw new ArgumentException("Either description markdown or statement file is required.");
+
+        if ( hasDescription && hasFile )
+            throw new ArgumentException("Description markdown and statement file cannot be provided together.");
+    }
+
     private static (string ext, string contentType, string sourceCode) ResolveStatement(IFormFile file)
     {
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -57,12 +69,14 @@ public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreatePro
         if ( string.IsNullOrWhiteSpace(slug) )
             throw new ArgumentException("Slug is required.");
 
-        if ( request.StatementFile is null && string.IsNullOrWhiteSpace(request.DescriptionMd) )
-            throw new ArgumentException("Either description markdown or statement file is required.");
+        ValidateStatementInput(request.DescriptionMd , request.StatementFile);
 
         var slugExists = await _problemRepository.SlugExistsAsync(slug , null , ct);
         if ( slugExists )
             throw new InvalidOperationException($"Problem slug '{slug}' already exists.");
+
+        if ( request.StatementFile is null && string.IsNullOrWhiteSpace(request.DescriptionMd) )
+            throw new ArgumentException("Either description markdown or statement file is required.");
 
         var now = DateTime.UtcNow;
 
@@ -84,15 +98,9 @@ public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreatePro
             UpdatedBy = _currentUser.UserId.Value
         };
 
-        if ( request.StatementFile is null )
-        {
-            entity.DescriptionMd = request.DescriptionMd;
-            entity.StatementSourceCode = ProblemStatementSourceCodes.InlineMd;
-        }
-        else
+        if ( request.StatementFile is not null && request.StatementFile.Length > 0 )
         {
             var (ext, contentType, sourceCode) = ResolveStatement(request.StatementFile);
-
             var fileId = Guid.NewGuid();
 
             await using var stream = request.StatementFile.OpenReadStream();
@@ -111,6 +119,16 @@ public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreatePro
             entity.StatementContentType = contentType;
             entity.StatementExtension = ext;
             entity.StatementUploadedAt = now;
+        }
+        else
+        {
+            entity.DescriptionMd = request.DescriptionMd?.Trim();
+            entity.StatementSourceCode = ProblemStatementSourceCodes.InlineMd;
+            entity.StatementFileId = null;
+            entity.StatementFileName = null;
+            entity.StatementContentType = null;
+            entity.StatementExtension = null;
+            entity.StatementUploadedAt = null;
         }
 
         await _problemWriteRepository.AddAsync(entity , ct);

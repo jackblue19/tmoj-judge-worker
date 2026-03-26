@@ -99,7 +99,7 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
             var fileId = Guid.NewGuid();
 
             await using var stream = request.StatementFile.OpenReadStream();
-            await _r2Service.UploadAsync(
+            await _r2Service.ReplaceIfExistsAsync(       // ReplaceIfExistsAsync    ||  UploadAsync
                 type: "Problem" ,
                 id: fileId ,
                 fileExtension: ext ,

@@ -1,13 +1,9 @@
 using Application;
 using Application.Common.Interfaces;
-using Application.UseCases.Problems.Queries.GetAllProblems;
-using Domain.Abstractions;
 using Infrastructure;
 using Infrastructure.Configurations.Auth;
-using Infrastructure.Persistence.Common;
 using Infrastructure.Persistence.Common.Repositories;
 using Infrastructure.Persistence.Scaffolded.Context;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
 using System.Net.WebSockets;
 using System.Text;
@@ -16,10 +12,7 @@ using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 using Microsoft.AspNetCore.HttpOverrides;
-using Application.UseCases.Auth;
-using Infrastructure.ExternalServices.Identity;
 using Microsoft.AspNetCore.Http.Features;
-using Application.Common.Interfaces;
 using Infrastructure.ExternalServices;
 
 var builder = WebApplication.CreateBuilder(args);

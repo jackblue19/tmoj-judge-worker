@@ -287,14 +287,14 @@ public class SemesterController : ControllerBase
                     var code = codeRaw.Trim().ToUpperInvariant();
                     var name = nameRaw.Trim();
                     
-                    DateTime? startAt = null;
-                    DateTime? endAt = null;
+                    DateOnly? startAt = null;
+                    DateOnly? endAt = null;
 
-                    if (!string.IsNullOrWhiteSpace(startAtRaw) && DateTime.TryParse(startAtRaw, out var sDate))
-                        startAt = sDate.ToUniversalTime();
+                    if (!string.IsNullOrWhiteSpace(startAtRaw) && DateOnly.TryParse(startAtRaw, out var sDate))
+                        startAt = sDate;
 
-                    if (!string.IsNullOrWhiteSpace(endAtRaw) && DateTime.TryParse(endAtRaw, out var eDate))
-                        endAt = eDate.ToUniversalTime();
+                    if (!string.IsNullOrWhiteSpace(endAtRaw) && DateOnly.TryParse(endAtRaw, out var eDate))
+                        endAt = eDate;
 
                     var semester = await _db.Semesters.FirstOrDefaultAsync(s => s.Code == code, ct);
                     if (semester != null)
@@ -309,8 +309,8 @@ public class SemesterController : ControllerBase
                         {
                             Code = code,
                             Name = name,
-                            StartAt = startAt ?? DateTime.UtcNow,
-                            EndAt = endAt ?? DateTime.UtcNow.AddMonths(4)
+                            StartAt = startAt ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                            EndAt = endAt ?? DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(4))
                         };
                         _db.Semesters.Add(semester);
                     }

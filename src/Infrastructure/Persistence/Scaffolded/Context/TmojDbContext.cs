@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +27,8 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<Class> Classes { get; set; }
 
     public virtual DbSet<ClassMember> ClassMembers { get; set; }
+
+    public virtual DbSet<ClassSemester> ClassSemesters { get; set; }
 
     public virtual DbSet<ClassSlot> ClassSlots { get; set; }
 
@@ -375,18 +377,13 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
-            entity.Property(e => e.SemesterId).HasColumnName("semester_id");
             entity.Property(e => e.StartDate).HasColumnName("start_date");
             entity.Property(e => e.SubjectId).HasColumnName("subject_id");
+            entity.Property(e => e.SemesterId).HasColumnName("semester_id");
             entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
-
-            entity.HasOne(d => d.Semester).WithMany(p => p.Classes)
-                .HasForeignKey(d => d.SemesterId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("class_semester_id_fkey");
 
             entity.HasOne(d => d.Subject).WithMany(p => p.Classes)
                 .HasForeignKey(d => d.SubjectId)
@@ -405,12 +402,12 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("class_member");
 
-            entity.HasIndex(e => new { e.ClassId , e.UserId } , "uq_class_user").IsUnique();
+            entity.HasIndex(e => new { e.ClassSemesterId , e.UserId } , "uq_class_semester_user").IsUnique();
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.ClassSemesterId).HasColumnName("class_semester_id");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
@@ -419,14 +416,41 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("joined_at");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
-            entity.HasOne(d => d.Class).WithMany(p => p.ClassMembers)
-                .HasForeignKey(d => d.ClassId)
-                .HasConstraintName("class_member_class_id_fkey");
+            entity.HasOne(d => d.ClassSemester).WithMany(p => p.ClassMembers)
+                .HasForeignKey(d => d.ClassSemesterId)
+                .HasConstraintName("class_member_class_semester_id_fkey");
 
             entity.HasOne(d => d.User).WithMany(p => p.ClassMembers)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("class_member_user_id_fkey");
+        });
+
+        modelBuilder.Entity<ClassSemester>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("class_semester_pkey");
+
+            entity.ToTable("class_semester");
+
+            entity.HasIndex(e => new { e.ClassId, e.SemesterId }, "uq_class_semester").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.SemesterId).HasColumnName("semester_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+
+            entity.HasOne(d => d.Class).WithMany(p => p.ClassSemesters)
+                .HasForeignKey(d => d.ClassId)
+                .HasConstraintName("class_semester_class_id_fkey");
+
+            entity.HasOne(d => d.Semester).WithMany(p => p.ClassSemesters)
+                .HasForeignKey(d => d.SemesterId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("class_semester_semester_id_fkey");
         });
 
         modelBuilder.Entity<ClassSlot>(entity =>

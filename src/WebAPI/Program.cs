@@ -140,12 +140,12 @@ builder.Services.AddOutputCache(options =>
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
+    options.Limits.MaxRequestBodySize = 200 * 1024 * 1024; // 100 MB
 });
 
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+    options.MultipartBodyLengthLimit = 200 * 1024 * 1024; // 100 MB
 });
 
 var app = builder.Build();

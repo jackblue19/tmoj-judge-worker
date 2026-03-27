@@ -147,6 +147,8 @@ public class ProblemUploadsController : ControllerBase
         return NoContent();
     }
 
+    [RequestSizeLimit(200 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 200 * 1024 * 1024)]
     [HttpPost("{id:guid}/testcases")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -625,7 +627,7 @@ public class ProblemUploadsController : ControllerBase
 
         return Ok(new { deleted });
     }
-    
+
     [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost("{id:guid}/testsets/{testsetId:guid}/testcases")]
     [Consumes("multipart/form-data")]

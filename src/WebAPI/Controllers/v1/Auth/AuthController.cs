@@ -731,14 +731,13 @@ public class AuthController : ControllerBase
         _db.UserSessions.Add(session);
         await _db.SaveChangesAsync(ct);
 
-        var roles = new List<string>();
-        if ( user.Role != null ) roles.Add(user.Role.RoleCode);
-        if ( !roles.Any() ) roles.Add("user");
+        // 1 User = 1 Role
+        var roleName = user.Role?.RoleCode ?? "user";
 
         var accessToken = _tokenService.CreateAccessToken(
             user.UserId.ToString() ,
             user.DisplayName ?? user.Username ,
-            roles);
+            new List<string> { roleName });
 
         var userDto = new UserDto(
             UserId: user.UserId ,
@@ -749,7 +748,7 @@ public class AuthController : ControllerBase
             Username: user.Username ,
             AvatarUrl: user.AvatarUrl ,
             emailVerified: user.EmailVerified ,
-            Roles: roles
+            Role: roleName
         );
 
         return new AuthResponse(

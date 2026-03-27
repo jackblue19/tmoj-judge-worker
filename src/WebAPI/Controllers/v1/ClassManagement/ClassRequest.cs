@@ -28,7 +28,14 @@ public record AssignTeacherRoleRequest(Guid UserId);
 /// <summary>Add a student to a class by userId or email (Teacher).</summary>
 public record AddStudentRequest(
     Guid? UserId,
-    string? Email);
+    string? Email,
+    Guid SemesterId);
+
+/// <summary>Update class member status (Teacher/Manager).</summary>
+public record UpdateClassMemberStatusRequest(bool IsActive);
 
 /// <summary>Student joins a class via invite code.</summary>
 public record JoinByCodeRequest(string InviteCode);
+
+/// <summary>Link a class to a semester (Manager).</summary>
+public record AddClassSemesterRequest(Guid SemesterId);

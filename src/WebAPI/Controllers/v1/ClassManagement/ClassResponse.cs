@@ -5,7 +5,6 @@ namespace WebAPI.Controllers.v1.ClassManagement;
 public record ClassResponse(
     Guid ClassId ,
     string ClassCode ,
-    //string ClassName,     //  db-update
     string? Description ,
     DateOnly? StartDate ,
     DateOnly? EndDate ,
@@ -16,7 +15,7 @@ public record ClassResponse(
     DateTime UpdatedAt ,
     // nested info
     ClassSubjectInfo Subject ,
-    ClassSemesterInfo Semester ,
+    List<ClassSemesterInfo> Semesters ,
     ClassTeacherInfo? Teacher ,
     int MemberCount);
 
@@ -48,6 +47,8 @@ public record InviteCodeResponse(
 
 /// <summary>Student information within a class (Teacher view).</summary>
 public record ClassMemberResponse(
+    Guid MemberId,
+    Guid ClassId,
     Guid UserId ,
     string? DisplayName ,
     string? Email ,
@@ -78,3 +79,10 @@ public record ClassRankingEntry(
     int SolvedCount ,
     decimal TotalScore ,
     int SubmissionCount);
+
+/// <summary>Result of importing students from Excel.</summary>
+public record ImportResultResponse(
+    int TotalProcessed,
+    int SuccessCount,
+    int FailedCount,
+    List<string> Errors);

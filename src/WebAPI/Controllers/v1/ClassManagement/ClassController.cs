@@ -51,7 +51,6 @@ public class ClassController : ControllerBase
             var cls = new Domain.Entities.Class
             {
                 SubjectId = req.SubjectId,
-                SemesterId = req.SemesterId,
                 ClassCode = codeNorm,
                 Description = req.Description?.Trim(),
                 StartDate = req.StartDate,
@@ -61,6 +60,14 @@ public class ClassController : ControllerBase
             };
 
             _db.Classes.Add(cls);
+            await _db.SaveChangesAsync(ct);
+
+            // Create ClassSemester junction record
+            _db.ClassSemesters.Add(new ClassSemester
+            {
+                ClassId = cls.ClassId,
+                SemesterId = req.SemesterId
+            });
             await _db.SaveChangesAsync(ct);
 
             return CreatedAtAction(nameof(GetById) , new { id = cls.ClassId } ,
@@ -89,12 +96,12 @@ public class ClassController : ControllerBase
         {
             var query = _db.Classes.AsNoTracking()
                 .Include(c => c.Subject)
-                .Include(c => c.Semester)
+                .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Semester)
                 .Include(c => c.Teacher)
                 .Where(c => c.IsActive);
 
             if ( semesterId.HasValue )
-                query = query.Where(c => c.SemesterId == semesterId.Value);
+                query = query.Where(c => c.ClassSemesters.Any(cs => cs.SemesterId == semesterId.Value));
             if ( subjectId.HasValue )
                 query = query.Where(c => c.SubjectId == subjectId.Value);
             if ( !string.IsNullOrWhiteSpace(search) )
@@ -109,21 +116,26 @@ public class ClassController : ControllerBase
                 .OrderByDescending(c => c.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(c => new ClassResponse(
+                .ToListAsync(ct);
+
+            var result = items.Select(c =>
+            {
+                var semester = c.ClassSemesters.FirstOrDefault()?.Semester;
+                return new ClassResponse(
                     c.ClassId, c.ClassCode, c.Description,
                     c.StartDate, c.EndDate, c.IsActive, c.InviteCode,
                     c.InviteCodeExpiresAt,
                     c.CreatedAt, c.UpdatedAt,
                     new ClassSubjectInfo(c.Subject.SubjectId, c.Subject.Code, c.Subject.Name),
-                    new ClassSemesterInfo(c.Semester.SemesterId, c.Semester.Code, c.Semester.Name),
+                    c.ClassSemesters.Select(cs => new ClassSemesterInfo(cs.Semester.SemesterId, cs.Semester.Code, cs.Semester.Name)).ToList(),
                     c.Teacher != null
                         ? new ClassTeacherInfo(c.Teacher.UserId , c.Teacher.DisplayName , c.Teacher.Email , c.Teacher.AvatarUrl)
                         : null ,
-                    c.ClassMembers.Count(m => m.IsActive)))
-                .ToListAsync(ct);
+                    c.ClassMembers.Count(m => m.IsActive));
+            }).ToList();
 
             return Ok(ApiResponse<ClassListResponse>.Ok(
-                new ClassListResponse(items , totalCount) , "Classes fetched successfully"));
+                new ClassListResponse(result , totalCount) , "Classes fetched successfully"));
         }
         catch ( Exception )
         {
@@ -141,7 +153,7 @@ public class ClassController : ControllerBase
         {
             var c = await _db.Classes.AsNoTracking()
                 .Include(x => x.Subject)
-                .Include(x => x.Semester)
+                .Include(x => x.ClassSemesters).ThenInclude(cs => cs.Semester)
                 .Include(x => x.Teacher)
                 .Include(x => x.ClassMembers)
                 .FirstOrDefaultAsync(x => x.ClassId == id , ct);
@@ -154,7 +166,7 @@ public class ClassController : ControllerBase
                 c.InviteCodeExpiresAt,
                 c.CreatedAt, c.UpdatedAt,
                 new ClassSubjectInfo(c.Subject.SubjectId, c.Subject.Code, c.Subject.Name),
-                new ClassSemesterInfo(c.Semester.SemesterId, c.Semester.Code, c.Semester.Name),
+                c.ClassSemesters.Select(cs => new ClassSemesterInfo(cs.Semester.SemesterId, cs.Semester.Code, cs.Semester.Name)).ToList(),
                 c.Teacher != null
                     ? new ClassTeacherInfo(c.Teacher.UserId , c.Teacher.DisplayName , c.Teacher.Email , c.Teacher.AvatarUrl)
                     : null ,
@@ -199,6 +211,7 @@ public class ClassController : ControllerBase
 
     // ──────────────────────────────────────────
     // POST api/v1/class/assign-teacher-role  →  Assign Teacher Role (Manager)
+    // Uses User.RoleId (1:1 with Role) instead of UserRole M:N table
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager")]
     [HttpPost("assign-teacher-role")]
@@ -208,21 +221,18 @@ public class ClassController : ControllerBase
     {
         try
         {
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == req.UserId , ct);
+            var user = await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.UserId == req.UserId , ct);
             if ( user is null ) return NotFound(new { Message = "User not found." });
 
             var teacherRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "teacher" , ct);
             if ( teacherRole is null ) return StatusCode(500 , new { Message = "Teacher role not found in system." });
 
-            var alreadyHas = await _db.UserRoles
-                .AnyAsync(ur => ur.UserId == req.UserId && ur.RoleId == teacherRole.RoleId , ct);
-            if ( alreadyHas ) return Conflict(new { Message = "User already has the teacher role." });
+            if ( user.RoleId == teacherRole.RoleId )
+                return Conflict(new { Message = "User already has the teacher role." });
 
-            _db.UserRoles.Add(new UserRole
-            {
-                UserId = req.UserId ,
-                RoleId = teacherRole.RoleId
-            });
+            user.RoleId = teacherRole.RoleId;
             await _db.SaveChangesAsync(ct);
 
             return Ok(new { Message = "Teacher role assigned successfully." });
@@ -319,9 +329,12 @@ public class ClassController : ControllerBase
             var teacherId = GetUserId();
             if ( teacherId is null ) return Unauthorized();
 
-            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == id , ct);
-            if ( cls is null ) return NotFound(new { Message = "Class not found." });
-            if ( cls.TeacherId != teacherId )
+            var classSemester = await _db.ClassSemesters
+                .Include(cs => cs.Class)
+                .FirstOrDefaultAsync(cs => cs.ClassId == id && cs.SemesterId == req.SemesterId , ct);
+
+            if ( classSemester is null ) return NotFound(new { Message = "Class not linked to this semester." });
+            if ( classSemester.Class.TeacherId != teacherId )
                 return Forbid();
 
             // Find student
@@ -334,14 +347,15 @@ public class ClassController : ControllerBase
             if ( student is null ) return NotFound(new { Message = "Student not found." });
 
             var exists = await _db.ClassMembers
-                .AnyAsync(m => m.ClassId == id && m.UserId == student.UserId , ct);
-            if ( exists ) return Conflict(new { Message = "Student is already a member of this class." });
+                .AnyAsync(m => m.ClassSemesterId == classSemester.Id && m.UserId == student.UserId , ct);
+            if ( exists ) return Conflict(new { Message = "Student is already a member of this class in this semester." });
 
             _db.ClassMembers.Add(new ClassMember
             {
-                ClassId = id ,
+                ClassSemesterId = classSemester.Id ,
                 UserId = student.UserId ,
-                IsActive = true
+                IsActive = true,
+                JoinedAt = DateTime.UtcNow
             });
             await _db.SaveChangesAsync(ct);
 
@@ -359,21 +373,24 @@ public class ClassController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpDelete("{id:guid}/members/{userId:guid}")]
     public async Task<IActionResult> RemoveStudent(
-        Guid id , Guid userId , CancellationToken ct)
+        Guid id , Guid userId , [FromQuery] Guid semesterId, CancellationToken ct)
     {
         try
         {
             var teacherId = GetUserId();
             if ( teacherId is null ) return Unauthorized();
 
-            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == id , ct);
-            if ( cls is null ) return NotFound(new { Message = "Class not found." });
-            if ( cls.TeacherId != teacherId )
+            var classSemester = await _db.ClassSemesters
+                .Include(cs => cs.Class)
+                .FirstOrDefaultAsync(cs => cs.ClassId == id && cs.SemesterId == semesterId, ct);
+            
+            if ( classSemester is null ) return NotFound(new { Message = "Class not linked to this semester." });
+            if ( classSemester.Class.TeacherId != teacherId )
                 return Forbid();
 
             var member = await _db.ClassMembers
-                .FirstOrDefaultAsync(m => m.ClassId == id && m.UserId == userId , ct);
-            if ( member is null ) return NotFound(new { Message = "Member not found." });
+                .FirstOrDefaultAsync(m => m.ClassSemesterId == classSemester.Id && m.UserId == userId , ct);
+            if ( member is null ) return NotFound(new { Message = "Member not found in this class/semester." });
 
             member.IsActive = false;
             await _db.SaveChangesAsync(ct);
@@ -383,6 +400,40 @@ public class ClassController : ControllerBase
         catch ( Exception )
         {
             return StatusCode(500 , new { Message = "An error occurred while removing student." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // PUT api/v1/class/{id}/members/{userId}/status → Update Member Status
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPut("{id:guid}/members/{userId:guid}/status")]
+    public async Task<IActionResult> UpdateMemberStatus(
+        Guid id, Guid userId, [FromQuery] Guid semesterId, [FromBody] UpdateClassMemberStatusRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var teacherId = GetUserId();
+            if (teacherId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters
+                .Include(cs => cs.Class)
+                .FirstOrDefaultAsync(cs => cs.ClassId == id && cs.SemesterId == semesterId, ct);
+            
+            if (classSemester is null) return NotFound(new { Message = "Class not linked to this semester." });
+            if (classSemester.Class.TeacherId != teacherId) return Forbid();
+
+            var member = await _db.ClassMembers.FirstOrDefaultAsync(m => m.ClassSemesterId == classSemester.Id && m.UserId == userId, ct);
+            if (member is null) return NotFound(new { Message = "Member not found." });
+
+            member.IsActive = req.IsActive;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = "Member status updated successfully." });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating status." });
         }
     }
 
@@ -404,7 +455,7 @@ public class ClassController : ControllerBase
 
             var cls = await _db.Classes
                 .Include(c => c.Subject)
-                .Include(c => c.Semester)
+                .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Semester)
                 .FirstOrDefaultAsync(c => c.InviteCode == req.InviteCode.Trim() && c.IsActive , ct);
 
             if ( cls is null ) return NotFound(new { Message = "Invalid or expired invite code." });
@@ -420,14 +471,17 @@ public class ClassController : ControllerBase
             }
 
             var exists = await _db.ClassMembers
-                .AnyAsync(m => m.ClassId == cls.ClassId && m.UserId == userId.Value , ct);
+                .AnyAsync(m => m.ClassSemesterId == cls.ClassSemesters.OrderByDescending(x => x.CreatedAt).First().Id && m.UserId == userId.Value , ct);
             if ( exists ) return Conflict(new { Message = "You are already a member of this class." });
+
+            var latestSemester = cls.ClassSemesters.OrderByDescending(x => x.CreatedAt).First();
 
             _db.ClassMembers.Add(new ClassMember
             {
-                ClassId = cls.ClassId ,
+                ClassSemesterId = latestSemester.Id ,
                 UserId = userId.Value ,
-                IsActive = true
+                IsActive = true,
+                JoinedAt = DateTime.UtcNow
             });
             await _db.SaveChangesAsync(ct);
 
@@ -451,8 +505,8 @@ public class ClassController : ControllerBase
             if ( userId is null ) return Unauthorized();
 
             var member = await _db.ClassMembers
-                .FirstOrDefaultAsync(m => m.ClassId == id && m.UserId == userId.Value && m.IsActive , ct);
-            if ( member is null ) return NotFound(new { Message = "You are not an active member of this class." });
+                .FirstOrDefaultAsync(m => m.ClassSemester.ClassId == id && m.UserId == userId.Value && m.IsActive , ct);
+            if ( member is null ) return NotFound(new { Message = "You are not an active member in any semester of this class." });
 
             member.IsActive = false;
             await _db.SaveChangesAsync(ct);
@@ -477,7 +531,8 @@ public class ClassController : ControllerBase
         {
             var member = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
-                .FirstOrDefaultAsync(m => m.ClassId == id && m.UserId == userId , ct);
+                .Include(m => m.ClassSemester)
+                .FirstOrDefaultAsync(m => m.ClassSemester.ClassId == id && m.UserId == userId && m.IsActive, ct);
 
             if ( member is null ) return NotFound(new { Message = "Member not found." });
 
@@ -517,19 +572,26 @@ public class ClassController : ControllerBase
     // GET api/v1/class/{id}/members  →  List All Members
     // ──────────────────────────────────────────
     [HttpGet("{id:guid}/members")]
-    public async Task<IActionResult> ListMembers(Guid id , CancellationToken ct)
+    public async Task<IActionResult> ListMembers(Guid id , [FromQuery] Guid? semesterId, CancellationToken ct)
     {
         try
         {
             var cls = await _db.Classes.AsNoTracking().FirstOrDefaultAsync(c => c.ClassId == id , ct);
             if ( cls is null ) return NotFound(new { Message = "Class not found." });
 
-            var members = await _db.ClassMembers.AsNoTracking()
+            var query = _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
-                .Where(m => m.ClassId == id && m.IsActive)
+                .Where(m => m.ClassSemester.ClassId == id && m.IsActive);
+
+            if (semesterId.HasValue)
+                query = query.Where(m => m.ClassSemester.SemesterId == semesterId.Value);
+
+            var members = await query
                 .OrderBy(m => m.JoinedAt)
                 .Select(m => new ClassMemberResponse(
-                    m.User.UserId ,
+                    m.Id,
+                    m.ClassSemester.ClassId,
+                    m.UserId ,
                     m.User.DisplayName ,
                     m.User.Email ,
                     m.User.AvatarUrl ,
@@ -549,12 +611,20 @@ public class ClassController : ControllerBase
     // GET api/v1/class/{id}/ranking  →  View Subject Ranking
     // ──────────────────────────────────────────
     [HttpGet("{id:guid}/ranking")]
-    public async Task<IActionResult> GetRanking(Guid id , CancellationToken ct)
+    public async Task<IActionResult> GetRanking(Guid id , [FromQuery] Guid? semesterId, CancellationToken ct)
     {
         try
         {
             var cls = await _db.Classes.AsNoTracking().FirstOrDefaultAsync(c => c.ClassId == id , ct);
             if ( cls is null ) return NotFound(new { Message = "Class not found." });
+
+            // Find ClassSemester
+            var csQuery = _db.ClassSemesters.AsNoTracking().Where(cs => cs.ClassId == id);
+            if (semesterId.HasValue)
+                csQuery = csQuery.Where(cs => cs.SemesterId == semesterId.Value);
+            
+            var classSemester = await csQuery.FirstOrDefaultAsync(ct);
+            if (classSemester is null) return NotFound(new { Message = "Class not found in specified semester." });
 
             // Get all problem ids in this class's slots
             var problemIds = await _db.ClassSlots.AsNoTracking()
@@ -563,10 +633,10 @@ public class ClassController : ControllerBase
                 .Distinct()
                 .ToListAsync(ct);
 
-            // Get all active members
+            // Get all active members for this class-semester
             var members = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
-                .Where(m => m.ClassId == id && m.IsActive)
+                .Where(m => m.ClassSemesterId == classSemester.Id && m.IsActive)
                 .ToListAsync(ct);
 
             var rankings = new List<ClassRankingEntry>();
@@ -608,7 +678,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpGet("{id:guid}/report/export")]
-    public async Task<IActionResult> ExportMarkReport(Guid id , CancellationToken ct)
+    public async Task<IActionResult> ExportMarkReport(Guid id , [FromQuery] Guid semesterId, CancellationToken ct)
     {
         try
         {
@@ -617,9 +687,13 @@ public class ClassController : ControllerBase
                 .FirstOrDefaultAsync(c => c.ClassId == id , ct);
             if ( cls is null ) return NotFound(new { Message = "Class not found." });
 
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.ClassId == id && cs.SemesterId == semesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class-Semester not found." });
+
             var members = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
-                .Where(m => m.ClassId == id && m.IsActive)
+                .Where(m => m.ClassSemesterId == classSemester.Id && m.IsActive)
                 .OrderBy(m => m.User.DisplayName)
                 .ToListAsync(ct);
 
@@ -676,7 +750,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpGet("{id:guid}/students/export")]
-    public async Task<IActionResult> ExportStudentsWithMarks(Guid id, CancellationToken ct)
+    public async Task<IActionResult> ExportStudentsWithMarks(Guid id, [FromQuery] Guid semesterId, CancellationToken ct)
     {
         try
         {
@@ -685,9 +759,13 @@ public class ClassController : ControllerBase
                 .FirstOrDefaultAsync(c => c.ClassId == id, ct);
             if (cls is null) return NotFound(new { Message = "Class not found." });
 
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.ClassId == id && cs.SemesterId == semesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class-Semester not found." });
+
             var members = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
-                .Where(m => m.ClassId == id && m.IsActive)
+                .Where(m => m.ClassSemesterId == classSemester.Id && m.IsActive)
                 .OrderBy(m => m.User.FirstName).ThenBy(m => m.User.LastName)
                 .ToListAsync(ct);
 
@@ -740,6 +818,69 @@ public class ClassController : ControllerBase
             return StatusCode(500, new { Message = "An error occurred while exporting: " + ex.Message });
         }
     }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{id}/semesters  →  Link Class to Semester (Manager)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager")]
+    [HttpPost("{id:guid}/semesters")]
+    public async Task<IActionResult> AddSemester(
+        Guid id,
+        [FromBody] AddClassSemesterRequest req,
+        CancellationToken ct)
+    {
+        try
+        {
+            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == id, ct);
+            if (cls is null) return NotFound(new { Message = "Class not found." });
+
+            if (!await _db.Semesters.AnyAsync(s => s.SemesterId == req.SemesterId, ct))
+                return BadRequest(new { Message = "Semester not found." });
+
+            var exists = await _db.ClassSemesters
+                .AnyAsync(cs => cs.ClassId == id && cs.SemesterId == req.SemesterId, ct);
+            if (exists) return Conflict(new { Message = "Class is already linked to this semester." });
+
+            _db.ClassSemesters.Add(new ClassSemester
+            {
+                ClassId = id,
+                SemesterId = req.SemesterId
+            });
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = "Class linked to semester successfully." });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while linking class to semester." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // DELETE api/v1/class/{id}/semesters/{semesterId}  →  Unlink Class from Semester (Manager)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager")]
+    [HttpDelete("{id:guid}/semesters/{semesterId:guid}")]
+    public async Task<IActionResult> RemoveSemester(
+        Guid id, Guid semesterId, CancellationToken ct)
+    {
+        try
+        {
+            var link = await _db.ClassSemesters
+                .FirstOrDefaultAsync(cs => cs.ClassId == id && cs.SemesterId == semesterId, ct);
+            if (link is null) return NotFound(new { Message = "Class-Semester link not found." });
+
+            _db.ClassSemesters.Remove(link);
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = "Class unlinked from semester successfully." });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while unlinking class from semester." });
+        }
+    }
+
     // ──────────────────────────────────────────
     // GET api/v1/class/import/template  →  Export Template Class (Admin/Manager)
     // ──────────────────────────────────────────
@@ -865,14 +1006,6 @@ public class ClassController : ControllerBase
                         continue;
                     }
 
-                    var isClassExists = await _db.Classes.AnyAsync(c => c.ClassCode == classCode, ct);
-                    if (isClassExists)
-                    {
-                        errors.Add($"Row {row.RowNumber()}: Class Code '{classCode}' already exists.");
-                        failedCount++;
-                        continue;
-                    }
-
                     Guid? teacherId = null;
                     if (!string.IsNullOrWhiteSpace(teacherEmailRaw))
                     {
@@ -896,10 +1029,30 @@ public class ClassController : ControllerBase
                     if (!string.IsNullOrWhiteSpace(endDateRaw) && DateOnly.TryParse(endDateRaw, out var eDate))
                         endDate = eDate;
 
+                    // Check if class already exists — if so, just link to semester
+                    var existingClass = await _db.Classes.FirstOrDefaultAsync(c => c.ClassCode == classCode, ct);
+
+                    if (existingClass != null)
+                    {
+                        // Class exists — link to semester if not already linked
+                        var alreadyLinked = await _db.ClassSemesters
+                            .AnyAsync(cs => cs.ClassId == existingClass.ClassId && cs.SemesterId == semesterId, ct);
+                        if (!alreadyLinked)
+                        {
+                            _db.ClassSemesters.Add(new ClassSemester
+                            {
+                                ClassId = existingClass.ClassId,
+                                SemesterId = semesterId
+                            });
+                            await _db.SaveChangesAsync(ct);
+                        }
+                        successCount++;
+                        continue;
+                    }
+
                     var cls = new Domain.Entities.Class
                     {
                         SubjectId = subjectId,
-                        SemesterId = semesterId,
                         ClassCode = classCode,
                         Description = descRaw,
                         StartDate = startDate,
@@ -908,6 +1061,14 @@ public class ClassController : ControllerBase
                         IsActive = true
                     };
                     _db.Classes.Add(cls);
+                    await _db.SaveChangesAsync(ct);
+
+                    // Create ClassSemester junction record
+                    _db.ClassSemesters.Add(new ClassSemester
+                    {
+                        ClassId = cls.ClassId,
+                        SemesterId = semesterId
+                    });
                     await _db.SaveChangesAsync(ct);
                     successCount++;
                 }
@@ -932,6 +1093,145 @@ public class ClassController : ControllerBase
         {
             return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
         }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/class/members/import/template  →  Excel Template for Members
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("members/import/template")]
+    public IActionResult DownloadMemberImportTemplate()
+    {
+        try
+        {
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Template");
+
+            var headers = new List<string> { "ClassCode", "SubjectCode", "SemesterCode", "RollNumber", "MemberCode" };
+            for (int i = 0; i < headers.Count; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+            }
+
+            worksheet.Cell(2, 1).Value = "SE1701";
+            worksheet.Cell(2, 2).Value = "PRN211";
+            worksheet.Cell(2, 3).Value = "FA23";
+            worksheet.Cell(2, 4).Value = "HE170001";
+            worksheet.Cell(2, 5).Value = "M12345";
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Member_Import_Template.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred: " + ex.Message });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{id}/members/import  →  Import Members to Specific Class
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("{id:guid}/members/import")]
+    public async Task<IActionResult> ImportSpecificMembers(Guid id, [FromQuery] Guid semesterId, IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0) return BadRequest(new { Message = "File is missing." });
+        var result = await ProcessMemberImport(file, id, semesterId, ct);
+        return Ok(ApiResponse<ImportResultResponse>.Ok(result, "Import processed."));
+    }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/members/import  →  Import Members by Codes
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("members/import")]
+    public async Task<IActionResult> ImportMembersGeneric(IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0) return BadRequest(new { Message = "File is missing." });
+        var result = await ProcessMemberImport(file, null, null, ct);
+        return Ok(ApiResponse<ImportResultResponse>.Ok(result, "Import processed."));
+    }
+
+    private async Task<ImportResultResponse> ProcessMemberImport(IFormFile file, Guid? fallbackClassId, Guid? fallbackSemesterId, CancellationToken ct)
+    {
+        int successCount = 0; int failedCount = 0; int totalProcessed = 0;
+        var errors = new List<string>();
+
+        using var stream = new MemoryStream();
+        await file.CopyToAsync(stream, ct);
+        using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+        var worksheet = workbook.Worksheet(1);
+        var rows = worksheet.RowsUsed().Skip(1);
+        var headers = worksheet.Row(1).CellsUsed().ToDictionary(c => c.GetValue<string>().Trim(), c => c.Address.ColumnNumber, StringComparer.OrdinalIgnoreCase);
+
+        var semestersDict = await _db.Semesters.ToDictionaryAsync(s => s.Code.ToLowerInvariant(), s => s.SemesterId, ct);
+
+        foreach (var row in rows)
+        {
+            totalProcessed++;
+            try
+            {
+                string rNum = GetCellString(row, headers, "RollNumber");
+                string mCode = GetCellString(row, headers, "MemberCode");
+
+                if (string.IsNullOrWhiteSpace(rNum) && string.IsNullOrWhiteSpace(mCode))
+                {
+                    errors.Add($"Row {row.RowNumber()}: Student identifier missing.");
+                    failedCount++; continue;
+                }
+
+                var student = await _db.Users.FirstOrDefaultAsync(u => (rNum != "" && u.RollNumber == rNum) || (mCode != "" && u.MemberCode == mCode), ct);
+                if (student == null) { errors.Add($"Row {row.RowNumber()}: Student not found."); failedCount++; continue; }
+
+                Guid targetClassId; Guid targetSemesterId;
+
+                if (fallbackClassId.HasValue && fallbackSemesterId.HasValue)
+                {
+                    targetClassId = fallbackClassId.Value; targetSemesterId = fallbackSemesterId.Value;
+                }
+                else
+                {
+                    string cCode = GetCellString(row, headers, "ClassCode");
+                    string sCode = GetCellString(row, headers, "SemesterCode");
+                    if (string.IsNullOrWhiteSpace(cCode) || string.IsNullOrWhiteSpace(sCode))
+                    {
+                        errors.Add($"Row {row.RowNumber()}: Class/Semester code missing.");
+                        failedCount++; continue;
+                    }
+                    if (!semestersDict.TryGetValue(sCode.ToLowerInvariant(), out targetSemesterId))
+                    {
+                        errors.Add($"Row {row.RowNumber()}: Semester '{sCode}' not found.");
+                        failedCount++; continue;
+                    }
+                    var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassCode == cCode.ToUpperInvariant(), ct);
+                    if (cls == null) { errors.Add($"Row {row.RowNumber()}: Class '{cCode}' not found."); failedCount++; continue; }
+                    targetClassId = cls.ClassId;
+                }
+
+                var classSemester = await _db.ClassSemesters.FirstOrDefaultAsync(cs => cs.ClassId == targetClassId && cs.SemesterId == targetSemesterId, ct);
+                if (classSemester == null)
+                {
+                    errors.Add($"Row {row.RowNumber()}: Class is not linked to this semester.");
+                    failedCount++; continue;
+                }
+
+                var exists = await _db.ClassMembers.AnyAsync(m => m.ClassSemesterId == classSemester.Id && m.UserId == student.UserId, ct);
+                if (!exists)
+                {
+                    _db.ClassMembers.Add(new ClassMember { ClassSemesterId = classSemester.Id, UserId = student.UserId, IsActive = true, JoinedAt = DateTime.UtcNow });
+                    await _db.SaveChangesAsync(ct);
+                }
+                successCount++;
+            }
+            catch (Exception ex) { errors.Add($"Row {row.RowNumber()}: {ex.Message}"); failedCount++; }
+        }
+        return new ImportResultResponse(totalProcessed, successCount, failedCount, errors);
     }
 
     // ── Helpers ───────────────────────────────

@@ -42,9 +42,9 @@ public class SemesterController : ControllerBase
 
             var totalCount = await query.CountAsync(ct);
             var items = await query
-              .OrderByDescending(x => x.StartAt)   // sắp xếp trước
-              .Skip((page - 1) * pageSize)         // bỏ qua các record trước
-              .Take(pageSize)                    
+              .OrderByDescending(x => x.StartAt)
+              .Skip((page - 1) * pageSize)
+              .Take(pageSize)
               .Select(x => new SemesterResponse(
                   x.SemesterId, x.Code, x.Name, x.StartAt, x.EndAt, x.IsActive, x.CreatedAt))
               .ToListAsync(ct);
@@ -151,8 +151,10 @@ public class SemesterController : ControllerBase
             var s = await _db.Semesters.FirstOrDefaultAsync(x => x.SemesterId == id, ct);
             if (s is null) return NotFound(new { Message = "Semester not found." });
 
-            // Check if any classes are using this semester
-            if (await _db.Classes.AnyAsync(c => c.SemesterId == id && c.IsActive, ct))
+            // Check if any active classes are linked to this semester via ClassSemester junction table
+            var hasActiveClasses = await _db.ClassSemesters
+                .AnyAsync(cs => cs.SemesterId == id && cs.Class.IsActive, ct);
+            if (hasActiveClasses)
                 return BadRequest(new { Message = "Cannot delete semester because it is being used by active classes." });
 
             s.IsActive = false;

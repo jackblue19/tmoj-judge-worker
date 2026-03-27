@@ -21,5 +21,14 @@ public sealed class ProblemDetailDto
     public Guid? ApprovedByUserId { get; init; }
     public DateTime? ApprovedAt { get; init; }
     public DateTime? PublishedAt { get; init; }
+
+    public string? StatementSourceCode { get; init; }
+    public string? StatementContentType { get; init; }
+    public string? StatementFileName { get; init; }
+    public string? StatementAccessUrl { get; init; } // backend endpoint hoặc presigned
+
+
     public IReadOnlyList<ProblemTagDto> Tags { get; init; } = [];
 }
+
+

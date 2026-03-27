@@ -23,7 +23,7 @@ public sealed class FileUploadDebugController : ControllerBase
     [HttpPost("r2/{type}/{id}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(50_000_000)]
-    public async Task<IActionResult> UploadR2(string type, Guid id, IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> UploadR2(string type, Guid id, IFormFile file, [FromQuery] bool replaceIfExists = false, CancellationToken ct = default)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { Message = "File is required." });
@@ -31,15 +31,45 @@ public sealed class FileUploadDebugController : ControllerBase
         var ext = Path.GetExtension(file.FileName);
         
         await using var stream = file.OpenReadStream();
-        await _r2.UploadAsync(type, id, ext, stream, file.ContentType, ct);
+        
+        if (replaceIfExists)
+        {
+            await _r2.ReplaceIfExistsAsync(type, id, ext, stream, file.ContentType, ct);
+        }
+        else
+        {
+            await _r2.UploadAsync(type, id, ext, stream, file.ContentType, ct);
+        }
 
         return Ok(new { Message = "File uploaded successfully.", Id = id });
     }
 
-    [HttpGet("r2/{type}/{id}")]
-    public async Task<IActionResult> GetR2PresignedUrl(string type, Guid id, CancellationToken ct = default)
+    [HttpGet("r2/download/{type}/{id}")]
+    public async Task<IActionResult> GetR2DownloadUrl(string type, Guid id, [FromQuery] int? expiresInMinutes, CancellationToken ct = default)
     {
-        var url = await _r2.GetPresignedUrlAsync(type, id, null, ct);
+        var url = await _r2.GetPresignedUrlForDownloadAsync(type, id, expiresInMinutes, ct);
+        
+        if (url == null) 
+            return NotFound(new { Message = $"File with ID {id} not found." });
+
+        return Ok(new { Url = url });
+    }
+
+    [HttpGet("r2/view/{type}/{id}")]
+    public async Task<IActionResult> GetR2ViewUrl(string type, Guid id, [FromQuery] int? expiresInMinutes, CancellationToken ct = default)
+    {
+        var url = await _r2.GetPresignedUrlForViewAsync(type, id, expiresInMinutes, ct);
+        
+        if (url == null) 
+            return NotFound(new { Message = $"File with ID {id} not found." });
+
+        return Ok(new { Url = url });
+    }
+
+    [HttpGet("r2/public/{type}/{id}")]
+    public async Task<IActionResult> GetR2PublicUrl(string type, Guid id, CancellationToken ct = default)
+    {
+        var url = await _r2.GetPublicUrlAsync(type, id, ct);
         
         if (url == null) 
             return NotFound(new { Message = $"File with ID {id} not found." });

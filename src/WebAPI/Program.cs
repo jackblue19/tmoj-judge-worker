@@ -1,11 +1,9 @@
-﻿using Application;
-using Application.UseCases.Problems.Queries.GetAllProblems;
-using Domain.Abstractions;
+using Application;
+using Application.Common.Interfaces;
 using Infrastructure;
 using Infrastructure.Configurations.Auth;
-using Infrastructure.Persistence.Common;
+using Infrastructure.Persistence.Common.Repositories;
 using Infrastructure.Persistence.Scaffolded.Context;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.OData;
 using System.Net.WebSockets;
 using System.Text;
@@ -14,14 +12,14 @@ using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 using Microsoft.AspNetCore.HttpOverrides;
-using Application.UseCases.Auth;
-using Infrastructure.ExternalServices.Identity;
 using Microsoft.AspNetCore.Http.Features;
+using Infrastructure.ExternalServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 //  database
+builder.Services.AddScoped<IEditorialRepository , EditorialRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {
@@ -34,7 +32,13 @@ builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 });
 
 //  controller + odata
-builder.Services.AddControllers().AddOData(opt =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler =
+            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    })
+    .AddOData(opt =>
 {
     opt.AddRouteComponents("odata" , EdmModelBuilder.GetEdmModel())
         .Select()
@@ -45,13 +49,8 @@ builder.Services.AddControllers().AddOData(opt =>
         .SetMaxTop(100);
 });
 
-builder.Services.AddScoped(
-    typeof(IReadRepository<,>) ,
-    typeof(EfReadRepository<,>));
-builder.Services.AddScoped(
-    typeof(IWriteRepository<,>) ,
-    typeof(EfWriteRepository<,>));
-builder.Services.AddScoped<IUnitOfWork , EfUnitOfWork>();
+builder.Services.AddPersistence();
+builder.Services.AddExternalServices(builder.Configuration);
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);

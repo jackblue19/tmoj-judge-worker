@@ -17,6 +17,7 @@ using System.Text.Json;
 using System.Runtime.CompilerServices;
 using Serilog.Core;
 using Microsoft.Extensions.Configuration;
+using Application.Abstractions.Outbound.Services;
 
 namespace WebAPI.Controllers.v1.Auth;
 
@@ -35,6 +36,7 @@ public class AuthController : ControllerBase
     private readonly TmojDbContext _db;
     private readonly ILogger<AuthController> _logger;
     private readonly IConfiguration _config;
+    private readonly IEmailService _emailService;
 
     public AuthController(
         ITokenService tokenService ,
@@ -45,7 +47,8 @@ public class AuthController : ControllerBase
         IOptions<GithubOptions> github ,
         ILogger<AuthController> logger ,
         TmojDbContext db ,
-        IConfiguration config)
+        IConfiguration config ,
+        IEmailService emailService)
     {
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
@@ -56,6 +59,7 @@ public class AuthController : ControllerBase
         _db = db;
         _logger = logger;
         _config = config;
+        _emailService = emailService;
     }
 
     [AllowAnonymous]
@@ -74,6 +78,12 @@ public class AuthController : ControllerBase
         try
         {
             var email = req.Email.ToLowerInvariant();
+
+            var emailSettings = _config.GetSection("EmailSettings");
+            var template = emailSettings["VerificationEmailTemplate"] ?? "<a href='{LINK}'>Xác nhận Email</a>";
+
+            string GenerateEmailVerificationHtml(string link) =>
+                template.Replace("{LINK}", link).Replace("{YEAR}", DateTime.Now.Year.ToString());
 
             if ( _google.AllowedDomains.Any() && !_google.AllowedDomains.Any(d => email.EndsWith($"@{d}" , StringComparison.OrdinalIgnoreCase)) )
             {
@@ -96,12 +106,13 @@ public class AuthController : ControllerBase
 
             if ( existingUser != null )
             {
-                if ( !string.IsNullOrEmpty(existingUser.Password) )
+                if ( existingUser.EmailVerified )
                 {
-                    return BadRequest(new { Message = "Email already exists" });
+                    return BadRequest(new { Message = "Email already exists and verified" });
                 }
 
                 // Ghi đè thông tin đăng ký lên tài khoản import chưa có password
+                // HOẶC gửi lại email xác nhận cho tài khoản đăng ký nhưng chưa kích hoạt
                 existingUser.FirstName = req.FirstName;
                 existingUser.LastName = req.LastName;
                 existingUser.DisplayName = $"{req.LastName} {req.FirstName}";
@@ -122,11 +133,17 @@ public class AuthController : ControllerBase
                 {
                     UserId = existingUser.UserId,
                     Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)),
-                    ExpiresAt = DateTime.UtcNow.AddHours(24)
+                    ExpiresAt = DateTime.UtcNow.AddMinutes(15)
                 };
                 
                 _db.EmailVerifications.Add(verification);
                 await _db.SaveChangesAsync(ct);
+
+                var confirmLink = $"https://localhost:7210/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(existingUser.Email)}&token={Uri.EscapeDataString(verification.Token)}";
+
+                var subject = "Xác nhận địa chỉ email - TMOJ";
+                var body = GenerateEmailVerificationHtml(confirmLink);
+                await _emailService.SendEmailAsync(existingUser.Email, subject, body, ct);
 
                 return Ok(new { Message = "Registration successful. Please check your email to verify your account.", Token = verification.Token });
             }
@@ -150,14 +167,18 @@ public class AuthController : ControllerBase
             {
                 User = user ,
                 Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) ,
-                ExpiresAt = DateTime.UtcNow.AddHours(24)
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15)
             };
 
             _db.Users.Add(user);
             _db.EmailVerifications.Add(newVerification);
             await _db.SaveChangesAsync(ct);
 
-            // TODO: Send email with verification.Token
+            var newConfirmLink = $"https://localhost:7210/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(newVerification.Token)}";
+
+            var subjectNew = "Xác nhận địa chỉ email - TMOJ";
+            var bodyNew = GenerateEmailVerificationHtml(newConfirmLink);
+            await _emailService.SendEmailAsync(user.Email, subjectNew, bodyNew, ct);
 
             return Ok(new { Message = "Registration successful. Please check your email to verify your account." , Token = newVerification.Token });
         }
@@ -168,17 +189,23 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
-    [HttpPost("confirm-email")]
+    [HttpGet("confirm-email")]
     public async Task<IActionResult> ConfirmEmail(
-        [FromBody] ConfirmEmailRequest req ,
+        [FromQuery] string email ,
+        [FromQuery] string token ,
         CancellationToken ct)
     {
         try
         {
-            var email = req.Email.ToLowerInvariant();
+            if ( string.IsNullOrEmpty(email) || string.IsNullOrEmpty(token) )
+            {
+                return BadRequest(new { Message = "Email and token are required." });
+            }
+
+            var emailLower = email.ToLowerInvariant();
             var verification = await _db.EmailVerifications
                 .Include(v => v.User).ThenInclude(u => u.Role)
-                .FirstOrDefaultAsync(v => v.User.Email == email && v.Token == req.Token , ct);
+                .FirstOrDefaultAsync(v => v.User.Email == emailLower && v.Token == token , ct);
 
             if ( verification == null || verification.ExpiresAt < DateTime.UtcNow )
             {

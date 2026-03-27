@@ -43,7 +43,11 @@ public sealed class JwtTokenService : ITokenService
             claims.Add(new Claim("name" , userName));
 
         foreach ( var r in roles.Distinct(StringComparer.OrdinalIgnoreCase) )
+        {
+            claims.Add(new Claim(ClaimTypes.Role , r));
             claims.Add(new Claim("role" , r));
+        }
+
 
         if ( extraClaims is not null )
         {

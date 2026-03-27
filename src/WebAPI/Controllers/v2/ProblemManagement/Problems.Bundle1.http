@@ -1,0 +1,93 @@
+@host = https://localhost:7210
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJqdGkiOiI4NTUwYTJjMDFmMmI0OTBkYjBjMWZlYWI3ZDc3NGJkYiIsImlhdCI6MTc3NDQwMDkwNywibmFtZSI6IkphY2sgYkxVRSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIzMTY0ZTE2NC1iM2YyLTQ2YmMtODhiMS0zNDg1ZWNmMDhhZjQiLCJuYmYiOjE3NzQ0MDA5MDcsImV4cCI6MTc3NTAwNTcwNywiaXNzIjoiZnB0dS10bW9qLWFwaSIsImF1ZCI6InRtb2otdXNlcnMifQ.0NP8J3FAxx3vHp88pCtrgHSyGzMOv-iKrAJM4EP42I8
+# @problemId = 8c54a739-8a7f-4bad-9da3-112df4b607b8
+@problemId = de4c347c-2c14-4776-9ab0-0c48be0ba74d
+@tagId1 = 796e83fe-b1dd-4210-a9b7-b2ade982e407
+@tagId2 = bcbffd41-6f60-4ac4-be48-8327a0cfc371
+
+### Create problem draft
+POST {{host}}/api/v2/problems/drafts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+{
+  "title": "Two Sum Basic v3",
+  "slug": "two-sum-basic-v3",
+  "timeLimitMs": 1000,
+  "memoryLimitKb": 262144,
+  "typeCode": "algorithm",
+  "scoringCode": "icpc",
+  "visibilityCode": "private",
+  "descriptionMd": "# Two Sum\n\nGiven an array of integers..."
+}
+
+### Get problem detail
+GET {{host}}/api/v2/problems/{{problemId}}
+Authorization: Bearer {{token}}
+
+### Update content
+PUT {{host}}/api/v2/problems/{{problemId}}/content
+Authorization: Bearer {{token}}
+Content-Type: application/json
+{
+  "title": "Two Sum Basic Updated into v3",
+  "slug": "two-sum-basic-v3",
+  "timeLimitMs": 1500,
+  "memoryLimitKb": 262144,
+  "typeCode": "algorithm",
+  "scoringCode": "icpc",
+  "visibilityCode": "private",
+  "descriptionMd": "Two Sum\n\nStatement\nFind two numbers..."
+}
+
+### Create tag 1
+POST {{host}}/api/v2/problems/tags
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Dynamic Programming v3",
+  "slug": "dynamic-programming-v3"
+}
+
+### Create tag 2
+POST {{host}}/api/v2/problems/tags
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Two Pointers v3",
+  "slug": "two-pointers-v3"
+}
+
+
+### Set difficulty
+PUT {{host}}/api/v2/problems/{{problemId}}/difficulty
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "difficulty": "hard"
+}
+
+### Attach tags
+POST {{host}}/api/v2/problems/{{problemId}}/tags/attach
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tagIds": [
+    "{{tagId2}}",
+    "{{tagId1}}"
+  ]
+}
+
+### Replace tags  ( >= 1 Ok)
+PUT {{host}}/api/v2/problems/{{problemId}}/tags
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tagIds": [
+    "{{tagId1}}"
+  ]
+}

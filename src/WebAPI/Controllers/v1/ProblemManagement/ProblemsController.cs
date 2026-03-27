@@ -1,4 +1,5 @@
-﻿using Application.UseCases.Auth;
+using Application.Common.Interfaces;
+using Application.UseCases.Auth;
 using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -105,33 +106,6 @@ public class ProblemsController : ControllerBase
         var existing = await _db.Problems
             .FirstOrDefaultAsync(x => x.Slug == dto.Slug , ct);
 
-        //  fetch userId ver1
-        //if ( Guid.TryParse(_currentUser.UserId , out var userId) )
-        //{
-        //    dto.CreatedBy = userId;
-        //}
-        //else
-        //{
-        //    throw new Exception("Invalid UserId format");
-        //}
-
-        //  fetch userId ver2
-        dto.CreatedBy = _currentUser.GetUserIdAsGuid();
-        //dto.CreatedBy = GetUserId();
-        if ( dto.CreatedBy == null ) Console.WriteLine("del co userid");
-        if ( string.IsNullOrEmpty(dto.CreatedBy.ToString()) ) Console.WriteLine("notfound404040404004");
-        Console.WriteLine(dto.CreatedBy);
-
-        //  fetch userId ver3   (có Authorize -> ko cần ver 3)
-        //if ( _currentUser.TryGetUserIdAsGuid(out var userId) )
-        //{
-        //    dto.CreatedBy = (Guid?) userId;
-        //}
-        //else
-        //{
-        //    return Unauthorized();
-        //}
-
         if ( existing != null )
         {
             if ( existing.IsActive )
@@ -148,12 +122,11 @@ public class ProblemsController : ControllerBase
             existing.DisplayIndex = dto.DisplayIndex;
             existing.TimeLimitMs = dto.TimeLimitMs;
             existing.MemoryLimitKb = dto.MemoryLimitKb;
-            existing.CreatedBy = dto.CreatedBy;
+            existing.CreatedBy = GetUserId();
             existing.IsActive = true;
             existing.StatusCode = "draft";
             existing.PublishedAt = null;
             existing.UpdatedAt = DateTime.UtcNow;
-            existing.CreatedBy = GetUserId();
 
             await _db.SaveChangesAsync(ct);
 
@@ -174,11 +147,10 @@ public class ProblemsController : ControllerBase
             DisplayIndex = dto.DisplayIndex ,
             TimeLimitMs = dto.TimeLimitMs ,
             MemoryLimitKb = dto.MemoryLimitKb ,
-            CreatedBy = dto.CreatedBy,
+            CreatedBy = GetUserId(),
             StatusCode = "draft" ,
             CreatedAt = DateTime.UtcNow ,
-            IsActive = true ,
-            CreatedBy = GetUserId()
+            IsActive = true
         };
 
         _db.Problems.Add(problem);
@@ -440,12 +412,5 @@ public class ProblemsController : ControllerBase
 
         await _db.SaveChangesAsync(ct);
         return Ok(ToDto(problem));
-    }
-
-    private Guid? GetUserId()
-    {
-        var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                 ?? User.FindFirst("sub")?.Value;
-        return Guid.TryParse(idStr, out var id) ? id : null;
     }
 }

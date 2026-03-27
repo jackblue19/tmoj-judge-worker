@@ -246,7 +246,7 @@ public class ClassSlotController : ControllerBase
 
             var members = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
-                .Where(m => m.ClassId == classId && m.IsActive)
+                .Where(m => m.ClassSemester.ClassId == classId && m.IsActive)
                 .ToListAsync(ct);
 
             var result = new List<StudentSlotScoreResponse>();

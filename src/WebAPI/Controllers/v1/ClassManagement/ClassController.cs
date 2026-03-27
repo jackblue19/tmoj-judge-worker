@@ -97,6 +97,7 @@ public class ClassController : ControllerBase
             var query = _db.Classes.AsNoTracking()
                 .Include(c => c.Subject)
                 .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Semester)
+                .Include(c => c.ClassSemesters).ThenInclude(cs => cs.ClassMembers)
                 .Include(c => c.Teacher)
                 .Where(c => c.IsActive);
 
@@ -131,7 +132,7 @@ public class ClassController : ControllerBase
                     c.Teacher != null
                         ? new ClassTeacherInfo(c.Teacher.UserId , c.Teacher.DisplayName , c.Teacher.Email , c.Teacher.AvatarUrl)
                         : null ,
-                    c.ClassMembers.Count(m => m.IsActive));
+                    c.ClassSemesters.Sum(cs => cs.ClassMembers.Count(m => m.IsActive)));
             }).ToList();
 
             return Ok(ApiResponse<ClassListResponse>.Ok(
@@ -154,8 +155,8 @@ public class ClassController : ControllerBase
             var c = await _db.Classes.AsNoTracking()
                 .Include(x => x.Subject)
                 .Include(x => x.ClassSemesters).ThenInclude(cs => cs.Semester)
+                .Include(x => x.ClassSemesters).ThenInclude(cs => cs.ClassMembers)
                 .Include(x => x.Teacher)
-                .Include(x => x.ClassMembers)
                 .FirstOrDefaultAsync(x => x.ClassId == id , ct);
 
             if ( c is null ) return NotFound(new { Message = "Class not found." });
@@ -170,7 +171,7 @@ public class ClassController : ControllerBase
                 c.Teacher != null
                     ? new ClassTeacherInfo(c.Teacher.UserId , c.Teacher.DisplayName , c.Teacher.Email , c.Teacher.AvatarUrl)
                     : null ,
-                c.ClassMembers.Count(m => m.IsActive));
+                c.ClassSemesters.Sum(cs => cs.ClassMembers.Count(m => m.IsActive)));
 
             return Ok(ApiResponse<ClassResponse>.Ok(dto , "Class fetched successfully"));
         }

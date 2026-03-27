@@ -274,7 +274,7 @@ public class ClassContestController : ControllerBase
 
             // Verify class membership
             var isMember = await _db.ClassMembers.AsNoTracking()
-                .AnyAsync(m => m.ClassId == classId && m.UserId == userId.Value && m.IsActive, ct);
+                .AnyAsync(m => m.ClassSemester.ClassId == classId && m.UserId == userId.Value && m.IsActive, ct);
             if (!isMember) return Forbid();
 
             // Verify contest belongs to class

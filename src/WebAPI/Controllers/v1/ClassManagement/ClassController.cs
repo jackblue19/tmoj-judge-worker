@@ -670,6 +670,76 @@ public class ClassController : ControllerBase
             return StatusCode(500 , new { Message = "An error occurred while exporting the report." });
         }
     }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/class/{id}/students/export  →  Export Student List with Marks (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("{id:guid}/students/export")]
+    public async Task<IActionResult> ExportStudentsWithMarks(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var cls = await _db.Classes.AsNoTracking()
+                .Include(c => c.Subject)
+                .FirstOrDefaultAsync(c => c.ClassId == id, ct);
+            if (cls is null) return NotFound(new { Message = "Class not found." });
+
+            var members = await _db.ClassMembers.AsNoTracking()
+                .Include(m => m.User)
+                .Where(m => m.ClassId == id && m.IsActive)
+                .OrderBy(m => m.User.FirstName).ThenBy(m => m.User.LastName)
+                .ToListAsync(ct);
+
+            var problemIds = await _db.ClassSlots.AsNoTracking()
+                .Where(s => s.ClassId == id)
+                .SelectMany(s => (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId))
+                .Distinct()
+                .ToListAsync(ct);
+
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Student_Marks");
+
+            var headers = new List<string> { "FullName", "Class", "Subject", "Mark", "MemberCode", "RollNumber" };
+            for (int i = 0; i < headers.Count; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+            }
+
+            int row = 2;
+            foreach (var m in members)
+            {
+                var subs = await _db.Submissions.AsNoTracking()
+                    .Where(s => s.UserId == m.UserId && problemIds.Contains(s.ProblemId) && s.FinalScore.HasValue)
+                    .GroupBy(s => s.ProblemId)
+                    .Select(g => g.Max(s => s.FinalScore!.Value))
+                    .ToListAsync(ct);
+                
+                var totalScore = subs.Sum();
+
+                worksheet.Cell(row, 1).Value = $"{m.User.FirstName} {m.User.LastName}".Trim();
+                worksheet.Cell(row, 2).Value = cls.ClassCode;
+                worksheet.Cell(row, 3).Value = cls.Subject.Code;
+                worksheet.Cell(row, 4).Value = totalScore;
+                worksheet.Cell(row, 5).Value = m.User.MemberCode;
+                worksheet.Cell(row, 6).Value = m.User.RollNumber;
+                row++;
+            }
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{cls.ClassCode}_StudentMarks_Export.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while exporting: " + ex.Message });
+        }
+    }
     // ──────────────────────────────────────────
     // GET api/v1/class/import/template  →  Export Template Class (Admin/Manager)
     // ──────────────────────────────────────────

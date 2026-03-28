@@ -1,29 +1,28 @@
 ﻿using Application.Abstractions.Outbound.Services;
+using Application.Common.Interfaces;
 using Application.UseCases.Testsets.Dtos;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using System;
-using System.Collections.Generic;
 using System.IO.Compression;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.UseCases.Testsets.Commands;
 
 public sealed class UploadTestcasesZipCommandHandler
     : IRequestHandler<UploadTestcasesZipCommand , UploadTestcasesResultDto>
 {
+    private readonly ICurrentUserService _currentUser;
     private readonly IReadRepository<Problem , Guid> _problemReadRepository;
     private readonly IReadRepository<Testset , Guid> _testsetReadRepository;
     private readonly IR2Service _r2Service;
 
     public UploadTestcasesZipCommandHandler(
+        ICurrentUserService currentUser ,
         IReadRepository<Problem , Guid> problemReadRepository ,
         IReadRepository<Testset , Guid> testsetReadRepository ,
         IR2Service r2Service)
     {
+        _currentUser = currentUser;
         _problemReadRepository = problemReadRepository;
         _testsetReadRepository = testsetReadRepository;
         _r2Service = r2Service;
@@ -33,6 +32,8 @@ public sealed class UploadTestcasesZipCommandHandler
         UploadTestcasesZipCommand request ,
         CancellationToken ct)
     {
+        EnsureAuthenticated();
+
         var ext = Path.GetExtension(request.FileName).ToLowerInvariant();
         if ( ext != ".zip" )
             throw new InvalidOperationException("Only .zip is supported.");
@@ -40,6 +41,8 @@ public sealed class UploadTestcasesZipCommandHandler
         var problem = await _problemReadRepository.GetByIdAsync(request.ProblemId , ct);
         if ( problem is null )
             throw new KeyNotFoundException("Problem not found.");
+
+        EnsureCanManageProblem(problem);
 
         if ( !problem.IsActive || string.Equals(problem.StatusCode , "archived" , StringComparison.OrdinalIgnoreCase) )
             throw new InvalidOperationException("Problem is archived/inactive.");
@@ -147,13 +150,30 @@ public sealed class UploadTestcasesZipCommandHandler
                 }
                 catch
                 {
-                    // swallow cleanup error
                 }
             }
         }
     }
 
-    private static string? ResolveContentType(string extension)
+    private void EnsureAuthenticated()
+    {
+        if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
+            throw new UnauthorizedAccessException("User is not authenticated.");
+    }
+
+    private void EnsureCanManageProblem(Problem problem)
+    {
+        var isAdmin = _currentUser.IsInRole("Admin");
+        if ( isAdmin ) return;
+
+        var currentUserId = _currentUser.UserId!.Value;
+
+        // TODO: đổi CreatedBy thành field owner thực tế của entity Problem bên bạn nếu khác
+        if ( problem.CreatedBy != currentUserId )
+            throw new KeyNotFoundException("Problem not found or access denied.");
+    }
+
+    private static string ResolveContentType(string extension)
     {
         return extension switch
         {

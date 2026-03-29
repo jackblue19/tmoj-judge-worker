@@ -2,6 +2,7 @@
 using Application.UseCases.Testsets.Queries;
 using Asp.Versioning;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace WebAPI.Controllers.v2.TestsetManagement;
@@ -18,7 +19,6 @@ public class TestsetsController : ControllerBase
         _mediator = mediator;
     }
 
-    // Upload ZIP (giữ nguyên)
     [HttpPost("{id:guid}/testcases")]
     public async Task<IActionResult> UploadTestcasesZip(
         Guid id ,
@@ -56,7 +56,23 @@ public class TestsetsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("{problemId:guid}/{testsetId:guid}/samples")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSamples(
+    Guid problemId ,
+    Guid testsetId ,
+    CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetSampleTestcasesQuery(problemId , testsetId) ,
+            ct);
+
+        return Ok(result);
+    }
+
     // 🔹 Get all testcase
+    [Authorize(Roles = "Admin")]
     [HttpGet("{problemId:guid}/{testsetId:guid}/all")]
     public async Task<IActionResult> GetAll(
         Guid problemId ,

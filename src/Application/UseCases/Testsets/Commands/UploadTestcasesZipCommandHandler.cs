@@ -152,9 +152,9 @@ public sealed class UploadTestcasesZipCommandHandler
                     TestsetId = request.TestsetId ,
                     Ordinal = ordinal ,
                     Weight = 1 ,
-                    IsSample = false ,
-                    Input = null ,
-                    ExpectedOutput = null ,
+                    IsSample = ordinal <= 3 ,
+                    Input = inputKey ,
+                    ExpectedOutput = outputKey ,
                     StorageBlobId = null ,
                     ExpireAt = null
                 });

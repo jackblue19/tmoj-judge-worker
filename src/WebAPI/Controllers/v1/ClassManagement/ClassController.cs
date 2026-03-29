@@ -56,6 +56,12 @@ public class ClassController : ControllerBase
                 _db.Classes.Add(cls);
                 await _db.SaveChangesAsync(ct);
             }
+            else if ( !cls.IsActive )
+            {
+                cls.IsActive = true;
+                _db.Classes.Update(cls);
+                await _db.SaveChangesAsync(ct);
+            }
 
             // Create ClassSemester junction record (Course Instance)
             var exists = await _db.ClassSemesters.AnyAsync(cs => 
@@ -77,9 +83,9 @@ public class ClassController : ControllerBase
             return CreatedAtAction(nameof(GetById) , new { id = cls.ClassId } ,
                 ApiResponse<object>.Ok(new { cls.ClassId, instance.Id, cls.ClassCode } , "Class instance created successfully"));
         }
-        catch ( Exception )
+        catch ( Exception ex )
         {
-            return StatusCode(500 , new { Message = "An error occurred while creating the class." });
+            return StatusCode(500 , new { Message = "An error occurred while creating the class." , Detail = ex.InnerException?.Message ?? ex.Message });
         }
     }
 

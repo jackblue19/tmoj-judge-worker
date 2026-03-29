@@ -1,4 +1,4 @@
-﻿using Application.UseCases.Problems.Dtos;
+using Application.UseCases.Problems.Dtos;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
@@ -24,12 +24,12 @@ public sealed class CreateTagCommandHandler : IRequestHandler<CreateTagCommand, 
     public async Task<ProblemTagDto> Handle(CreateTagCommand request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
-        var slug = string.IsNullOrWhiteSpace(request.Slug)
-            ? name?.Trim().ToLower().Replace(' ', '-')
-            : request.Slug.Trim().ToLower();
-
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Tag name is required.");
+
+        var slug = string.IsNullOrWhiteSpace(request.Slug)
+            ? name.Trim().ToLower().Replace(' ', '-')
+            : request.Slug.Trim().ToLower();
 
         if (await _tagRepository.ExistsByNameAsync(name, ct))
             throw new InvalidOperationException($"Tag name '{name}' already exists.");

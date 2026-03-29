@@ -42,7 +42,9 @@ public class TestsetsController : ControllerBase
         return Ok(result);
     }
 
-    // 🔹 Preview 3 testcase
+    //  Preview 3 testcase -> chuyển qua dùng /samples
+    //[NonAction]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpGet("{problemId:guid}/{testsetId:guid}/preview")]
     public async Task<IActionResult> GetPreview(
         Guid problemId ,
@@ -71,7 +73,9 @@ public class TestsetsController : ControllerBase
         return Ok(result);
     }
 
-    // 🔹 Get all testcase
+    //  Get all testcase
+    //[NonAction]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "Admin")]
     [HttpGet("{problemId:guid}/{testsetId:guid}/all")]
     public async Task<IActionResult> GetAll(

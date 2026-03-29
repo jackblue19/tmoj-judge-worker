@@ -5,7 +5,9 @@ using Application.UseCases.Testsets.Specifications;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using System.IO.Compression;
+using System.Text;
 
 namespace Application.UseCases.Testsets.Queries;
 
@@ -17,19 +19,22 @@ public sealed class DownloadTestsetZipQueryHandler
     private readonly IReadRepository<Testset , Guid> _testsetReadRepository;
     private readonly IReadRepository<Testcase , Guid> _testcaseReadRepository;
     private readonly IR2Service _r2Service;
+    private readonly int _maxParallelDownloads;
 
     public DownloadTestsetZipQueryHandler(
         ICurrentUserService currentUser ,
         IReadRepository<Problem , Guid> problemReadRepository ,
         IReadRepository<Testset , Guid> testsetReadRepository ,
         IReadRepository<Testcase , Guid> testcaseReadRepository ,
-        IR2Service r2Service)
+        IR2Service r2Service ,
+        IConfiguration configuration)
     {
         _currentUser = currentUser;
         _problemReadRepository = problemReadRepository;
         _testsetReadRepository = testsetReadRepository;
         _testcaseReadRepository = testcaseReadRepository;
         _r2Service = r2Service;
+        _maxParallelDownloads = configuration.GetValue<int?>("TestsetSettings:MaxParallelDownloads") ?? 4;
     }
 
     public async Task<DownloadTestsetZipDto> Handle(
@@ -57,91 +62,90 @@ public sealed class DownloadTestsetZipQueryHandler
         if ( testcases.Count == 0 )
             throw new InvalidOperationException("No testcase metadata found for this testset.");
 
-        var zipFileName = $"{problem.Slug}.zip";
+        var semaphore = new SemaphoreSlim(_maxParallelDownloads);
 
-        await using var memoryStream = new MemoryStream();
-
-        using ( var archive = new ZipArchive(memoryStream , ZipArchiveMode.Create , leaveOpen: true) )
+        try
         {
-            foreach ( var testcase in testcases )
+            // Parallel fetch from R2 (bounded)
+            var fetchTasks = testcases.Select(async testcase =>
             {
-                var ordinalFolder = $"{problem.Slug}/{testcase.Ordinal:D3}/";
-
-                var inputKey = await ResolveExistingObjectKeyAsync(
-                    request.TestsetId ,
-                    testcase.Ordinal ,
-                    isInput: true ,
-                    ct);
-
-                var outputKey = await ResolveExistingObjectKeyAsync(
-                    request.TestsetId ,
-                    testcase.Ordinal ,
-                    isInput: false ,
-                    ct);
-
-                var inputText = await _r2Service.GetObjectTextAsync("Testset" , inputKey , ct);
-                var outputText = await _r2Service.GetObjectTextAsync("Testset" , outputKey , ct);
-
-                var inputEntry = archive.CreateEntry(
-                    $"{ordinalFolder}{problem.Slug}.inp" ,
-                    CompressionLevel.Fastest);
-
-                await using ( var inputEntryStream = inputEntry.Open() )
-                await using ( var inputWriter = new StreamWriter(inputEntryStream) )
+                await semaphore.WaitAsync(ct);
+                try
                 {
-                    await inputWriter.WriteAsync(inputText);
+                    if ( string.IsNullOrWhiteSpace(testcase.Input) )
+                        throw new InvalidOperationException(
+                            $"Missing input object key for testcase ordinal {testcase.Ordinal}.");
+
+                    if ( string.IsNullOrWhiteSpace(testcase.ExpectedOutput) )
+                        throw new InvalidOperationException(
+                            $"Missing output object key for testcase ordinal {testcase.Ordinal}.");
+
+                    var inputTask = _r2Service.GetObjectTextAsync("Testset" , testcase.Input , ct);
+                    var outputTask = _r2Service.GetObjectTextAsync("Testset" , testcase.ExpectedOutput , ct);
+
+                    await Task.WhenAll(inputTask , outputTask);
+
+                    return new DownloadZipFetchedTestcase
+                    {
+                        Ordinal = testcase.Ordinal ,
+                        InputText = await inputTask ,
+                        OutputText = await outputTask
+                    };
                 }
-
-                var outputEntry = archive.CreateEntry(
-                    $"{ordinalFolder}{problem.Slug}.out" ,
-                    CompressionLevel.Fastest);
-
-                await using ( var outputEntryStream = outputEntry.Open() )
-                await using ( var outputWriter = new StreamWriter(outputEntryStream) )
+                finally
                 {
-                    await outputWriter.WriteAsync(outputText);
+                    semaphore.Release();
+                }
+            });
+
+            var fetchedItems = (await Task.WhenAll(fetchTasks))
+                .OrderBy(x => x.Ordinal)
+                .ToList();
+
+            var zipFileName = $"{problem.Slug}.zip";
+
+            await using var memoryStream = new MemoryStream();
+
+            // Sequential zip writing only
+            using ( var archive = new ZipArchive(memoryStream , ZipArchiveMode.Create , leaveOpen: true) )
+            {
+                foreach ( var item in fetchedItems )
+                {
+                    var ordinalFolder = $"{problem.Slug}/{item.Ordinal:D3}/";
+
+                    var inputEntry = archive.CreateEntry(
+                        $"{ordinalFolder}{problem.Slug}.inp" ,
+                        CompressionLevel.Fastest);
+
+                    await using ( var entryStream = inputEntry.Open() )
+                    await using ( var writer = new StreamWriter(entryStream , new UTF8Encoding(false)) )
+                    {
+                        await writer.WriteAsync(item.InputText);
+                    }
+
+                    var outputEntry = archive.CreateEntry(
+                        $"{ordinalFolder}{problem.Slug}.out" ,
+                        CompressionLevel.Fastest);
+
+                    await using ( var entryStream = outputEntry.Open() )
+                    await using ( var writer = new StreamWriter(entryStream , new UTF8Encoding(false)) )
+                    {
+                        await writer.WriteAsync(item.OutputText);
+                    }
                 }
             }
-        }
 
-        return new DownloadTestsetZipDto
-        {
-            FileName = zipFileName ,
-            ContentType = "application/zip" ,
-            Bytes = memoryStream.ToArray()
-        };
-    }
-
-    private async Task<string> ResolveExistingObjectKeyAsync(
-        Guid testsetId ,
-        int ordinal ,
-        bool isInput ,
-        CancellationToken ct)
-    {
-        var baseFolder = $"{testsetId:D}/{ordinal:D3}/";
-
-        var candidates = isInput
-            ? new[]
+            return new DownloadTestsetZipDto
             {
-                $"{baseFolder}input.inp",
-                $"{baseFolder}input.txt"
-            }
-            : new[]
-            {
-                $"{baseFolder}output.out",
-                $"{baseFolder}output.txt"
+                FileName = zipFileName ,
+                ContentType = "application/zip" ,
+                Bytes = memoryStream.ToArray()
             };
-
-        var existingKeys = await _r2Service.ListObjectKeysAsync("Testset" , baseFolder , ct);
-
-        foreach ( var candidate in candidates )
-        {
-            if ( existingKeys.Contains(candidate , StringComparer.OrdinalIgnoreCase) )
-                return candidate;
         }
-
-        throw new FileNotFoundException(
-            $"Cannot find {(isInput ? "input" : "output")} object for testcase ordinal {ordinal}.");
+        finally
+        {
+            semaphore.Dispose();
+        }
     }
 
     private void EnsureAuthenticated()
@@ -159,5 +163,12 @@ public sealed class DownloadTestsetZipQueryHandler
 
         if ( problem.CreatedBy != currentUserId )
             throw new KeyNotFoundException("Problem not found or access denied.");
+    }
+
+    private sealed class DownloadZipFetchedTestcase
+    {
+        public int Ordinal { get; init; }
+        public string InputText { get; init; } = null!;
+        public string OutputText { get; init; } = null!;
     }
 }

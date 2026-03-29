@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -19,5 +19,5 @@ public partial class Semester
 
     public DateTime CreatedAt { get; set; }
 
-    public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
+    public virtual ICollection<ClassSemester> ClassSemesters { get; set; } = new List<ClassSemester>();
 }

@@ -46,6 +46,24 @@ public class UserController : ControllerBase
                 return BadRequest(new { Message = "Email already exists" });
             }
 
+            // 1 User = 1 Role (use User.RoleId directly)
+            Guid? roleId = null;
+            if ( req.Roles != null && req.Roles.Any() )
+            {
+                // Take the first role (1:1 relationship)
+                var roleCode = req.Roles.First().ToLowerInvariant();
+                var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == roleCode, ct);
+                if (role != null)
+                    roleId = role.RoleId;
+            }
+            
+            if (roleId == null)
+            {
+                var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student" , ct);
+                if ( studentRole != null )
+                    roleId = studentRole.RoleId;
+            }
+
             var user = new User
             {
                 FirstName = req.FirstName ,
@@ -56,29 +74,9 @@ public class UserController : ControllerBase
                 DisplayName = $"{req.LastName} {req.FirstName}" ,
                 LanguagePreference = "vi" ,
                 Status = true ,
-                EmailVerified = true // Admin created users are verified by default
+                EmailVerified = true,
+                RoleId = roleId
             };
-
-            if ( req.Roles != null && req.Roles.Any() )
-            {
-                foreach ( var roleCode in req.Roles )
-                {
-                    var normalizedRoleCode = roleCode.ToLowerInvariant();
-                    var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == normalizedRoleCode , ct);
-                    if ( role != null )
-                    {
-                        user.UserRoleUsers.Add(new UserRole { RoleId = role.RoleId });
-                    }
-                }
-            }
-            else
-            {
-                var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student" , ct);
-                if ( studentRole != null )
-                {
-                    user.UserRoleUsers.Add(new UserRole { RoleId = studentRole.RoleId });
-                }
-            }
 
             _db.Users.Add(user);
             await _db.SaveChangesAsync(ct);
@@ -99,8 +97,7 @@ public class UserController : ControllerBase
         try
         {
             var users = await _db.Users
-                .Include(u => u.UserRoleUsers)
-                    .ThenInclude(ur => ur.Role)
+                .Include(u => u.Role)
                 .Select(u => new UserDto(
                     u.UserId,
                     u.Email,
@@ -110,9 +107,7 @@ public class UserController : ControllerBase
                     u.Username,
                     u.AvatarUrl,
                     u.EmailVerified,
-                    u.UserRoleUsers
-                        .Select(ur => ur.Role.RoleCode)
-                        .ToList()
+                    u.Role != null ? u.Role.RoleCode : null
                 ))
                 .ToListAsync(ct);
 
@@ -131,54 +126,54 @@ public class UserController : ControllerBase
     }
 
     [Authorize]
-[HttpGet("me")]
-public async Task<IActionResult> GetMe(CancellationToken ct)
-{
-    try
+    [HttpGet("me")]
+    public async Task<IActionResult> GetMe(CancellationToken ct)
     {
-        var userIdStr =
-            User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value;
-
-        if (string.IsNullOrEmpty(userIdStr) ||
-            !Guid.TryParse(userIdStr, out var userId))
+        try
         {
-            return Unauthorized(new { Message = "Unauthorized access." });
+            var userIdStr =
+                User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("sub")?.Value;
+
+            if (string.IsNullOrEmpty(userIdStr) ||
+                !Guid.TryParse(userIdStr, out var userId))
+            {
+                return Unauthorized(new { Message = "Unauthorized access." });
+            }
+
+            var user = await _db.Users
+                .Where(u => u.UserId == userId && u.DeletedAt == null)
+                .Include(u => u.Role)
+                .Select(u => new UserDto(
+                    u.UserId,
+                    u.Email,
+                    u.FirstName,
+                    u.LastName,
+                    u.DisplayName,
+                    u.Username,
+                    u.AvatarUrl,
+                    u.EmailVerified,
+                    u.Role != null ? u.Role.RoleCode : null
+                ))
+                .FirstOrDefaultAsync(ct);
+
+            if (user == null)
+                return NotFound(new { Message = "User not found." });
+
+            return Ok(ApiResponse<UserDto>.Ok(
+                user,
+                "Profile fetched successfully"
+            ));
         }
-
-        var user = await _db.Users
-            .Where(u => u.UserId == userId && u.DeletedAt == null)
-            .Select(u => new UserDto(
-                u.UserId,
-                u.Email,
-                u.FirstName,
-                u.LastName,
-                u.DisplayName,
-                u.Username,
-                u.AvatarUrl,
-                u.EmailVerified,
-                u.UserRoleUsers
-                    .Select(ur => ur.Role.RoleCode)
-                    .ToList()
-            ))
-            .FirstOrDefaultAsync(ct);
-
-        if (user == null)
-            return NotFound(new { Message = "User not found." });
-
-        return Ok(ApiResponse<UserDto>.Ok(
-            user,
-            "Profile fetched successfully"
-        ));
-    }
-    catch (Exception)
-    {
-        return StatusCode(500, new
+        catch (Exception)
         {
-            Message = "An error occurred while fetching your profile. Please try again later."
-        });
+            return StatusCode(500, new
+            {
+                Message = "An error occurred while fetching your profile. Please try again later."
+            });
+        }
     }
-}
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetProfile(Guid id, CancellationToken ct)
     {
@@ -229,6 +224,7 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
             return StatusCode(500 , new { Message = "An error occurred while deleting the account. Please try again later." });
         }
     }
+
     [HttpGet("role/{roleName}")]
     public async Task<IActionResult> ListAllUserByRole(string roleName, CancellationToken ct)
     {
@@ -246,10 +242,12 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
             if (role == null)
                 return NotFound(new { message = "Role name not found." });
 
+            // Query users via direct User.RoleId (1:1 with Role)
             var users = await _db.Users
                 .AsNoTracking()
-                .Where(u => u.UserRoleUsers.Any(ur => ur.RoleId == role.RoleId))
-                 .OrderBy(u => u.DisplayName)
+                .Include(u => u.Role)
+                .Where(u => u.RoleId == role.RoleId)
+                .OrderBy(u => u.DisplayName)
                 .Select(u => new UserDto(
                     u.UserId,
                     u.Email,
@@ -259,7 +257,7 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
                     u.Username,
                     u.AvatarUrl,
                     u.EmailVerified,
-                    u.UserRoleUsers.Select(ur => ur.Role.RoleCode).ToList()
+                    u.Role != null ? u.Role.RoleCode : null
                 ))
                 .ToListAsync(ct);
 
@@ -278,7 +276,6 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
 
     // ──────────────────────────────────────────
     // GET api/v1/User/import/template
-    // Template cho admin thêm sinh viên vào hệ thống
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin")]
     [HttpGet("import/template")]
@@ -325,115 +322,116 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
         }
     }
 
-        // ──────────────────────────────────────────
-        // POST api/v1/User/import
-        // Admin import sinh viên hàng loạt từ Excel
-        // ──────────────────────────────────────────
-        [Authorize(Roles = "admin")]
-        [HttpPost("import")]
-        public async Task<IActionResult> ImportStudents(IFormFile file, CancellationToken ct)
+    // ──────────────────────────────────────────
+    // POST api/v1/User/import
+    // Admin import sinh viên hàng loạt từ Excel
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin")]
+    [HttpPost("import")]
+    public async Task<IActionResult> ImportStudents(IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Message = "File is missing." });
+
+        try
         {
-            if (file == null || file.Length == 0)
-                return BadRequest(new { Message = "File is missing." });
+            int successCount = 0;
+            int failedCount = 0;
+            var errors = new List<string>();
+            int totalProcessed = 0;
 
-            try
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, ct);
+            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+            var worksheet = workbook.Worksheet(1);
+            var rows = worksheet.RowsUsed().Skip(1); // skip header
+
+            var headerRow = worksheet.Row(1);
+            var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var cell in headerRow.CellsUsed())
             {
-                int successCount = 0;
-                int failedCount = 0;
-                var errors = new List<string>();
-                int totalProcessed = 0;
+                headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
+            }
 
-                using var stream = new MemoryStream();
-                await file.CopyToAsync(stream, ct);
-                using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
-                var worksheet = workbook.Worksheet(1);
-                var rows = worksheet.RowsUsed().Skip(1); // skip header
-
-                var headerRow = worksheet.Row(1);
-                var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                foreach (var cell in headerRow.CellsUsed())
+            foreach (var row in rows)
+            {
+                totalProcessed++;
+                try
                 {
-                    headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
-                }
+                    string fullName = GetCellString(row, headers, "FullName");
+                    string email = GetCellString(row, headers, "Email");             
+                    string rollNumber = GetCellString(row, headers, "RollNumber");
+                    string memberCode = GetCellString(row, headers, "MemberCode");
 
-                foreach (var row in rows)
-                {
-                    totalProcessed++;
-                    try
+                    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
                     {
-                        string fullName = GetCellString(row, headers, "FullName");
-                        string email = GetCellString(row, headers, "Email");             
-                        string rollNumber = GetCellString(row, headers, "RollNumber");
-                        string memberCode = GetCellString(row, headers, "MemberCode");
-
-                        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
-                        {
-                            errors.Add($"Row {row.RowNumber()}: Missing Email or FullName.");
-                            failedCount++;
-                            continue;
-                        }
-
-                        email = email.Trim().ToLowerInvariant();
-                        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
-
-                        if (user == null)
-                        {
-                            var names = SplitFullName(fullName);
-                            user = new User
-                            {
-                                FirstName = names.FirstName,
-                                LastName = names.LastName,
-                                Email = email,
-                                Username = email.Split('@')[0] + "_" + Guid.NewGuid().ToString("N").Substring(0, 4),
-                                DisplayName = fullName,
-                                RollNumber = rollNumber,
-                                MemberCode = memberCode,
-                                Status = true,
-                                EmailVerified = true,
-                                LanguagePreference = "en",
-                                CreatedAt = DateTime.UtcNow,
-                                UpdatedAt = DateTime.UtcNow
-                            };
-
-                            // Assign student role by default
-                            var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student", ct);
-                            if (studentRole != null)
-                            {
-                                user.RoleId = studentRole.RoleId;
-                            }
-
-                            _db.Users.Add(user);
-                            await _db.SaveChangesAsync(ct);
-                            successCount++;
-                        }
-                        else
-                        {
-                            // User đã tồn tại — bỏ qua, không tạo mới
-                            successCount++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add($"Row {row.RowNumber()}: {ex.Message}");
+                        errors.Add($"Row {row.RowNumber()}: Missing Email or FullName.");
                         failedCount++;
+                        continue;
+                    }
+
+                    email = email.Trim().ToLowerInvariant();
+                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+
+                    if (user == null)
+                    {
+                        var names = SplitFullName(fullName);
+
+                        // Use User.RoleId directly (1:1 with Role)
+                        Guid? studentRoleId = null;
+                        var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student", ct);
+                        if (studentRole != null)
+                            studentRoleId = studentRole.RoleId;
+
+                        user = new User
+                        {
+                            FirstName = names.FirstName,
+                            LastName = names.LastName,
+                            Email = email,
+                            Username = email.Split('@')[0] + "_" + Guid.NewGuid().ToString("N").Substring(0, 4),
+                            DisplayName = fullName,
+                            RollNumber = rollNumber,
+                            MemberCode = memberCode,
+                            Status = true,
+                            EmailVerified = true,
+                            LanguagePreference = "en",
+                            RoleId = studentRoleId,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+
+                        _db.Users.Add(user);
+                        await _db.SaveChangesAsync(ct);
+                        successCount++;
+                    }
+                    else
+                    {
+                        // User đã tồn tại — bỏ qua, không tạo mới
+                        successCount++;
                     }
                 }
-
-                var result = new
+                catch (Exception ex)
                 {
-                    TotalProcessed = totalProcessed,
-                    SuccessCount = successCount,
-                    FailedCount = failedCount,
-                    Errors = errors
-                };
+                    errors.Add($"Row {row.RowNumber()}: {ex.Message}");
+                    failedCount++;
+                }
+            }
 
-                return Ok(ApiResponse<object>.Ok(result, "Import processed successfully"));
-            }
-            catch (Exception ex)
+            var result = new
             {
-                return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
-            }
-        } 
+                TotalProcessed = totalProcessed,
+                SuccessCount = successCount,
+                FailedCount = failedCount,
+                Errors = errors
+            };
+
+            return Ok(ApiResponse<object>.Ok(result, "Import processed successfully"));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
+        }
+    } 
 
 
     private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string columnName)
@@ -463,11 +461,8 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
 
     // ──────────────────────────────────────────
     //  Avatar Upload / Delete
-    //  Uses Cloudinary with GUID as the PublicId link
     // ──────────────────────────────────────────
 
-    /// Upload or replace the current user's avatar.
-    /// The avatar is stored in Cloudinary and linked by GUID in User.AvatarUrl.
     [Authorize]
     [HttpPut("me/avatar")]
     [Consumes("multipart/form-data")]
@@ -492,7 +487,6 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
             if (user == null)
                 return NotFound(new { Message = "User not found." });
 
-            // If user already has an avatar, replace it; otherwise upload new
             if (!string.IsNullOrEmpty(user.AvatarUrl) && Guid.TryParse(user.AvatarUrl, out var existingAvatarId))
             {
                 await _cloudinary.ReplaceAvatarAsync(existingAvatarId, file.OpenReadStream(), ext, ct);
@@ -506,7 +500,6 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
             user.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
 
-            // Resolve the GUID to a full URL for the response
             var avatarUrl = Guid.TryParse(user.AvatarUrl, out var aid)
                 ? _cloudinary.GetAvatarUrl(aid)
                 : user.AvatarUrl;
@@ -520,7 +513,6 @@ public async Task<IActionResult> GetMe(CancellationToken ct)
         }
     }
 
-    /// Delete the current user's avatar from Cloudinary.
     [Authorize]
     [HttpDelete("me/avatar")]
     public async Task<IActionResult> DeleteAvatar(CancellationToken ct)

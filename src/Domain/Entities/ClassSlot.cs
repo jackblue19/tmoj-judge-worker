@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -7,7 +7,7 @@ public partial class ClassSlot
 {
     public Guid Id { get; set; }
 
-    public Guid ClassId { get; set; }
+    public Guid ClassSemesterId { get; set; }
 
     public int SlotNo { get; set; }
 
@@ -37,7 +37,7 @@ public partial class ClassSlot
 
     public Guid? UpdatedBy { get; set; }
 
-    public virtual Class Class { get; set; } = null!;
+    public virtual ClassSemester ClassSemester { get; set; } = null!;
 
     public virtual ICollection<ClassSlotProblem> ClassSlotProblems { get; set; } = new List<ClassSlotProblem>();
 

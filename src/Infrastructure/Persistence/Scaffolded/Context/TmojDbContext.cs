@@ -361,6 +361,8 @@ public partial class TmojDbContext : DbContext
 
             entity.HasIndex(e => e.ClassCode , "class_class_code_key").IsUnique();
 
+            entity.HasIndex(e => e.ClassCode , "uq_class_code").IsUnique();
+
             entity.Property(e => e.ClassId)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("class_id");
@@ -381,8 +383,6 @@ public partial class TmojDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("class_member_pkey");
 
             entity.ToTable("class_member");
-
-            entity.HasIndex(e => new { e.ClassSemesterId , e.UserId } , "uq_class_semester_user").IsUnique();
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -412,40 +412,42 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("class_semester");
 
-            entity.HasIndex(e => new { e.ClassId, e.SemesterId, e.SubjectId }, "uq_class_semester").IsUnique();
-            entity.HasIndex(e => e.InviteCode, "uq_class_semester_invite_code").IsUnique();
+            entity.HasIndex(e => new { e.ClassId , e.SemesterId , e.SubjectId } , "uq_class_semester").IsUnique();
+
+            entity.HasIndex(e => e.InviteCode , "uq_class_semester_invite_code")
+                .IsUnique()
+                .HasFilter("(invite_code IS NOT NULL)");
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
             entity.Property(e => e.ClassId).HasColumnName("class_id");
-            entity.Property(e => e.SemesterId).HasColumnName("semester_id");
-            entity.Property(e => e.SubjectId).HasColumnName("subject_id");
-            entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
-            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
-            entity.Property(e => e.InviteCodeExpiresAt).HasColumnName("invite_code_expires_at");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
+            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
+            entity.Property(e => e.InviteCodeExpiresAt).HasColumnName("invite_code_expires_at");
+            entity.Property(e => e.SemesterId).HasColumnName("semester_id");
+            entity.Property(e => e.SubjectId).HasColumnName("subject_id");
+            entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
 
             entity.HasOne(d => d.Class).WithMany(p => p.ClassSemesters)
                 .HasForeignKey(d => d.ClassId)
-                .HasConstraintName("class_semester_class_id_fkey");
+                .HasConstraintName("fk_class");
 
             entity.HasOne(d => d.Semester).WithMany(p => p.ClassSemesters)
                 .HasForeignKey(d => d.SemesterId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("class_semester_semester_id_fkey");
+                .HasConstraintName("fk_semester");
 
             entity.HasOne(d => d.Subject).WithMany(p => p.ClassSemesters)
                 .HasForeignKey(d => d.SubjectId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("class_semester_subject_id_fkey");
+                .HasConstraintName("fk_subject");
 
-            entity.HasOne(d => d.Teacher).WithMany()
+            entity.HasOne(d => d.Teacher).WithMany(p => p.ClassSemesters)
                 .HasForeignKey(d => d.TeacherId)
                 .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("class_semester_teacher_id_fkey");
+                .HasConstraintName("fk_teacher");
         });
 
         modelBuilder.Entity<ClassSlot>(entity =>
@@ -453,8 +455,6 @@ public partial class TmojDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("class_slot_pkey");
 
             entity.ToTable("class_slot");
-
-            entity.HasIndex(e => new { e.ClassSemesterId , e.SlotNo } , "ux_class_slot").IsUnique();
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")

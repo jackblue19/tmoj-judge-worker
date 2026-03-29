@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -51,11 +51,11 @@ public partial class User
 
     public virtual ICollection<ClassMember> ClassMembers { get; set; } = new List<ClassMember>();
 
+    public virtual ICollection<ClassSemester> ClassSemesters { get; set; } = new List<ClassSemester>();
+
     public virtual ICollection<ClassSlot> ClassSlotCreatedByNavigations { get; set; } = new List<ClassSlot>();
 
     public virtual ICollection<ClassSlot> ClassSlotUpdatedByNavigations { get; set; } = new List<ClassSlot>();
-
-
 
     public virtual Collection? Collection { get; set; }
 

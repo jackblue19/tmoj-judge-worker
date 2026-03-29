@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -6,8 +6,6 @@ namespace Domain.Entities;
 public partial class ClassSlot
 {
     public Guid Id { get; set; }
-
-    public Guid ClassSemesterId { get; set; }
 
     public int SlotNo { get; set; }
 
@@ -36,6 +34,8 @@ public partial class ClassSlot
     public DateTime UpdatedAt { get; set; }
 
     public Guid? UpdatedBy { get; set; }
+
+    public Guid ClassSemesterId { get; set; }
 
     public virtual ClassSemester ClassSemester { get; set; } = null!;
 

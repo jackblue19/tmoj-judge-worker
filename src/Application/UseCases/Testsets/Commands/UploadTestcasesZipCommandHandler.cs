@@ -5,6 +5,7 @@ using Ardalis.Specification;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using System.IO.Compression;
 
 namespace Application.UseCases.Testsets.Commands;
@@ -19,6 +20,7 @@ public sealed class UploadTestcasesZipCommandHandler
     private readonly IWriteRepository<Testcase , Guid> _testcaseWriteRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IR2Service _r2Service;
+    private readonly int _maxParallelUploads;
 
     public UploadTestcasesZipCommandHandler(
         ICurrentUserService currentUser ,
@@ -27,7 +29,8 @@ public sealed class UploadTestcasesZipCommandHandler
         IReadRepository<Testcase , Guid> testcaseReadRepository ,
         IWriteRepository<Testcase , Guid> testcaseWriteRepository ,
         IUnitOfWork unitOfWork ,
-        IR2Service r2Service)
+        IR2Service r2Service ,
+        IConfiguration configuration)
     {
         _currentUser = currentUser;
         _problemReadRepository = problemReadRepository;
@@ -36,6 +39,7 @@ public sealed class UploadTestcasesZipCommandHandler
         _testcaseWriteRepository = testcaseWriteRepository;
         _unitOfWork = unitOfWork;
         _r2Service = r2Service;
+        _maxParallelUploads = configuration.GetValue<int?>("TestsetSettings:MaxParallelUploads") ?? 4;
     }
 
     public async Task<UploadTestcasesResultDto> Handle(
@@ -108,79 +112,107 @@ public sealed class UploadTestcasesZipCommandHandler
                 }
             }
 
-            var uploadedItems = new List<TestcaseUploadedItemDto>();
-            var newTestcases = new List<Testcase>();
+            var semaphore = new SemaphoreSlim(_maxParallelUploads);
 
-            foreach ( var kv in pairs.OrderBy(x => x.Key) )
+            try
             {
-                var ordinal = kv.Key;
-                var pair = kv.Value;
+                var uploadTasks = pairs
+                    .OrderBy(x => x.Key)
+                    .Select(async kv =>
+                    {
+                        await semaphore.WaitAsync(ct);
+                        try
+                        {
+                            var ordinal = kv.Key;
+                            var pair = kv.Value;
 
-                var inputExt = Path.GetExtension(pair.InputPath).ToLowerInvariant();
-                var outputExt = Path.GetExtension(pair.OutputPath).ToLowerInvariant();
+                            var inputExt = Path.GetExtension(pair.InputPath).ToLowerInvariant();
+                            var outputExt = Path.GetExtension(pair.OutputPath).ToLowerInvariant();
 
-                var inputFileName = inputExt == ".inp" ? "input.inp" : "input.txt";
-                var outputFileName = outputExt == ".out" ? "output.out" : "output.txt";
+                            var inputFileName = inputExt == ".inp" ? "input.inp" : "input.txt";
+                            var outputFileName = outputExt == ".out" ? "output.out" : "output.txt";
 
-                var folder = $"{request.TestsetId:D}/{ordinal:D3}/";
-                var inputKey = folder + inputFileName;
-                var outputKey = folder + outputFileName;
+                            var folder = $"{request.TestsetId:D}/{ordinal:D3}/";
+                            var inputKey = folder + inputFileName;
+                            var outputKey = folder + outputFileName;
 
-                await using ( var inputStream = File.OpenRead(pair.InputPath) )
+                            await using var inputStream = File.OpenRead(pair.InputPath);
+                            await using var outputStream = File.OpenRead(pair.OutputPath);
+
+                            var inputUploadTask = _r2Service.UploadObjectAsync(
+                                "Testset" ,
+                                inputKey ,
+                                inputStream ,
+                                ResolveContentType(inputExt) ,
+                                ct);
+
+                            var outputUploadTask = _r2Service.UploadObjectAsync(
+                                "Testset" ,
+                                outputKey ,
+                                outputStream ,
+                                ResolveContentType(outputExt) ,
+                                ct);
+
+                            await Task.WhenAll(inputUploadTask , outputUploadTask);
+
+                            return new UploadedPairResult
+                            {
+                                Ordinal = ordinal ,
+                                InputObjectKey = inputKey ,
+                                OutputObjectKey = outputKey
+                            };
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    });
+
+                var uploadedResults = (await Task.WhenAll(uploadTasks))
+                    .OrderBy(x => x.Ordinal)
+                    .ToList();
+
+                var newTestcases = uploadedResults
+                    .Select(x => new Testcase
+                    {
+                        Id = Guid.NewGuid() ,
+                        TestsetId = request.TestsetId ,
+                        Ordinal = x.Ordinal ,
+                        Weight = 1 ,
+                        IsSample = x.Ordinal <= 3 ,
+                        Input = x.InputObjectKey ,
+                        ExpectedOutput = x.OutputObjectKey ,
+                        StorageBlobId = null ,
+                        ExpireAt = null
+                    })
+                    .ToList();
+
+                if ( newTestcases.Count > 0 )
                 {
-                    await _r2Service.UploadObjectAsync(
-                        "Testset" ,
-                        inputKey ,
-                        inputStream ,
-                        ResolveContentType(inputExt) ,
-                        ct);
+                    await _testcaseWriteRepository.AddRangeAsync(newTestcases , ct);
+                    await _unitOfWork.SaveChangesAsync(ct);
                 }
 
-                await using ( var outputStream = File.OpenRead(pair.OutputPath) )
+                return new UploadTestcasesResultDto
                 {
-                    await _r2Service.UploadObjectAsync(
-                        "Testset" ,
-                        outputKey ,
-                        outputStream ,
-                        ResolveContentType(outputExt) ,
-                        ct);
-                }
-
-                newTestcases.Add(new Testcase
-                {
-                    Id = Guid.NewGuid() ,
+                    ProblemId = request.ProblemId ,
+                    Slug = problem.Slug ,
                     TestsetId = request.TestsetId ,
-                    Ordinal = ordinal ,
-                    Weight = 1 ,
-                    IsSample = ordinal <= 3 ,
-                    Input = inputKey ,
-                    ExpectedOutput = outputKey ,
-                    StorageBlobId = null ,
-                    ExpireAt = null
-                });
-
-                uploadedItems.Add(new TestcaseUploadedItemDto
-                {
-                    Ordinal = ordinal ,
-                    InputObjectKey = inputKey ,
-                    OutputObjectKey = outputKey
-                });
+                    Total = uploadedResults.Count ,
+                    Items = uploadedResults
+                        .Select(x => new TestcaseUploadedItemDto
+                        {
+                            Ordinal = x.Ordinal ,
+                            InputObjectKey = x.InputObjectKey ,
+                            OutputObjectKey = x.OutputObjectKey
+                        })
+                        .ToList()
+                };
             }
-
-            if ( newTestcases.Count > 0 )
+            finally
             {
-                await _testcaseWriteRepository.AddRangeAsync(newTestcases , ct);
-                await _unitOfWork.SaveChangesAsync(ct);
+                semaphore.Dispose();
             }
-
-            return new UploadTestcasesResultDto
-            {
-                ProblemId = request.ProblemId ,
-                Slug = problem.Slug ,
-                TestsetId = request.TestsetId ,
-                Total = uploadedItems.Count ,
-                Items = uploadedItems
-            };
         }
         finally
         {
@@ -265,6 +297,13 @@ public sealed class UploadTestcasesZipCommandHandler
     {
         public string InputPath { get; init; } = null!;
         public string OutputPath { get; init; } = null!;
+    }
+
+    private sealed class UploadedPairResult
+    {
+        public int Ordinal { get; init; }
+        public string InputObjectKey { get; init; } = null!;
+        public string OutputObjectKey { get; init; } = null!;
     }
 
     private sealed class TestcasesByTestsetForWriteSpec : Specification<Testcase>

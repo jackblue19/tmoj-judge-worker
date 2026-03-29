@@ -233,7 +233,6 @@ public sealed class R2Service : IR2Service
         {
             request.ResponseHeaderOverrides.ContentDisposition = "inline";
 
-            // ✅ Fix encoding cho file text
             var ext = Path.GetExtension(fullKey);
 
             if ( !string.IsNullOrEmpty(ext) && TextExtensions.Contains(ext) )
@@ -308,6 +307,83 @@ public sealed class R2Service : IR2Service
 
         await _s3Client.DeleteObjectAsync(request , cancellationToken);
         return fullKey;
+    }
+
+    public Task<string> GetPresignedObjectUrlForViewAsync(
+    string bucketType ,
+    string objectKey ,
+    TimeSpan? expiresIn = null ,
+    CancellationToken cancellationToken = default)
+    {
+        var bucketName = ResolveBucket(bucketType);
+
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = bucketName ,
+            Key = objectKey ,
+            Verb = HttpVerb.GET ,
+            Expires = DateTime.UtcNow.Add(
+                expiresIn ?? TimeSpan.FromMinutes(_settings.PresignedUrlExpirationMinutes))
+        };
+
+        request.ResponseHeaderOverrides = new ResponseHeaderOverrides
+        {
+            ContentDisposition = "inline"
+        };
+
+        var ext = Path.GetExtension(objectKey);
+        if ( !string.IsNullOrWhiteSpace(ext) && TextExtensions.Contains(ext) )
+        {
+            request.ResponseHeaderOverrides.ContentType = "text/plain; charset=utf-8";
+        }
+
+        return Task.FromResult(_s3Client.GetPreSignedURL(request));
+    }
+
+    public Task<string> GetPresignedObjectUrlForDownloadAsync(
+        string bucketType ,
+        string objectKey ,
+        string fileName ,
+        TimeSpan? expiresIn = null ,
+        CancellationToken cancellationToken = default)
+    {
+        var bucketName = ResolveBucket(bucketType);
+
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = bucketName ,
+            Key = objectKey ,
+            Verb = HttpVerb.GET ,
+            Expires = DateTime.UtcNow.Add(
+                expiresIn ?? TimeSpan.FromMinutes(_settings.PresignedUrlExpirationMinutes))
+        };
+
+        request.ResponseHeaderOverrides = new ResponseHeaderOverrides
+        {
+            ContentDisposition = $"attachment; filename=\"{fileName}\""
+        };
+
+        return Task.FromResult(_s3Client.GetPreSignedURL(request));
+    }
+
+    public async Task<string> GetObjectTextAsync(
+        string bucketType ,
+        string objectKey ,
+        CancellationToken cancellationToken = default)
+    {
+        var bucketName = ResolveBucket(bucketType);
+
+        var request = new GetObjectRequest
+        {
+            BucketName = bucketName ,
+            Key = objectKey
+        };
+
+        using var response = await _s3Client.GetObjectAsync(request , cancellationToken);
+        await using var responseStream = response.ResponseStream;
+        using var reader = new StreamReader(responseStream , System.Text.Encoding.UTF8);
+
+        return await reader.ReadToEndAsync(cancellationToken);
     }
 
     // ─────────────────────────────────────────────

@@ -1,38 +1,53 @@
 ﻿using Application.Abstractions.Outbound.Services;
+using Application.Common.Interfaces;
 using Application.UseCases.Testsets.Dtos;
+using Ardalis.Specification;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using System;
-using System.Collections.Generic;
+using Microsoft.Extensions.Configuration;
 using System.IO.Compression;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.UseCases.Testsets.Commands;
 
 public sealed class UploadTestcasesZipCommandHandler
     : IRequestHandler<UploadTestcasesZipCommand , UploadTestcasesResultDto>
 {
+    private readonly ICurrentUserService _currentUser;
     private readonly IReadRepository<Problem , Guid> _problemReadRepository;
     private readonly IReadRepository<Testset , Guid> _testsetReadRepository;
+    private readonly IReadRepository<Testcase , Guid> _testcaseReadRepository;
+    private readonly IWriteRepository<Testcase , Guid> _testcaseWriteRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IR2Service _r2Service;
+    private readonly int _maxParallelUploads;
 
     public UploadTestcasesZipCommandHandler(
+        ICurrentUserService currentUser ,
         IReadRepository<Problem , Guid> problemReadRepository ,
         IReadRepository<Testset , Guid> testsetReadRepository ,
-        IR2Service r2Service)
+        IReadRepository<Testcase , Guid> testcaseReadRepository ,
+        IWriteRepository<Testcase , Guid> testcaseWriteRepository ,
+        IUnitOfWork unitOfWork ,
+        IR2Service r2Service ,
+        IConfiguration configuration)
     {
+        _currentUser = currentUser;
         _problemReadRepository = problemReadRepository;
         _testsetReadRepository = testsetReadRepository;
+        _testcaseReadRepository = testcaseReadRepository;
+        _testcaseWriteRepository = testcaseWriteRepository;
+        _unitOfWork = unitOfWork;
         _r2Service = r2Service;
+        _maxParallelUploads = configuration.GetValue<int?>("TestsetSettings:MaxParallelUploads") ?? 4;
     }
 
     public async Task<UploadTestcasesResultDto> Handle(
         UploadTestcasesZipCommand request ,
         CancellationToken ct)
     {
+        EnsureAuthenticated();
+
         var ext = Path.GetExtension(request.FileName).ToLowerInvariant();
         if ( ext != ".zip" )
             throw new InvalidOperationException("Only .zip is supported.");
@@ -40,6 +55,8 @@ public sealed class UploadTestcasesZipCommandHandler
         var problem = await _problemReadRepository.GetByIdAsync(request.ProblemId , ct);
         if ( problem is null )
             throw new KeyNotFoundException("Problem not found.");
+
+        EnsureCanManageProblem(problem);
 
         if ( !problem.IsActive || string.Equals(problem.StatusCode , "archived" , StringComparison.OrdinalIgnoreCase) )
             throw new InvalidOperationException("Problem is archived/inactive.");
@@ -73,69 +90,129 @@ public sealed class UploadTestcasesZipCommandHandler
 
             var pairs = CollectTestcasePairsByFolder(extractDir);
             if ( pairs.Count == 0 )
+            {
                 throw new InvalidOperationException(
-                    "No valid testcase pairs found. Expected *.inp/*.out or *-inp.txt/*-out.txt");
+                    "No valid testcase pairs found. Expected folder structure like 001/input.inp + output.out");
+            }
 
             var prefix = $"{request.TestsetId:D}/";
 
             if ( request.ReplaceExisting )
             {
                 await _r2Service.DeleteByPrefixAsync("Testset" , prefix , ct);
+
+                var existingTestcases = await _testcaseReadRepository.ListAsync(
+                    new TestcasesByTestsetForWriteSpec(request.TestsetId) ,
+                    ct);
+
+                if ( existingTestcases.Count > 0 )
+                {
+                    _testcaseWriteRepository.RemoveRange(existingTestcases);
+                    await _unitOfWork.SaveChangesAsync(ct);
+                }
             }
 
-            var uploadedItems = new List<TestcaseUploadedItemDto>();
+            var semaphore = new SemaphoreSlim(_maxParallelUploads);
 
-            foreach ( var kv in pairs.OrderBy(x => x.Key) )
+            try
             {
-                var ordinal = kv.Key;
-                var pair = kv.Value;
+                var uploadTasks = pairs
+                    .OrderBy(x => x.Key)
+                    .Select(async kv =>
+                    {
+                        await semaphore.WaitAsync(ct);
+                        try
+                        {
+                            var ordinal = kv.Key;
+                            var pair = kv.Value;
 
-                var inputExt = Path.GetExtension(pair.InputPath).ToLowerInvariant();
-                var outputExt = Path.GetExtension(pair.OutputPath).ToLowerInvariant();
+                            var inputExt = Path.GetExtension(pair.InputPath).ToLowerInvariant();
+                            var outputExt = Path.GetExtension(pair.OutputPath).ToLowerInvariant();
 
-                var inputFileName = inputExt == ".inp" ? "input.inp" : "input.txt";
-                var outputFileName = outputExt == ".out" ? "output.out" : "output.txt";
+                            var inputFileName = inputExt == ".inp" ? "input.inp" : "input.txt";
+                            var outputFileName = outputExt == ".out" ? "output.out" : "output.txt";
 
-                var folder = $"{request.TestsetId:D}/{ordinal:D3}/";
-                var inputKey = folder + inputFileName;
-                var outputKey = folder + outputFileName;
+                            var folder = $"{request.TestsetId:D}/{ordinal:D3}/";
+                            var inputKey = folder + inputFileName;
+                            var outputKey = folder + outputFileName;
 
-                await using ( var inputStream = File.OpenRead(pair.InputPath) )
+                            await using var inputStream = File.OpenRead(pair.InputPath);
+                            await using var outputStream = File.OpenRead(pair.OutputPath);
+
+                            var inputUploadTask = _r2Service.UploadObjectAsync(
+                                "Testset" ,
+                                inputKey ,
+                                inputStream ,
+                                ResolveContentType(inputExt) ,
+                                ct);
+
+                            var outputUploadTask = _r2Service.UploadObjectAsync(
+                                "Testset" ,
+                                outputKey ,
+                                outputStream ,
+                                ResolveContentType(outputExt) ,
+                                ct);
+
+                            await Task.WhenAll(inputUploadTask , outputUploadTask);
+
+                            return new UploadedPairResult
+                            {
+                                Ordinal = ordinal ,
+                                InputObjectKey = inputKey ,
+                                OutputObjectKey = outputKey
+                            };
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    });
+
+                var uploadedResults = (await Task.WhenAll(uploadTasks))
+                    .OrderBy(x => x.Ordinal)
+                    .ToList();
+
+                var newTestcases = uploadedResults
+                    .Select(x => new Testcase
+                    {
+                        Id = Guid.NewGuid() ,
+                        TestsetId = request.TestsetId ,
+                        Ordinal = x.Ordinal ,
+                        Weight = 1 ,
+                        IsSample = x.Ordinal <= 3 ,
+                        Input = x.InputObjectKey ,
+                        ExpectedOutput = x.OutputObjectKey ,
+                        StorageBlobId = null ,
+                        ExpireAt = null
+                    })
+                    .ToList();
+
+                if ( newTestcases.Count > 0 )
                 {
-                    await _r2Service.UploadObjectAsync(
-                        "Testset" ,
-                        inputKey ,
-                        inputStream ,
-                        ResolveContentType(inputExt) ,
-                        ct);
+                    await _testcaseWriteRepository.AddRangeAsync(newTestcases , ct);
+                    await _unitOfWork.SaveChangesAsync(ct);
                 }
 
-                await using ( var outputStream = File.OpenRead(pair.OutputPath) )
+                return new UploadTestcasesResultDto
                 {
-                    await _r2Service.UploadObjectAsync(
-                        "Testset" ,
-                        outputKey ,
-                        outputStream ,
-                        ResolveContentType(outputExt) ,
-                        ct);
-                }
-
-                uploadedItems.Add(new TestcaseUploadedItemDto
-                {
-                    Ordinal = ordinal ,
-                    InputObjectKey = inputKey ,
-                    OutputObjectKey = outputKey
-                });
+                    ProblemId = request.ProblemId ,
+                    Slug = problem.Slug ,
+                    TestsetId = request.TestsetId ,
+                    Total = uploadedResults.Count ,
+                    Items = uploadedResults
+                        .Select(x => new TestcaseUploadedItemDto
+                        {
+                            Ordinal = x.Ordinal ,
+                            InputObjectKey = x.InputObjectKey ,
+                            OutputObjectKey = x.OutputObjectKey
+                        })
+                        .ToList()
+                };
             }
-
-            return new UploadTestcasesResultDto
+            finally
             {
-                ProblemId = request.ProblemId ,
-                Slug = problem.Slug ,
-                TestsetId = request.TestsetId ,
-                Total = uploadedItems.Count ,
-                Items = uploadedItems
-            };
+                semaphore.Dispose();
+            }
         }
         finally
         {
@@ -147,13 +224,29 @@ public sealed class UploadTestcasesZipCommandHandler
                 }
                 catch
                 {
-                    // swallow cleanup error
                 }
             }
         }
     }
 
-    private static string? ResolveContentType(string extension)
+    private void EnsureAuthenticated()
+    {
+        if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
+            throw new UnauthorizedAccessException("User is not authenticated.");
+    }
+
+    private void EnsureCanManageProblem(Problem problem)
+    {
+        var isAdmin = _currentUser.IsInRole("Admin");
+        if ( isAdmin ) return;
+
+        var currentUserId = _currentUser.UserId!.Value;
+
+        if ( problem.CreatedBy != currentUserId )
+            throw new KeyNotFoundException("Problem not found or access denied.");
+    }
+
+    private static string ResolveContentType(string extension)
     {
         return extension switch
         {
@@ -204,5 +297,20 @@ public sealed class UploadTestcasesZipCommandHandler
     {
         public string InputPath { get; init; } = null!;
         public string OutputPath { get; init; } = null!;
+    }
+
+    private sealed class UploadedPairResult
+    {
+        public int Ordinal { get; init; }
+        public string InputObjectKey { get; init; } = null!;
+        public string OutputObjectKey { get; init; } = null!;
+    }
+
+    private sealed class TestcasesByTestsetForWriteSpec : Specification<Testcase>
+    {
+        public TestcasesByTestsetForWriteSpec(Guid testsetId)
+        {
+            Query.Where(x => x.TestsetId == testsetId);
+        }
     }
 }

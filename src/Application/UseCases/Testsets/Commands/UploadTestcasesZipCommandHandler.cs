@@ -1,6 +1,7 @@
 ﻿using Application.Abstractions.Outbound.Services;
 using Application.Common.Interfaces;
 using Application.UseCases.Testsets.Dtos;
+using Ardalis.Specification;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
@@ -14,17 +15,26 @@ public sealed class UploadTestcasesZipCommandHandler
     private readonly ICurrentUserService _currentUser;
     private readonly IReadRepository<Problem , Guid> _problemReadRepository;
     private readonly IReadRepository<Testset , Guid> _testsetReadRepository;
+    private readonly IReadRepository<Testcase , Guid> _testcaseReadRepository;
+    private readonly IWriteRepository<Testcase , Guid> _testcaseWriteRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IR2Service _r2Service;
 
     public UploadTestcasesZipCommandHandler(
         ICurrentUserService currentUser ,
         IReadRepository<Problem , Guid> problemReadRepository ,
         IReadRepository<Testset , Guid> testsetReadRepository ,
+        IReadRepository<Testcase , Guid> testcaseReadRepository ,
+        IWriteRepository<Testcase , Guid> testcaseWriteRepository ,
+        IUnitOfWork unitOfWork ,
         IR2Service r2Service)
     {
         _currentUser = currentUser;
         _problemReadRepository = problemReadRepository;
         _testsetReadRepository = testsetReadRepository;
+        _testcaseReadRepository = testcaseReadRepository;
+        _testcaseWriteRepository = testcaseWriteRepository;
+        _unitOfWork = unitOfWork;
         _r2Service = r2Service;
     }
 
@@ -76,17 +86,30 @@ public sealed class UploadTestcasesZipCommandHandler
 
             var pairs = CollectTestcasePairsByFolder(extractDir);
             if ( pairs.Count == 0 )
+            {
                 throw new InvalidOperationException(
-                    "No valid testcase pairs found. Expected *.inp/*.out or *-inp.txt/*-out.txt");
+                    "No valid testcase pairs found. Expected folder structure like 001/input.inp + output.out");
+            }
 
             var prefix = $"{request.TestsetId:D}/";
 
             if ( request.ReplaceExisting )
             {
                 await _r2Service.DeleteByPrefixAsync("Testset" , prefix , ct);
+
+                var existingTestcases = await _testcaseReadRepository.ListAsync(
+                    new TestcasesByTestsetForWriteSpec(request.TestsetId) ,
+                    ct);
+
+                if ( existingTestcases.Count > 0 )
+                {
+                    _testcaseWriteRepository.RemoveRange(existingTestcases);
+                    await _unitOfWork.SaveChangesAsync(ct);
+                }
             }
 
             var uploadedItems = new List<TestcaseUploadedItemDto>();
+            var newTestcases = new List<Testcase>();
 
             foreach ( var kv in pairs.OrderBy(x => x.Key) )
             {
@@ -123,12 +146,31 @@ public sealed class UploadTestcasesZipCommandHandler
                         ct);
                 }
 
+                newTestcases.Add(new Testcase
+                {
+                    Id = Guid.NewGuid() ,
+                    TestsetId = request.TestsetId ,
+                    Ordinal = ordinal ,
+                    Weight = 1 ,
+                    IsSample = false ,
+                    Input = null ,
+                    ExpectedOutput = null ,
+                    StorageBlobId = null ,
+                    ExpireAt = null
+                });
+
                 uploadedItems.Add(new TestcaseUploadedItemDto
                 {
                     Ordinal = ordinal ,
                     InputObjectKey = inputKey ,
                     OutputObjectKey = outputKey
                 });
+            }
+
+            if ( newTestcases.Count > 0 )
+            {
+                await _testcaseWriteRepository.AddRangeAsync(newTestcases , ct);
+                await _unitOfWork.SaveChangesAsync(ct);
             }
 
             return new UploadTestcasesResultDto
@@ -168,7 +210,6 @@ public sealed class UploadTestcasesZipCommandHandler
 
         var currentUserId = _currentUser.UserId!.Value;
 
-        // TODO: đổi CreatedBy thành field owner thực tế của entity Problem bên bạn nếu khác
         if ( problem.CreatedBy != currentUserId )
             throw new KeyNotFoundException("Problem not found or access denied.");
     }
@@ -224,5 +265,13 @@ public sealed class UploadTestcasesZipCommandHandler
     {
         public string InputPath { get; init; } = null!;
         public string OutputPath { get; init; } = null!;
+    }
+
+    private sealed class TestcasesByTestsetForWriteSpec : Specification<Testcase>
+    {
+        public TestcasesByTestsetForWriteSpec(Guid testsetId)
+        {
+            Query.Where(x => x.TestsetId == testsetId);
+        }
     }
 }

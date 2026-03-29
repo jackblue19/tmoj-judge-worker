@@ -10,7 +10,7 @@ public sealed class UploadTestcasesFormDto
     public Guid TestsetId { get; set; }
 
     [FromForm(Name = "replaceExisting")]
-    public bool ReplaceExisting { get; set; } = false;
+    public bool ReplaceExisting { get; set; } = true;
 
     [Required]
     [FromForm(Name = "file")]

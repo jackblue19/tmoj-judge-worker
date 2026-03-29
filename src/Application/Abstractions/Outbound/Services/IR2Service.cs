@@ -67,4 +67,22 @@ public interface IR2Service
         string type ,
         string prefix ,
         CancellationToken cancellationToken = default);
+
+    Task<string> GetPresignedObjectUrlForViewAsync(
+        string bucketType ,
+        string objectKey ,
+        TimeSpan? expiresIn = null ,
+        CancellationToken cancellationToken = default);
+
+    Task<string> GetPresignedObjectUrlForDownloadAsync(
+        string bucketType ,
+        string objectKey ,
+        string fileName ,
+        TimeSpan? expiresIn = null ,
+        CancellationToken cancellationToken = default);
+
+    Task<string> GetObjectTextAsync(
+        string bucketType ,
+        string objectKey ,
+        CancellationToken cancellationToken = default);
 }

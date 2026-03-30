@@ -12,7 +12,7 @@ public record UserDto(
     string? Username,
     string? AvatarUrl,
     bool emailVerified, 
-    List<string> Roles);
+    string? Role);
 
 public record UserProfileResponse(
     Guid UserId,

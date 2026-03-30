@@ -1,6 +1,5 @@
 using Asp.Versioning;
 using Domain.Entities;
-using Class = Domain.Entities.Class;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +11,7 @@ namespace WebAPI.Controllers.v1.ClassContestManagement;
 
 [ApiController]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/class/{classId:guid}/contests")]
+[Route("api/v{version:apiVersion}/class-instance/{instanceId:guid}/contests")]
 [Authorize]
 public class ClassContestController : ControllerBase
 {
@@ -24,20 +23,20 @@ public class ClassContestController : ControllerBase
     }
 
     // ──────────────────────────────────────────
-    // GET .../contests  →  List contests in a class
+    // GET .../contests  →  List contests in a class instance
     // ──────────────────────────────────────────
     [HttpGet]
-    public async Task<IActionResult> GetAll(Guid classId, CancellationToken ct)
+    public async Task<IActionResult> GetAll(Guid instanceId, CancellationToken ct)
     {
         try
         {
-            var cls = await _db.Classes.AsNoTracking().FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-            if (cls is null) return NotFound(new { Message = "Class not found." });
+            var exists = await _db.ClassSemesters.AnyAsync(cs => cs.Id == instanceId, ct);
+            if (!exists) return NotFound(new { Message = "Class instance not found." });
 
             var contestSlots = await _db.ClassSlots.AsNoTracking()
                 .Include(s => s.Contest).ThenInclude(c => c!.ContestProblems)
                 .Include(s => s.Contest).ThenInclude(c => c!.ContestTeams)
-                .Where(s => s.ClassId == classId && s.Mode == "contest" && s.ContestId != null)
+                .Where(s => s.ClassSemesterId == instanceId && s.Mode == "contest" && s.ContestId != null)
                 .ToListAsync(ct);
 
             var result = contestSlots
@@ -67,7 +66,7 @@ public class ClassContestController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
     public async Task<IActionResult> Create(
-        Guid classId,
+        Guid instanceId,
         [FromBody] CreateClassContestRequest req,
         CancellationToken ct)
     {
@@ -76,9 +75,11 @@ public class ClassContestController : ControllerBase
             var userId = GetUserId();
             if (userId is null) return Unauthorized();
 
-            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-            if (cls is null) return NotFound(new { Message = "Class not found." });
-            if (cls.TeacherId != userId) return Forbid();
+            var classSemester = await _db.ClassSemesters.FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+            
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
             if (string.IsNullOrWhiteSpace(req.Title))
                 return BadRequest(new { Message = "Title is required." });
@@ -131,12 +132,12 @@ public class ClassContestController : ControllerBase
 
             // 3. Create ClassSlot linked to this contest
             int slotNo = req.SlotNo ?? (await _db.ClassSlots
-                .Where(s => s.ClassId == classId)
+                .Where(s => s.ClassSemesterId == instanceId)
                 .MaxAsync(s => (int?)s.SlotNo, ct) ?? 0) + 1;
 
             var slot = new ClassSlot
             {
-                ClassId = classId,
+                ClassSemesterId = instanceId,
                 SlotNo = slotNo,
                 Title = req.SlotTitle ?? req.Title.Trim(),
                 Mode = "contest",
@@ -149,7 +150,7 @@ public class ClassContestController : ControllerBase
 
             await _db.SaveChangesAsync(ct);
 
-            return CreatedAtAction(nameof(GetById), new { classId, contestId = contest.Id },
+            return CreatedAtAction(nameof(GetById), new { instanceId, contestId = contest.Id, version = "1.0" },
                 new { Message = "Contest created successfully.", contest.Id, SlotId = slot.Id });
         }
         catch (Exception)
@@ -163,17 +164,17 @@ public class ClassContestController : ControllerBase
     // ──────────────────────────────────────────
     [HttpGet("{contestId:guid}")]
     public async Task<IActionResult> GetById(
-        Guid classId, Guid contestId, CancellationToken ct)
+        Guid instanceId, Guid contestId, CancellationToken ct)
     {
         try
         {
             var userId = GetUserId();
             if (userId is null) return Unauthorized();
 
-            // Verify contest belongs to this class
+            // Verify contest belongs to this class instance
             var slot = await _db.ClassSlots.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.ClassId == classId && s.ContestId == contestId, ct);
-            if (slot is null) return NotFound(new { Message = "Contest not found in this class." });
+                .FirstOrDefaultAsync(s => s.ClassSemesterId == instanceId && s.ContestId == contestId, ct);
+            if (slot is null) return NotFound(new { Message = "Contest not found in this class instance." });
 
             var contest = await _db.Contests.AsNoTracking()
                 .Include(c => c.ContestProblems).ThenInclude(cp => cp.Problem)
@@ -199,7 +200,7 @@ public class ClassContestController : ControllerBase
             double? remaining = contest.EndAt > now ? (contest.EndAt - now).TotalSeconds : 0;
 
             var dto = new ClassContestResponse(
-                contest.Id, classId, slot.Id,
+                contest.Id, instanceId, slot.Id,
                 contest.Title, contest.Slug, contest.DescriptionMd, contest.Rules,
                 contest.StartAt, contest.EndAt, contest.FreezeAt,
                 contest.IsActive, isJoined, remaining,
@@ -223,7 +224,7 @@ public class ClassContestController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{contestId:guid}/extend")]
     public async Task<IActionResult> ExtendTime(
-        Guid classId, Guid contestId,
+        Guid instanceId, Guid contestId,
         [FromBody] ExtendContestRequest req,
         CancellationToken ct)
     {
@@ -232,14 +233,16 @@ public class ClassContestController : ControllerBase
             var userId = GetUserId();
             if (userId is null) return Unauthorized();
 
-            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-            if (cls is null) return NotFound(new { Message = "Class not found." });
-            if (cls.TeacherId != userId) return Forbid();
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+            
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            // Verify contest belongs to class
+            // Verify contest belongs to class instance
             var slot = await _db.ClassSlots.FirstOrDefaultAsync(
-                s => s.ClassId == classId && s.ContestId == contestId, ct);
-            if (slot is null) return NotFound(new { Message = "Contest not found in this class." });
+                s => s.ClassSemesterId == instanceId && s.ContestId == contestId, ct);
+            if (slot is null) return NotFound(new { Message = "Contest not found in this class instance." });
 
             var contest = await _db.Contests.FirstOrDefaultAsync(c => c.Id == contestId, ct);
             if (contest is null) return NotFound(new { Message = "Contest not found." });
@@ -265,7 +268,7 @@ public class ClassContestController : ControllerBase
     // ──────────────────────────────────────────
     [HttpPost("{contestId:guid}/join")]
     public async Task<IActionResult> Join(
-        Guid classId, Guid contestId, CancellationToken ct)
+        Guid instanceId, Guid contestId, CancellationToken ct)
     {
         try
         {
@@ -274,13 +277,13 @@ public class ClassContestController : ControllerBase
 
             // Verify class membership
             var isMember = await _db.ClassMembers.AsNoTracking()
-                .AnyAsync(m => m.ClassId == classId && m.UserId == userId.Value && m.IsActive, ct);
+                .AnyAsync(m => m.ClassSemesterId == instanceId && m.UserId == userId.Value && m.IsActive, ct);
             if (!isMember) return Forbid();
 
-            // Verify contest belongs to class
+            // Verify contest belongs to class instance
             var slot = await _db.ClassSlots.AsNoTracking()
-                .FirstOrDefaultAsync(s => s.ClassId == classId && s.ContestId == contestId, ct);
-            if (slot is null) return NotFound(new { Message = "Contest not found in this class." });
+                .FirstOrDefaultAsync(s => s.ClassSemesterId == instanceId && s.ContestId == contestId, ct);
+            if (slot is null) return NotFound(new { Message = "Contest not found in this class instance." });
 
             var contest = await _db.Contests.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == contestId && c.IsActive, ct);

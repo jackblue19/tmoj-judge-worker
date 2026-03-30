@@ -6,6 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using Infrastructure.Persistence.Common;
+using Application.Common.Interfaces;
+using Application.UseCases.Problems;
+using Infrastructure.Persistence.Repositories.Problems;
+using Infrastructure.ExternalServices;
+using Infrastructure.Configurations.FileStorage;
 
 namespace Infrastructure;
 
@@ -34,6 +39,10 @@ public static class InfrastructureRegistration
         services.AddScoped(typeof(IWriteRepository<,>) , typeof(EfWriteRepository<,>));
         services.AddScoped<IUnitOfWork , EfUnitOfWork>();
 
+        services.AddScoped<ICurrentUserService , CurrentUserService>();
+
+        services.AddScoped<IProblemRepository , ProblemRepository>();
+        services.AddScoped<ITagRepository , TagRepository>();
         return services;
     }
 
@@ -45,11 +54,22 @@ public static class InfrastructureRegistration
         return services;
     }
 
-    public static IServiceCollection AddExternalServices(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection AddExternalServices(this IServiceCollection services , IConfiguration config)
     {
+        // Email
         services.Configure<Infrastructure.Configurations.Auth.EmailSettings>(config.GetSection("EmailSettings"));
-        services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService, Infrastructure.ExternalServices.Mailing.EmailService>();
+        services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService , Infrastructure.ExternalServices.Mailing.EmailService>();
 
+        // Cloudinary
+        services.Configure<CloudinarySettings>(config.GetSection("FileStorage:CloudinarySettings"));
+        services.AddScoped<Application.Abstractions.Outbound.Services.ICloudinaryService , Infrastructure.ExternalServices.FileStorage.CloudinaryService>();
+
+        // Cloudflare R2
+        services.Configure<R2Settings>(config.GetSection("FileStorage:R2Settings"));
+        services.AddScoped<Application.Abstractions.Outbound.Services.IR2Service , Infrastructure.ExternalServices.FileStorage.R2Service>();
+
+        //  HttpClient
+        services.AddHttpClient();
         return services;
     }
 }

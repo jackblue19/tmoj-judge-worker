@@ -1,6 +1,5 @@
 using Asp.Versioning;
 using Domain.Entities;
-using Class = Domain.Entities.Class;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +11,7 @@ namespace WebAPI.Controllers.v1.ClassSlotManagement;
 
 [ApiController]
 [ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/class/{classId:guid}/slots")]
+[Route("api/v{version:apiVersion}/class-instance/{instanceId:guid}/slots")]
 [Authorize]
 public class ClassSlotController : ControllerBase
 {
@@ -24,24 +23,24 @@ public class ClassSlotController : ControllerBase
     }
 
     // ──────────────────────────────────────────
-    // GET .../slots  →  List all slots for a class
+    // GET .../slots  →  List all slots for a class instance
     // ──────────────────────────────────────────
     [HttpGet]
-    public async Task<IActionResult> GetAll(Guid classId, CancellationToken ct)
+    public async Task<IActionResult> GetAll(Guid instanceId, CancellationToken ct)
     {
         try
         {
-            var cls = await _db.Classes.AsNoTracking().FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-            if (cls is null) return NotFound(new { Message = "Class not found." });
+            var exists = await _db.ClassSemesters.AnyAsync(cs => cs.Id == instanceId, ct);
+            if (!exists) return NotFound(new { Message = "Class instance not found." });
 
             var slots = await _db.ClassSlots.AsNoTracking()
                 .Include(s => s.ClassSlotProblems!).ThenInclude(sp => sp.Problem)
-                .Where(s => s.ClassId == classId)
+                .Where(s => s.ClassSemesterId == instanceId)
                 .OrderBy(s => s.SlotNo)
                 .ToListAsync(ct);
 
             var result = slots.Select(s => new ClassSlotResponse(
-                s.Id, s.ClassId, s.SlotNo, s.Title, s.Description, s.Rules,
+                s.Id, s.ClassSemesterId, s.SlotNo, s.Title, s.Description, s.Rules,
                 s.OpenAt, s.DueAt, s.CloseAt, s.Mode, s.ContestId, s.IsPublished,
                 s.CreatedAt, s.UpdatedAt,
                 (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).OrderBy(sp => sp.Ordinal).Select(sp => new SlotProblemResponse(
@@ -63,7 +62,7 @@ public class ClassSlotController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
     public async Task<IActionResult> Create(
-    Guid classId,
+    Guid instanceId,
     [FromBody] CreateClassSlotRequest req,
     CancellationToken ct)
     {
@@ -72,9 +71,11 @@ public class ClassSlotController : ControllerBase
             var userId = GetUserId();
             if (userId is null) return Unauthorized();
 
-            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-            if (cls is null) return NotFound(new { Message = "Class not found." });
-            if (cls.TeacherId != userId)
+            var classSemester = await _db.ClassSemesters.FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+            
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId)
                 return Forbid();
 
             if (string.IsNullOrWhiteSpace(req.Title))
@@ -84,13 +85,13 @@ public class ClassSlotController : ControllerBase
             if (mode is not ("problemset" or "contest"))
                 return BadRequest(new { Message = "Mode must be 'problemset' or 'contest'." });
 
-            // Check unique slot_no
-            if (await _db.ClassSlots.AnyAsync(s => s.ClassId == classId && s.SlotNo == req.SlotNo, ct))
-                return Conflict(new { Message = $"SlotNo {req.SlotNo} already exists in this class." });
+            // Check unique slot_no within this instance
+            if (await _db.ClassSlots.AnyAsync(s => s.ClassSemesterId == instanceId && s.SlotNo == req.SlotNo, ct))
+                return Conflict(new { Message = $"SlotNo {req.SlotNo} already exists in this class instance." });
 
             var slot = new ClassSlot
             {
-                ClassId = classId,
+                ClassSemesterId = instanceId,
                 SlotNo = req.SlotNo,
                 Title = req.Title.Trim(),
                 Description = req.Description?.Trim(),
@@ -105,7 +106,6 @@ public class ClassSlotController : ControllerBase
             };
 
             _db.ClassSlots.Add(slot);
-
             await _db.SaveChangesAsync(ct);
 
             // Add problems
@@ -129,17 +129,14 @@ public class ClassSlotController : ControllerBase
 
             await _db.SaveChangesAsync(ct);
 
-            return CreatedAtAction(nameof(GetAll), new { classId, version = "1.0" },
+            return CreatedAtAction(nameof(GetAll), new { instanceId, version = "1.0" },
                 new { Message = "Assignment created successfully.", slot.Id, slot.SlotNo });
         }
         catch (Exception ex)
         {
-            var inner = ex.InnerException?.Message ?? "No inner exception";
-            return StatusCode(500, new { Message = "An error occurred while creating the assignment.", Detail = ex.Message, Inner = inner });
+            return StatusCode(500, new { Message = "An error occurred while creating the assignment.", Detail = ex.Message });
         }
     } 
-
-
 
     // ──────────────────────────────────────────
     // PUT .../slots/{slotId}/due-date  →  Set Due Date (Teacher)
@@ -147,7 +144,7 @@ public class ClassSlotController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{slotId:guid}/due-date")]
     public async Task<IActionResult> SetDueDate(
-        Guid classId, Guid slotId,
+        Guid instanceId, Guid slotId,
         [FromBody] SetDueDateRequest req,
         CancellationToken ct)
     {
@@ -156,14 +153,15 @@ public class ClassSlotController : ControllerBase
             var userId = GetUserId();
             if (userId is null) return Unauthorized();
 
-            var cls = await _db.Classes.FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-            if (cls is null) return NotFound(new { Message = "Class not found." });
-            if (cls.TeacherId != userId)
-                return Forbid();
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+            
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
             var slot = await _db.ClassSlots
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassId == classId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
+            if (slot is null) return NotFound(new { Message = "Slot not found in this instance." });
 
             slot.DueAt = req.DueAt;
             if (req.CloseAt.HasValue) slot.CloseAt = req.CloseAt.Value;
@@ -185,7 +183,7 @@ public class ClassSlotController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{slotId:guid}/publish")]
     public async Task<IActionResult> TogglePublish(
-     Guid classId,
+     Guid instanceId,
      Guid slotId,
      CancellationToken ct = default)
     {
@@ -194,22 +192,17 @@ public class ClassSlotController : ControllerBase
             var userId = GetUserId();
             if (userId is null) return Unauthorized();
 
-            var cls = await _db.Classes
-                .FirstOrDefaultAsync(c => c.ClassId == classId, ct);
-
-            if (cls is null)
-                return NotFound(new { Message = "Class not found." });
-
-            if (cls.TeacherId != userId)
-                return Forbid();
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+            
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
             var slot = await _db.ClassSlots
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassId == classId, ct);
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
 
-            if (slot is null)
-                return NotFound(new { Message = "Slot not found." });
+            if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            // 🔥 Toggle trạng thái
             slot.IsPublished = !slot.IsPublished;
             slot.UpdatedBy = userId;
 
@@ -233,20 +226,20 @@ public class ClassSlotController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpGet("{slotId:guid}/scores")]
     public async Task<IActionResult> GetScores(
-        Guid classId, Guid slotId, CancellationToken ct)
+        Guid instanceId, Guid slotId, CancellationToken ct)
     {
         try
         {
             var slot = await _db.ClassSlots.AsNoTracking()
                 .Include(s => s.ClassSlotProblems!).ThenInclude(sp => sp.Problem)
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassId == classId, ct);
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
             var problemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId).ToList();
 
             var members = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
-                .Where(m => m.ClassId == classId && m.IsActive)
+                .Where(m => m.ClassSemesterId == instanceId && m.IsActive)
                 .ToListAsync(ct);
 
             var result = new List<StudentSlotScoreResponse>();
@@ -295,13 +288,13 @@ public class ClassSlotController : ControllerBase
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpGet("{slotId:guid}/submissions/{userId:guid}")]
     public async Task<IActionResult> GetStudentSubmissions(
-        Guid classId, Guid slotId, Guid userId, CancellationToken ct)
+        Guid instanceId, Guid slotId, Guid userId, CancellationToken ct)
     {
         try
         {
             var slot = await _db.ClassSlots.AsNoTracking()
                 .Include(s => s.ClassSlotProblems!).ThenInclude(sp => sp.Problem)
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassId == classId, ct);
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
             var problemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId).ToList();

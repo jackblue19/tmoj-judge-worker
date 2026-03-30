@@ -421,4 +421,10 @@ FodyWeavers.xsd
 **/appsettings.json
 **/appsettings.*.json
 
-ignoremeahihi
+# Test vibe coding =D
+Copilot
+Copilot/insight.txt
+Copilot/overview.md
+Copilot/tmoj-beta.sql
+
+.vscode/

@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebAPI.Models.Common;
+using System.IO;
+using Microsoft.AspNetCore.Http;
 
 namespace WebAPI.Controllers.v1.SubjectManagement;
 
@@ -163,4 +165,171 @@ public class SubjectController : ControllerBase
     // helpers
     private static SubjectResponse ToDto(Subject s) =>
         new(s.SubjectId, s.Code, s.Name, s.Description, s.IsActive, s.CreatedAt);
+
+    [Authorize(Roles = "admin,manager")]
+    [HttpGet("import/template")]
+    public IActionResult DownloadImportTemplate()
+    {
+        try
+        {
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Template");
+
+            var headers = new List<string> { "Code", "Name", "Description" };
+
+            for (int i = 0; i < headers.Count; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+            }
+
+            worksheet.Cell(2, 1).Value = "PRN211";
+            worksheet.Cell(2, 2).Value = "C# Programming";
+            worksheet.Cell(2, 3).Value = "Basic C# programming subject";
+
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var content = stream.ToArray();
+
+            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Subject_Import_Template.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while generating template: " + ex.Message });
+        }
+    }
+
+    [Authorize(Roles = "admin,manager")]
+    [HttpPost("import")]
+    public async Task<IActionResult> ImportSubjects(IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Message = "File is missing." });
+
+        try
+        {
+            int successCount = 0;
+            int failedCount = 0;
+            var errors = new List<string>();
+            int totalProcessed = 0;
+
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, ct);
+            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+            var worksheet = workbook.Worksheet(1);
+            var rows = worksheet.RowsUsed().Skip(1); 
+
+            var headerRow = worksheet.Row(1);
+            var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var cell in headerRow.CellsUsed())
+            {
+                headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
+            }
+
+            foreach (var row in rows)
+            {
+                totalProcessed++;
+                try
+                {
+                    string codeRaw = GetCellString(row, headers, "Code");
+                    string nameRaw = GetCellString(row, headers, "Name");
+                    string descRaw = GetCellString(row, headers, "Description");
+
+                    if (string.IsNullOrWhiteSpace(codeRaw) || string.IsNullOrWhiteSpace(nameRaw))
+                    {
+                        errors.Add($"Row {row.RowNumber()}: Missing Required fields (Code, Name).");
+                        failedCount++;
+                        continue;
+                    }
+
+                    var code = codeRaw.Trim().ToUpperInvariant();
+                    var name = nameRaw.Trim();
+                    
+                    var subject = await _db.Subjects.FirstOrDefaultAsync(s => s.Code == code, ct);
+                    if (subject != null)
+                    {
+                        subject.Name = name;
+                        subject.Description = descRaw;
+                    }
+                    else
+                    {
+                        subject = new Subject
+                        {
+                            Code = code,
+                            Name = name,
+                            Description = descRaw,
+                            IsActive = true
+                        };
+                        _db.Subjects.Add(subject);
+                    }
+                    
+                    await _db.SaveChangesAsync(ct);
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"Row {row.RowNumber()}: {ex.Message}");
+                    failedCount++;
+                }
+            }
+
+            return Ok(ApiResponse<object>.Ok(new { TotalProcessed = totalProcessed, SuccessCount = successCount, FailedCount = failedCount, Errors = errors }, "Import processed."));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
+        }
+    }
+
+    [Authorize(Roles = "admin,manager")]
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportSubjects(CancellationToken ct)
+    {
+        try
+        {
+            var subjects = await _db.Subjects.AsNoTracking().OrderBy(s => s.Code).ToListAsync(ct);
+            using var workbook = new ClosedXML.Excel.XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Subjects");
+
+            var headers = new List<string> { "Code", "Name", "Description", "IsActive" };
+            for (int i = 0; i < headers.Count; i++)
+            {
+                var cell = worksheet.Cell(1, i + 1);
+                cell.Value = headers[i];
+                cell.Style.Font.Bold = true;
+            }
+
+            int row = 2;
+            foreach (var s in subjects)
+            {
+                worksheet.Cell(row, 1).Value = s.Code;
+                worksheet.Cell(row, 2).Value = s.Name;
+                worksheet.Cell(row, 3).Value = s.Description;
+                worksheet.Cell(row, 4).Value = s.IsActive ? "Yes" : "No";
+                row++;
+            }
+            worksheet.Columns().AdjustToContents();
+
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Subjects_Export.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while exporting: " + ex.Message });
+        }
+    }
+
+    private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string columnName)
+    {
+        if (headers.TryGetValue(columnName, out int colIdx))
+        {
+            return row.Cell(colIdx).GetValue<string>()?.Trim() ?? string.Empty;
+        }
+        return string.Empty;
+    }
 }

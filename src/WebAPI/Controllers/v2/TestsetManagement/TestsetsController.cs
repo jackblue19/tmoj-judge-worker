@@ -1,6 +1,7 @@
 ﻿using Application.UseCases.Testsets.Commands;
 using Application.UseCases.Testsets.Queries;
 using Asp.Versioning;
+using Infrastructure.Configurations.Security;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,10 +14,11 @@ namespace WebAPI.Controllers.v2.TestsetManagement;
 public class TestsetsController : ControllerBase
 {
     private readonly IMediator _mediator;
-
-    public TestsetsController(IMediator mediator)
+    private readonly IConfiguration _configuration;
+    public TestsetsController(IMediator mediator , IConfiguration configuration)
     {
         _mediator = mediator;
+        _configuration = configuration;
     }
 
     [HttpPost("{id:guid}/testcases")]
@@ -94,10 +96,17 @@ public class TestsetsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadZip(
-    Guid problemId ,
-    Guid testsetId ,
-    CancellationToken ct)
+     Guid problemId ,
+     Guid testsetId ,
+     CancellationToken ct)
     {
+        // auth-security-bypass-for-judge-server (vpc)
+        var isInternal = InternalAuthHelper.IsInternalRequest(HttpContext);
+        var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
+
+        if ( !isInternal && !hasApiKey )
+            return Unauthorized("Invalid internal access");
+
         var result = await _mediator.Send(
             new DownloadTestsetZipQuery(problemId , testsetId) ,
             ct);

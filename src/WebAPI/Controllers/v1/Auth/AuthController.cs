@@ -62,9 +62,9 @@ public class AuthController : ControllerBase
         _emailService = emailService;
     }
 
-    [AllowAnonymous]
-    [HttpGet("ping")]
-    public IActionResult Ping() => Ok(new { Message = "pong" });
+    // [AllowAnonymous]
+    // [HttpGet("ping")]
+    // public IActionResult Ping() => Ok(new { Message = "pong" });
 
 
     [AllowAnonymous]
@@ -564,7 +564,14 @@ public class AuthController : ControllerBase
             _db.EmailVerifications.Add(verification);
             await _db.SaveChangesAsync(ct);
 
-            // TODO: Send reset email
+            var resetLink = $"http://localhost:3000/reset-password?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verification.Token)}";
+
+            var emailSettings = _config.GetSection("EmailSettings");
+            var template = emailSettings["ForgotPasswordEmailTemplate"] ?? "<a href='{LINK}'>Khôi phục mật khẩu</a>";
+            var body = template.Replace("{LINK}", resetLink).Replace("{YEAR}", DateTime.Now.Year.ToString());
+
+            await _emailService.SendEmailAsync(user.Email, "Khôi phục mật khẩu - TMOJ", body, ct);
+
             return Ok(new { Message = "Password reset link sent." , Token = verification.Token });
         }
         catch ( Exception )
@@ -592,6 +599,7 @@ public class AuthController : ControllerBase
             if ( user != null )
             {
                 user.Password = _passwordHasher.Hash(req.NewPassword);
+                user.EmailVerified = true;
                 _db.EmailVerifications.Remove(verification);
                 await _db.SaveChangesAsync(ct);
             }
@@ -620,9 +628,30 @@ public class AuthController : ControllerBase
             }
 
             user.Password = _passwordHasher.Hash(req.NewPassword);
+            user.EmailVerified = false;
+
+            var oldVerifications = await _db.EmailVerifications.Where(v => v.UserId == user.UserId).ToListAsync(ct);
+            _db.EmailVerifications.RemoveRange(oldVerifications);
+
+            var verification = new EmailVerification
+            {
+                UserId = user.UserId ,
+                Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) ,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15)
+            };
+
+            _db.EmailVerifications.Add(verification);
             await _db.SaveChangesAsync(ct);
 
-            return Ok(new { Message = "Password changed successfully." });
+            var confirmLink = $"https://localhost:7210/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verification.Token)}";
+
+            var emailSettings = _config.GetSection("EmailSettings");
+            var template = emailSettings["ChangePasswordEmailTemplate"] ?? "<a href='{LINK}'>Xác nhận Email</a>";
+            var body = template.Replace("{LINK}", confirmLink).Replace("{YEAR}", DateTime.Now.Year.ToString());
+
+            await _emailService.SendEmailAsync(user.Email, "Xác nhận địa chỉ email - TMOJ", body, ct);
+
+            return Ok(new { Message = "Password changed successfully. Please check your email to verify your account." , Token = verification.Token });
         }
         catch ( Exception )
         {
@@ -630,84 +659,7 @@ public class AuthController : ControllerBase
         }
     }
 
-    // Administrative Actions
-    [Authorize(Roles = "admin")]
-    [HttpPut("users/{id}/lock")]
-    public async Task<IActionResult> LockAccount(Guid id , CancellationToken ct)
-    {
-        var user = await _db.Users.FindAsync(new object[] { id } , ct);
-        if ( user == null ) return NotFound();
-        user.Status = false;
-        await _db.SaveChangesAsync(ct);
-        return Ok(new { Message = "Account locked." });
-    }
 
-    [Authorize(Roles = "admin")]
-    [HttpPut("users/{id}/unlock")]
-    public async Task<IActionResult> UnlockAccount(Guid id , CancellationToken ct)
-    {
-        var user = await _db.Users.FindAsync(new object[] { id } , ct);
-        if ( user == null ) return NotFound();
-        user.Status = true;
-        await _db.SaveChangesAsync(ct);
-        return Ok(new { Message = "Account unlocked." });
-    }
-
-    [Authorize(Roles = "admin")]
-    [HttpGet("users/locked")]
-    public async Task<IActionResult> ListLockedAccounts(CancellationToken ct)
-    {
-        var users = await _db.Users.Where(u => u.Status == false)
-            .Select(u => new UserProfileResponse(u.UserId , u.Email , u.FirstName , u.LastName , u.DisplayName , u.Username , u.AvatarUrl , u.EmailVerified , u.Status , u.CreatedAt))
-            .ToListAsync(ct);
-        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users , "list of locked accounts"));
-    }
-
-    [Authorize(Roles = "admin")]
-    [HttpGet("users/unlocked")]
-    public async Task<IActionResult> ListUnlockedAccounts(CancellationToken ct)
-    {
-        var users = await _db.Users.Where(u => u.Status == true)
-            .Select(u => new UserProfileResponse(u.UserId , u.Email , u.FirstName , u.LastName , u.DisplayName , u.Username , u.AvatarUrl , u.EmailVerified , u.Status , u.CreatedAt))
-            .ToListAsync(ct);
-        return Ok(ApiResponse<List<UserProfileResponse>>.Ok(users , "List of active accounts"));
-    }
-
-    [Authorize(Roles = "admin")]
-    [HttpPost("users/{id}/assign-role")]
-    public async Task<IActionResult> AssignRole(Guid id , [FromBody] AssignRoleRequest req , CancellationToken ct)
-    {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id , ct);
-        if ( user == null ) return NotFound();
-
-        var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant() , ct);
-        if ( role == null ) return BadRequest(new { Message = "Role not found." });
-
-        if ( user.RoleId != role.RoleId )
-        {
-            user.RoleId = role.RoleId;
-            await _db.SaveChangesAsync(ct);
-        }
-
-        return Ok(new { Message = $"Role {req.RoleCode} assigned." });
-    }
-
-    [Authorize(Roles = "admin")]
-    [HttpDelete("users/{id}/roles/{roleCode}")]
-    public async Task<IActionResult> RemoveRole(Guid id , string roleCode , CancellationToken ct)
-    {
-        var user = await _db.Users.Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.UserId == id , ct);
-        if ( user == null ) return NotFound();
-
-        if ( user.Role != null && user.Role.RoleCode == roleCode.ToLowerInvariant() )
-        {
-            user.RoleId = null;
-            await _db.SaveChangesAsync(ct);
-        }
-
-        return Ok(new { Message = $"Role {roleCode} removed." });
-    }
 
     private async Task<AuthResponse> CreateAuthResponseAsync(User user , CancellationToken ct)
     {

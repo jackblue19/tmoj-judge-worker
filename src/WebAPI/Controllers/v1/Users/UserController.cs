@@ -487,24 +487,21 @@ public class UserController : ControllerBase
             if (user == null)
                 return NotFound(new { Message = "User not found." });
 
-            if (!string.IsNullOrEmpty(user.AvatarUrl) && Guid.TryParse(user.AvatarUrl, out var existingAvatarId))
+            if (TryGetAvatarIdFromUrl(user.AvatarUrl, out var existingAvatarId))
             {
                 await _cloudinary.ReplaceAvatarAsync(existingAvatarId, file.OpenReadStream(), ext, ct);
+                user.AvatarUrl = _cloudinary.GetAvatarUrl(existingAvatarId);
             }
             else
             {
                 var avatarId = await _cloudinary.UploadAvatarAsync(file.OpenReadStream(), ext, ct);
-                user.AvatarUrl = avatarId.ToString();
+                user.AvatarUrl = _cloudinary.GetAvatarUrl(avatarId);
             }
 
             user.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
 
-            var avatarUrl = Guid.TryParse(user.AvatarUrl, out var aid)
-                ? _cloudinary.GetAvatarUrl(aid)
-                : user.AvatarUrl;
-
-            return Ok(new { Message = "Avatar uploaded successfully.", AvatarUrl = avatarUrl });
+            return Ok(ApiResponse<object>.Ok(new { AvatarUrl = user.AvatarUrl }, "Avatar uploaded successfully."));
         }
         catch (Exception ex)
         {
@@ -530,7 +527,7 @@ public class UserController : ControllerBase
             if (string.IsNullOrEmpty(user.AvatarUrl))
                 return BadRequest(new { Message = "No avatar to delete." });
 
-            if (Guid.TryParse(user.AvatarUrl, out var avatarId))
+            if (TryGetAvatarIdFromUrl(user.AvatarUrl, out var avatarId))
             {
                 await _cloudinary.DeleteAvatarAsync(avatarId, ct);
             }
@@ -538,14 +535,95 @@ public class UserController : ControllerBase
             user.AvatarUrl = null;
             user.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
-
-            return Ok(new { Message = "Avatar deleted successfully." });
+            return Ok(ApiResponse<object>.Ok(null!, "Avatar deleted successfully."));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting avatar for user {UserId}", userId);
             return StatusCode(500, new { Message = "An error occurred while deleting the avatar." });
         }
+    }
+
+    // ──────────────────────────────────────────
+    // Administrative Actions (Moved from AuthController)
+    // ──────────────────────────────────────────
+
+    [Authorize(Roles = "admin")]
+    [HttpPut("{id}/lock")]
+    public async Task<IActionResult> LockAccount(Guid id, CancellationToken ct)
+    {
+        var user = await _db.Users.FindAsync(new object[] { id }, ct);
+        if (user == null) return NotFound();
+        user.Status = false;
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { Message = "Account locked." });
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpPut("{id}/unlock")]
+    public async Task<IActionResult> UnlockAccount(Guid id, CancellationToken ct)
+    {
+        var user = await _db.Users.FindAsync(new object[] { id }, ct);
+        if (user == null) return NotFound();
+        user.Status = true;
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { Message = "Account unlocked." });
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpGet("locked")]
+    public async Task<IActionResult> ListLockedAccounts(CancellationToken ct)
+    {
+        var users = await _db.Users.Where(u => u.Status == false)
+            .Select(u => new Auth.UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
+            .ToListAsync(ct);
+        return Ok(ApiResponse<List<Auth.UserProfileResponse>>.Ok(users, "List of locked accounts"));
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpGet("unlocked")]
+    public async Task<IActionResult> ListUnlockedAccounts(CancellationToken ct)
+    {
+        var users = await _db.Users.Where(u => u.Status == true)
+            .Select(u => new Auth.UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
+            .ToListAsync(ct);
+        return Ok(ApiResponse<List<Auth.UserProfileResponse>>.Ok(users, "List of active accounts"));
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpPost("{id}/assign-role")]
+    public async Task<IActionResult> AssignRole(Guid id, [FromBody] AssignRoleRequest req, CancellationToken ct)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id, ct);
+        if (user == null) return NotFound();
+
+        var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant(), ct);
+        if (role == null) return BadRequest(new { Message = "Role not found." });
+
+        if (user.RoleId != role.RoleId)
+        {
+            user.RoleId = role.RoleId;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return Ok(new { Message = $"Role {req.RoleCode} assigned." });
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpDelete("{id}/roles/{roleCode}")]
+    public async Task<IActionResult> RemoveRole(Guid id, string roleCode, CancellationToken ct)
+    {
+        var user = await _db.Users.Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.UserId == id, ct);
+        if (user == null) return NotFound();
+
+        if (user.Role != null && user.Role.RoleCode == roleCode.ToLowerInvariant())
+        {
+            user.RoleId = null;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return Ok(new { Message = $"Role {roleCode} removed." });
     }
 
     private Guid GetUserId()
@@ -557,5 +635,22 @@ public class UserController : ControllerBase
             User.FindFirstValue("uid");
 
         return Guid.TryParse(v, out var id) ? id : Guid.Empty;
+    }
+
+    private bool TryGetAvatarIdFromUrl(string? avatarUrl, out Guid avatarId)
+    {
+        avatarId = Guid.Empty;
+        if (string.IsNullOrWhiteSpace(avatarUrl)) return false;
+
+        if (Guid.TryParse(avatarUrl, out avatarId)) return true;
+
+        var fileName = avatarUrl.Split('/').LastOrDefault();
+        if (fileName != null)
+        {
+            var idString = Path.GetFileNameWithoutExtension(fileName);
+            return Guid.TryParse(idString, out avatarId);
+        }
+
+        return false;
     }
 }

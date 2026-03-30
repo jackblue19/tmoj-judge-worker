@@ -5,6 +5,7 @@ using Application.UseCases.Testsets.Specifications;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using System.IO.Compression;
 using System.Text;
@@ -20,20 +21,23 @@ public sealed class DownloadTestsetZipQueryHandler
     private readonly IReadRepository<Testcase , Guid> _testcaseReadRepository;
     private readonly IR2Service _r2Service;
     private readonly int _maxParallelDownloads;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public DownloadTestsetZipQueryHandler(
-        ICurrentUserService currentUser ,
-        IReadRepository<Problem , Guid> problemReadRepository ,
-        IReadRepository<Testset , Guid> testsetReadRepository ,
-        IReadRepository<Testcase , Guid> testcaseReadRepository ,
-        IR2Service r2Service ,
-        IConfiguration configuration)
+     ICurrentUserService currentUser ,
+     IReadRepository<Problem , Guid> problemReadRepository ,
+     IReadRepository<Testset , Guid> testsetReadRepository ,
+     IReadRepository<Testcase , Guid> testcaseReadRepository ,
+     IR2Service r2Service ,
+     IConfiguration configuration ,
+     IHttpContextAccessor httpContextAccessor)
     {
         _currentUser = currentUser;
         _problemReadRepository = problemReadRepository;
         _testsetReadRepository = testsetReadRepository;
         _testcaseReadRepository = testcaseReadRepository;
         _r2Service = r2Service;
+        _httpContextAccessor = httpContextAccessor;
         _maxParallelDownloads = configuration.GetValue<int?>("TestsetSettings:MaxParallelDownloads") ?? 4;
     }
 
@@ -41,13 +45,22 @@ public sealed class DownloadTestsetZipQueryHandler
         DownloadTestsetZipQuery request ,
         CancellationToken ct)
     {
-        EnsureAuthenticated();
+
+
+        //EnsureAuthenticated();
 
         var problem = await _problemReadRepository.GetByIdAsync(request.ProblemId , ct);
         if ( problem is null )
             throw new KeyNotFoundException("Problem not found.");
 
-        EnsureCanManageProblem(problem);
+        var isInternal = _httpContextAccessor.HttpContext?.Items["IsInternal"] as bool? ?? false;
+
+        if ( !isInternal )
+        {
+            EnsureAuthenticated();
+            EnsureCanManageProblem(problem);
+        }
+        //EnsureCanManageProblem(problem);
 
         var testset = await _testsetReadRepository.GetByIdAsync(request.TestsetId , ct);
         if ( testset is null || testset.ProblemId != request.ProblemId )

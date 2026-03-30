@@ -103,10 +103,12 @@ public class TestsetsController : ControllerBase
     {
         var isInternal = InternalAuthHelper.IsInternalRequest(HttpContext);
         var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
-        var isAdmin = User.IsInRole("admin");
+        var isAdmin = User.IsInRole("Admin");
 
         if ( !isInternal && !hasApiKey && !isAdmin )
             return Unauthorized("Invalid access");
+
+        HttpContext.Items["IsInternal"] = isInternal || hasApiKey;
 
         var result = await _mediator.Send(
             new DownloadTestsetZipQuery(problemId , testsetId) ,

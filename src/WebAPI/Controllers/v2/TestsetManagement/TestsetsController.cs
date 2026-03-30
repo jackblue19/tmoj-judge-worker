@@ -95,17 +95,18 @@ public class TestsetsController : ControllerBase
     [HttpGet("{problemId:guid}/{testsetId:guid}/download-zip")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [Authorize] // enable auth
     public async Task<IActionResult> DownloadZip(
-     Guid problemId ,
-     Guid testsetId ,
-     CancellationToken ct)
+    Guid problemId ,
+    Guid testsetId ,
+    CancellationToken ct)
     {
-        // auth-security-bypass-for-judge-server (vpc)
         var isInternal = InternalAuthHelper.IsInternalRequest(HttpContext);
         var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
+        var isAdmin = User.IsInRole("admin");
 
-        if ( !isInternal && !hasApiKey )
-            return Unauthorized("Invalid internal access");
+        if ( !isInternal && !hasApiKey && !isAdmin )
+            return Unauthorized("Invalid access");
 
         var result = await _mediator.Send(
             new DownloadTestsetZipQuery(problemId , testsetId) ,

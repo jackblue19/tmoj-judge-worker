@@ -10,15 +10,24 @@ namespace Infrastructure.Configurations.Security;
 
 public static class InternalAuthHelper
 {
-    public static bool IsInternalRequest(HttpContext context)
+    /*public static bool IsInternalRequest(HttpContext context)
     {
         var ip = context.Connection.RemoteIpAddress?.ToString();
 
         if ( string.IsNullOrEmpty(ip) ) return false;
 
         return ip.StartsWith("10.104."); // private network của judge-server => chung 1 vpc
-    }
+    }*/
+    public static bool IsInternalRequest(HttpContext context)
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString();
 
+        if ( string.IsNullOrEmpty(ip) ) return false;
+
+        return ip.StartsWith("10.104.")
+            || ip == "127.0.0.1"
+            || ip == "::1";
+    }
     public static bool HasValidApiKey(HttpContext context , IConfiguration config)
     {
         var apiKey = context.Request.Headers["X-API-KEY"].FirstOrDefault();

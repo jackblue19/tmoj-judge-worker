@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace Worker.Execution.Runtimes.Cp;
 
-namespace Worker.Execution.Runtimes.Cp;
-
-internal class CppExecutorProfile
+public sealed class CppExecutorProfile : ICpExecutorProfile
 {
+    public string Name => "cpp17";
+    public string SourceFileName => "main.cpp";
+    public bool HasCompileStep => true;
+    public string CompileCommand => "g++ -O2 -std=c++17 main.cpp -o main";
+    public string RunCommand => "./main";
 }

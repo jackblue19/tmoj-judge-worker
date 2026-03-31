@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace Worker.Execution.Runtimes.Cp;
 
-namespace Worker.Execution.Runtimes.Cp;
-
-internal class PythonExecutorProfile
+public sealed class PythonExecutorProfile : ICpExecutorProfile
 {
+    public string Name => "python3";
+    public string SourceFileName => "main.py";
+    public bool HasCompileStep => false;
+    public string CompileCommand => "";
+    public string RunCommand => "python3 main.py";
 }

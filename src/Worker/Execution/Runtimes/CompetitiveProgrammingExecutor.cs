@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Worker.Execution.Containers;
+using Worker.Execution.Runtimes.Cp;
 using Worker.Execution.Testset;
 
 namespace Worker.Execution.Runtimes;
@@ -14,18 +15,21 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
     private readonly DockerSandboxRunner _dockerRunner;
     private readonly string _runtimeWorkRoot;
     private readonly string _competitiveImage;
+    private readonly RuntimeProfileRegistry _profileRegistry;
 
     public CompetitiveProgrammingExecutor(
         IConfiguration configuration ,
         ILogger<CompetitiveProgrammingExecutor> logger ,
         TestsetEnsureService ensureService ,
         TestsetLayoutAdapter layoutAdapter ,
-        DockerSandboxRunner dockerRunner)
+        DockerSandboxRunner dockerRunner ,
+        RuntimeProfileRegistry profileRegistry)
     {
         _logger = logger;
         _ensureService = ensureService;
         _layoutAdapter = layoutAdapter;
         _dockerRunner = dockerRunner;
+        _profileRegistry = profileRegistry;
 
         _runtimeWorkRoot =
             configuration["Judge:RuntimeWorkRoot"]
@@ -53,7 +57,8 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         DispatchJudgeJobContract job ,
         CancellationToken ct)
     {
-        var profile = ResolveProfile(job.RuntimeName);
+        //var profile = ResolveProfile(job.RuntimeName);
+        var profile = _profileRegistry.Resolve(job.RuntimeName);
         var workDir = CreateWorkDir(job.SubmissionId);
 
         try
@@ -247,7 +252,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
     }
 
     private static string BuildRunCommand(
-        CpRuntimeProfile profile ,
+        ICpExecutorProfile profile ,
         PreparedJudgeCaseLayout prepared)
     {
         var inputRelative = GetRelativeUnixPath(prepared.InputPath , GetWorkRoot(prepared.CaseDirectory));
@@ -300,45 +305,45 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
             .Trim();
     }
 
-    private static CpRuntimeProfile ResolveProfile(string runtimeName)
-    {
-        var r = runtimeName.ToLowerInvariant();
+    //private static CpRuntimeProfile ResolveProfile(string runtimeName)
+    //{
+    //    var r = runtimeName.ToLowerInvariant();
 
-        if ( r.Contains("cpp") || r.Contains("c++") || r.Contains("prf") )
-        {
-            return new CpRuntimeProfile
-            {
-                SourceFileName = "main.cpp" ,
-                CompileCommand = "g++ -O2 -std=c++17 main.cpp -o main" ,
-                RunCommand = "./main" ,
-                HasCompileStep = true
-            };
-        }
+    //    if ( r.Contains("cpp") || r.Contains("c++") || r.Contains("prf") )
+    //    {
+    //        return new CpRuntimeProfile
+    //        {
+    //            SourceFileName = "main.cpp" ,
+    //            CompileCommand = "g++ -O2 -std=c++17 main.cpp -o main" ,
+    //            RunCommand = "./main" ,
+    //            HasCompileStep = true
+    //        };
+    //    }
 
-        if ( r.Contains("java") || r.Contains("pro") )
-        {
-            return new CpRuntimeProfile
-            {
-                SourceFileName = "Main.java" ,
-                CompileCommand = "javac Main.java" ,
-                RunCommand = "java Main" ,
-                HasCompileStep = true
-            };
-        }
+    //    if ( r.Contains("java") || r.Contains("pro") )
+    //    {
+    //        return new CpRuntimeProfile
+    //        {
+    //            SourceFileName = "Main.java" ,
+    //            CompileCommand = "javac Main.java" ,
+    //            RunCommand = "java Main" ,
+    //            HasCompileStep = true
+    //        };
+    //    }
 
-        if ( r.Contains("python") || r.Contains("pfp") )
-        {
-            return new CpRuntimeProfile
-            {
-                SourceFileName = "main.py" ,
-                CompileCommand = "" ,
-                RunCommand = "python3 main.py" ,
-                HasCompileStep = false
-            };
-        }
+    //    if ( r.Contains("python") || r.Contains("pfp") )
+    //    {
+    //        return new CpRuntimeProfile
+    //        {
+    //            SourceFileName = "main.py" ,
+    //            CompileCommand = "" ,
+    //            RunCommand = "python3 main.py" ,
+    //            HasCompileStep = false
+    //        };
+    //    }
 
-        throw new InvalidOperationException($"Unsupported competitive runtime: {runtimeName}");
-    }
+    //    throw new InvalidOperationException($"Unsupported competitive runtime: {runtimeName}");
+    //}
 
     private string CreateWorkDir(Guid submissionId)
     {
@@ -384,11 +389,11 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         };
     }
 
-    private sealed class CpRuntimeProfile
-    {
-        public string SourceFileName { get; init; } = null!;
-        public string CompileCommand { get; init; } = null!;
-        public string RunCommand { get; init; } = null!;
-        public bool HasCompileStep { get; init; }
-    }
+    //private sealed class CpRuntimeProfile
+    //{
+    //    public string SourceFileName { get; init; } = null!;
+    //    public string CompileCommand { get; init; } = null!;
+    //    public string RunCommand { get; init; } = null!;
+    //    public bool HasCompileStep { get; init; }
+    //}
 }

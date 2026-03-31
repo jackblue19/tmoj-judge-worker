@@ -1,52 +1,36 @@
-﻿namespace Worker.Execution.Runtimes;
+﻿using Worker.Execution.Runtimes.Cp;
 
-public static class RuntimeProfileRegistry
+namespace Worker.Execution.Runtimes;
+
+public sealed class RuntimeProfileRegistry
 {
-    public static CpRuntimeProfile Resolve(string runtimeName)
+    private readonly CppExecutorProfile _cpp;
+    private readonly JavaExecutorProfile _java;
+    private readonly PythonExecutorProfile _python;
+
+    public RuntimeProfileRegistry(
+        CppExecutorProfile cpp ,
+        JavaExecutorProfile java ,
+        PythonExecutorProfile python)
     {
-        var r = runtimeName.ToLowerInvariant();
+        _cpp = cpp;
+        _java = java;
+        _python = python;
+    }
+
+    public ICpExecutorProfile Resolve(string runtimeName)
+    {
+        var r = runtimeName.Trim().ToLowerInvariant();
 
         if ( r.Contains("cpp") || r.Contains("c++") || r.Contains("prf") )
-            return CpRuntimeProfile.Cpp;
+            return _cpp;
 
         if ( r.Contains("java") || r.Contains("pro") )
-            return CpRuntimeProfile.Java;
+            return _java;
 
         if ( r.Contains("python") || r.Contains("pfp") )
-            return CpRuntimeProfile.Python;
+            return _python;
 
         throw new InvalidOperationException($"Unsupported runtime: {runtimeName}");
     }
-}
-
-public sealed class CpRuntimeProfile
-{
-    public string SourceFileName { get; init; } = null!;
-    public string CompileCommand { get; init; } = null!;
-    public string RunCommand { get; init; } = null!;
-    public bool HasCompileStep { get; init; }
-
-    public static CpRuntimeProfile Cpp => new()
-    {
-        SourceFileName = "main.cpp" ,
-        CompileCommand = "g++ -O2 -std=c++17 main.cpp -o main" ,
-        RunCommand = "./main" ,
-        HasCompileStep = true
-    };
-
-    public static CpRuntimeProfile Java => new()
-    {
-        SourceFileName = "Main.java" ,
-        CompileCommand = "javac Main.java" ,
-        RunCommand = "java Main" ,
-        HasCompileStep = true
-    };
-
-    public static CpRuntimeProfile Python => new()
-    {
-        SourceFileName = "main.py" ,
-        CompileCommand = "" ,
-        RunCommand = "python3 main.py" ,
-        HasCompileStep = false
-    };
 }

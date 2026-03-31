@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace Worker.Execution.Runtimes.Cp;
 
-namespace Worker.Execution.Runtimes.Cp;
-
-internal class JavaExecutorProfile
+public sealed class JavaExecutorProfile : ICpExecutorProfile
 {
+    public string Name => "java";
+    public string SourceFileName => "Main.java";
+    public bool HasCompileStep => true;
+    public string CompileCommand => "javac Main.java";
+    public string RunCommand => "java Main";
 }

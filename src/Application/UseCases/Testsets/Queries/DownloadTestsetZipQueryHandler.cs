@@ -53,13 +53,13 @@ public sealed class DownloadTestsetZipQueryHandler
         if ( problem is null )
             throw new KeyNotFoundException("Problem not found.");
 
-        var isInternal = _httpContextAccessor.HttpContext?.Items["IsInternal"] as bool? ?? false;
+        //var isInternal = _httpContextAccessor.HttpContext?.Items["IsInternal"] as bool? ?? false;
 
-        if ( !isInternal )
-        {
-            EnsureAuthenticated();
-            EnsureCanManageProblem(problem);
-        }
+        //if ( !isInternal )
+        //{
+        //    EnsureAuthenticated();
+        //    EnsureCanManageProblem(problem);
+        //}
         //EnsureCanManageProblem(problem);
 
         var testset = await _testsetReadRepository.GetByIdAsync(request.TestsetId , ct);

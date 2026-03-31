@@ -56,6 +56,8 @@ public partial class Submission
 
     public string? UserAgent { get; set; }
 
+    public string? SourceCode { get; set; }
+
     public virtual ArtifactBlob? CodeArtifact { get; set; }
 
     public virtual ContestProblem? ContestProblem { get; set; }

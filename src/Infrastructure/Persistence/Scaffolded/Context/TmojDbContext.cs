@@ -7,6 +7,10 @@ namespace Infrastructure.Persistence.Scaffolded.Context;
 
 public partial class TmojDbContext : DbContext
 {
+    public TmojDbContext()
+    {
+    }
+
     public TmojDbContext(DbContextOptions<TmojDbContext> options)
         : base(options)
     {
@@ -157,6 +161,10 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<Wallet> Wallets { get; set; }
 
     public virtual DbSet<WalletTransaction> WalletTransactions { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+        => optionsBuilder.UseNpgsql("Host=103.57.223.247;Port=5432;Database=tmoj-beta;Username=postgres;Password=123456789;Trust Server Certificate=true");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1096,6 +1104,8 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("judge_jobs");
 
+            entity.HasIndex(e => new { e.Status , e.EnqueueAt } , "ix_judge_jobs_status_enqueue_at");
+
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
@@ -1139,6 +1149,8 @@ public partial class TmojDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("judge_runs_pkey");
 
             entity.ToTable("judge_runs");
+
+            entity.HasIndex(e => e.SubmissionId , "ix_judge_runs_submission_id");
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -1187,6 +1199,8 @@ public partial class TmojDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("judge_workers_pkey");
 
             entity.ToTable("judge_workers");
+
+            entity.HasIndex(e => e.LastSeenAt , "ix_judge_workers_last_seen_at");
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -1622,6 +1636,10 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("result");
 
+            entity.HasIndex(e => e.JudgeRunId , "ix_results_judge_run_id");
+
+            entity.HasIndex(e => e.SubmissionId , "ix_results_submission_id");
+
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
@@ -1979,6 +1997,7 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.MemoryKb).HasColumnName("memory_kb");
             entity.Property(e => e.ProblemId).HasColumnName("problem_id");
             entity.Property(e => e.RuntimeId).HasColumnName("runtime_id");
+            entity.Property(e => e.SourceCode).HasColumnName("source_code");
             entity.Property(e => e.StatusCode)
                 .HasDefaultValueSql("'queued'::text")
                 .HasColumnName("status_code");

@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.OData;
 using System.Net.WebSockets;
 using System.Text;
 using WebAPI.Extensions;
-using WebAPI.Judging;
+//using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -81,15 +81,7 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
 
-//  DI LOCAL JUDGE
-
-builder.Services.AddSingleton<JudgeConnectionRegistry>();
-builder.Services.AddSingleton<JudgeDispatchService>();
-builder.Services.AddScoped<LocalJudgeService>();
-builder.Services.AddHostedService<JudgeBridgeBackgroundService>();
-//builder.Services.AddControllers();
-
-//  v2  -   Judge Worker
+//  v2  -   Judge Worker    -   DI
 builder.Services.AddScoped<WebAPI.Services.Judging.JudgeJobDispatchService>();
 builder.Services.AddScoped<WebAPI.Services.Judging.JudgeResultApplyService>();
 

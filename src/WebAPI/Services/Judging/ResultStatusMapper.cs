@@ -18,7 +18,7 @@ public static class ResultStatusMapper
             "rte" => "re",
             "ce" => "ce",
             "ie" => "ie",
-            "skipped" => "skipped",
+            "skipped" => "ie",
             _ => "ie"
         };
     }

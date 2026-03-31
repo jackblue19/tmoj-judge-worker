@@ -1,30 +1,46 @@
-using Worker;
+using Worker.Execution;
+using Worker.Execution.Containers;
+using Worker.Execution.Runtimes;
+using Worker.Execution.Runtimes.Cp;
+using Worker.Execution.Testset;
+using Worker.Orchestration;
+using Worker.Services;
+using Worker.Workers;
 
 var builder = Host.CreateApplicationBuilder(args);
-//builder.Services.AddHostedService<Worker>();
 
+// typed client for backend internal APIs
+builder.Services.AddHttpClient<JudgeBackendClient>(client =>
+{
+    var baseUrl = builder.Configuration["JudgeBackend:BaseUrl"]
+        ?? throw new InvalidOperationException("JudgeBackend:BaseUrl is missing.");
+
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+
+// default client factory for heartbeat service
 builder.Services.AddHttpClient();
-builder.Services.AddHttpClient<Worker.Services.JudgeCallbackClient>();
 
-builder.Services.AddScoped<Worker.Execution.Testset.TestsetEnsureService>();
-builder.Services.AddScoped<Worker.Execution.Testset.TestsetPathResolver>();
-builder.Services.AddScoped<Worker.Execution.Testset.TestsetLayoutAdapter>();
+builder.Services.AddScoped<TestsetEnsureService>();
+builder.Services.AddScoped<TestsetPathResolver>();
+builder.Services.AddScoped<TestsetLayoutAdapter>();
 
-builder.Services.AddScoped<Worker.Execution.Containers.DockerSandboxRunner>();
+builder.Services.AddScoped<DockerSandboxRunner>();
 
-builder.Services.AddScoped<Worker.Execution.Runtimes.Cp.CppExecutorProfile>();
-builder.Services.AddScoped<Worker.Execution.Runtimes.Cp.JavaExecutorProfile>();
-builder.Services.AddScoped<Worker.Execution.Runtimes.Cp.PythonExecutorProfile>();
-builder.Services.AddScoped<Worker.Execution.Runtimes.RuntimeProfileRegistry>();
+builder.Services.AddScoped<CppExecutorProfile>();
+builder.Services.AddScoped<JavaExecutorProfile>();
+builder.Services.AddScoped<PythonExecutorProfile>();
+builder.Services.AddScoped<RuntimeProfileRegistry>();
 
-builder.Services.AddScoped<Worker.Execution.Runtimes.IRuntimeExecutor , Worker.Execution.Runtimes.CompetitiveProgrammingExecutor>();
+builder.Services.AddScoped<IRuntimeExecutor , CompetitiveProgrammingExecutor>();
 
-builder.Services.AddScoped<Worker.Execution.JudgeEngine>();
-builder.Services.AddScoped<Worker.Orchestration.SubmissionProcessor>();
+builder.Services.AddScoped<JudgeEngine>();
+builder.Services.AddScoped<LocalJudgeService>();
+builder.Services.AddScoped<SubmissionProcessor>();
 
-builder.Services.AddHostedService<Worker.Consumers.SubmissionCreatedConsumer>();
-builder.Services.AddHostedService<Worker.Services.JudgeWorkerHeartbeatService>();
-
+builder.Services.AddHostedService<JudgePollingWorker>();
+builder.Services.AddHostedService<JudgeWorkerHeartbeatService>();
 
 var host = builder.Build();
 host.Run();

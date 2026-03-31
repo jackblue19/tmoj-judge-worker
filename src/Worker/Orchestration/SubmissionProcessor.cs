@@ -9,16 +9,16 @@ public sealed class SubmissionProcessor
 {
     private readonly ILogger<SubmissionProcessor> _logger;
     private readonly JudgeEngine _judgeEngine;
-    private readonly JudgeCallbackClient _callbackClient;
+    private readonly JudgeBackendClient _backendClient;
 
     public SubmissionProcessor(
         ILogger<SubmissionProcessor> logger ,
         JudgeEngine judgeEngine ,
-        JudgeCallbackClient callbackClient)
+        JudgeBackendClient backendClient)
     {
         _logger = logger;
         _judgeEngine = judgeEngine;
-        _callbackClient = callbackClient;
+        _backendClient = backendClient;
     }
 
     public async Task ProcessAsync(
@@ -31,7 +31,7 @@ public sealed class SubmissionProcessor
 
         var result = await _judgeEngine.ExecuteAsync(job , ct);
 
-        await _callbackClient.SendJobCompletedAsync(result , ct);
+        await _backendClient.CompleteAsync(result , ct);
 
         _logger.LogInformation(
             "Finished processing job. JobId={JobId}, SubmissionId={SubmissionId}, Status={Status}, Verdict={Verdict}" ,

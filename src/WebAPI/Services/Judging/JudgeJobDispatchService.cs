@@ -15,7 +15,9 @@ public sealed class JudgeJobDispatchService
 
     public async Task<DispatchJudgeJobContract?> ClaimNextAsync(Guid workerId , CancellationToken ct)
     {
-        var worker = await _db.JudgeWorkers.FirstOrDefaultAsync(x => x.Id == workerId , ct);
+        var worker = await _db.JudgeWorkers
+            .FirstOrDefaultAsync(x => x.Id == workerId , ct);
+
         if ( worker is null )
             throw new InvalidOperationException($"JudgeWorker {workerId} not found.");
 
@@ -64,15 +66,15 @@ public sealed class JudgeJobDispatchService
             .FirstOrDefaultAsync(x => x.SubmissionId == submission.Id , ct)
             ?? throw new InvalidOperationException($"JudgeRun for Submission {submission.Id} not found.");
 
-        job.Status = "dequeued";
+        job.Status = "running";
         job.DequeuedAt = DateTime.UtcNow;
         job.DequeuedByWorkerId = workerId;
         job.Attempts += 1;
 
         judgeRun.WorkerId = workerId;
-        judgeRun.Status = "queued";
+        judgeRun.Status = "running";
 
-        submission.StatusCode = "judging";
+        submission.StatusCode = "running";
 
         await _db.SaveChangesAsync(ct);
 
@@ -99,11 +101,11 @@ public sealed class JudgeJobDispatchService
 
     private Task<string> ResolveSourceCodeAsync(Domain.Entities.Submission submission , CancellationToken ct)
     {
-        // TODO: sau này nếu source nằm blob/file store thì đọc từ đó.
-        // Hiện tại bạn cần bảo đảm submit v2 đang lưu source ở nơi worker có thể đọc được.
-        // Tạm thời fail fast để bạn không quên phần này.
+        if ( !string.IsNullOrWhiteSpace(submission.SourceCode) )
+            return Task.FromResult(submission.SourceCode);
+
         throw new InvalidOperationException(
-            $"ResolveSourceCodeAsync is not implemented for Submission {submission.Id}. " +
-            $"Bạn cần quyết định lưu source vào ArtifactBlob/StorageBlob hoặc cột riêng.");
+            $"Submission {submission.Id} has no source_code. " +
+            $"Need to load from code_artifact_id/storage_blob_id.");
     }
 }

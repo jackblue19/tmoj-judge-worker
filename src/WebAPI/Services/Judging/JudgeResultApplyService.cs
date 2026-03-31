@@ -28,10 +28,12 @@ public sealed class JudgeResultApplyService
             .FirstOrDefaultAsync(x => x.Id == req.JobId , ct)
             ?? throw new InvalidOperationException($"JudgeJob {req.JobId} not found.");
 
-        judgeJob.Status = req.Status == "done" ? "done" : "failed";
-        judgeJob.LastError = req.Status == "done" ? null : req.Note;
+        var normalizedJobStatus = req.Status == "done" ? "done" : "failed";
 
-        judgeRun.Status = req.Status;
+        judgeJob.Status = normalizedJobStatus;
+        judgeJob.LastError = normalizedJobStatus == "done" ? null : req.Note;
+
+        judgeRun.Status = normalizedJobStatus;
         judgeRun.FinishedAt = DateTime.UtcNow;
         judgeRun.Note = req.Note;
         judgeRun.CompileExitCode = req.Compile.ExitCode;
@@ -46,6 +48,7 @@ public sealed class JudgeResultApplyService
             submission.VerdictCode = "ce";
             submission.TimeMs = req.Summary.TimeMs;
             submission.MemoryKb = req.Summary.MemoryKb;
+            submission.FinalScore = req.Summary.FinalScore ?? 0;
             submission.JudgedAt = DateTime.UtcNow;
 
             _db.Results.Add(new Result
@@ -87,8 +90,8 @@ public sealed class JudgeResultApplyService
             RuntimeMs = x.TimeMs ,
             MemoryKb = x.MemoryKb ,
             Input = null ,
-            ExpectedOutput = null ,
-            ActualOutput = null ,
+            ExpectedOutput = x.ExpectedOutput ,
+            ActualOutput = x.ActualOutput ,
             StdoutBlobId = null ,
             StderrBlobId = null ,
             CheckerMessage = x.CheckerMessage ,
@@ -114,7 +117,8 @@ public sealed class JudgeResultApplyService
         JudgeJobCompletedContract req ,
         CancellationToken ct)
     {
-        var metric = await _db.RunMetrics.FirstOrDefaultAsync(x => x.SubmissionId == submissionId , ct);
+        var metric = await _db.RunMetrics
+            .FirstOrDefaultAsync(x => x.SubmissionId == submissionId , ct);
 
         if ( metric is null )
         {

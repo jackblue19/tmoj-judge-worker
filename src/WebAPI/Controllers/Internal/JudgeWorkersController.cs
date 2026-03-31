@@ -2,6 +2,8 @@
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using Domain.Entities;
 
 namespace WebAPI.Controllers.Internal;
 
@@ -21,29 +23,37 @@ public sealed class JudgeWorkersController : ControllerBase
         [FromBody] JudgeWorkerHeartbeatContract req ,
         CancellationToken ct)
     {
-        var worker = await _db.JudgeWorkers.FirstOrDefaultAsync(x => x.Id == req.WorkerId , ct);
+        if ( req.WorkerId == Guid.Empty )
+            return BadRequest(new { error = "WorkerId is required." });
+
+        if ( string.IsNullOrWhiteSpace(req.Name) )
+            return BadRequest(new { error = "Name is required." });
+
+        var worker = await _db.JudgeWorkers
+            .FirstOrDefaultAsync(x => x.Id == req.WorkerId , ct);
 
         if ( worker is null )
         {
-            worker = new Domain.Entities.JudgeWorker
+            worker = new JudgeWorker
             {
                 Id = req.WorkerId ,
                 Name = req.Name ,
-                Capabilities = req.Capabilities ,
                 LastSeenAt = DateTime.UtcNow ,
                 Status = req.Status ,
                 Version = req.Version
             };
 
+            SetCapabilities(worker , req.Capabilities);
             _db.JudgeWorkers.Add(worker);
         }
         else
         {
             worker.Name = req.Name;
-            worker.Capabilities = req.Capabilities;
             worker.LastSeenAt = DateTime.UtcNow;
             worker.Status = req.Status;
             worker.Version = req.Version;
+
+            SetCapabilities(worker , req.Capabilities);
         }
 
         await _db.SaveChangesAsync(ct);
@@ -79,5 +89,10 @@ public sealed class JudgeWorkersController : ControllerBase
             .ToListAsync(ct);
 
         return Ok(items);
+    }
+
+    private static void SetCapabilities(JudgeWorker worker , List<string> capabilities)
+    {
+        worker.Capabilities = capabilities ?? new List<string>();
     }
 }

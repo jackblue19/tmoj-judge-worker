@@ -13,7 +13,7 @@ public static class SubmissionFinalizer
         submission.VerdictCode = ResultStatusMapper.NormalizeVerdict(summary.Verdict);
         submission.TimeMs = summary.TimeMs;
         submission.MemoryKb = summary.MemoryKb;
-        submission.FinalScore = summary.FinalScore;
+        submission.FinalScore = summary.FinalScore ?? 0;
         submission.JudgedAt = DateTime.UtcNow;
     }
 }

@@ -1191,10 +1191,7 @@ public partial class TmojDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("judge_runs_worker_id_fkey");
         });
-        //var converter = new ValueConverter<List<string> , string>(
-        //    v => JsonSerializer.Serialize(v , (JsonSerializerOptions) null) ,
-        //    v => JsonSerializer.Deserialize<List<string>>(v , (JsonSerializerOptions) null)!
-        //);
+
         modelBuilder.Entity<JudgeWorker>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("judge_workers_pkey");
@@ -1208,10 +1205,11 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("id");
             entity
                 .Property(x => x.Capabilities)
+                .HasColumnName("capabilities")
                 .HasColumnType("jsonb")
                 .HasConversion(
-                    v => JsonSerializer.Serialize(v , (JsonSerializerOptions) null) ,
-                    v => JsonSerializer.Deserialize<List<string>>(v , (JsonSerializerOptions) null)!
+                    v => JsonSerializer.Serialize(v , (JsonSerializerOptions?) null) ,
+                    v => JsonSerializer.Deserialize<List<string>>(v , (JsonSerializerOptions?) null) ?? new List<string>()
                 );
             entity.Property(e => e.LastSeenAt).HasColumnName("last_seen_at");
             entity.Property(e => e.Name).HasColumnName("name");

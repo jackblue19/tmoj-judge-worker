@@ -67,13 +67,10 @@ public sealed class JudgeWorkerHeartbeatService : BackgroundService
                     WorkerJsonSerializerContext.Default.JudgeWorkerHeartbeatContract);
 
                 using var res = await client.SendAsync(req , stoppingToken);
-                //res.EnsureSuccessStatusCode();
+
                 if ( !res.IsSuccessStatusCode )
                 {
-                    //_logger.LogWarning("Claim failed: {Status}" , res.StatusCode);
                     _logger.LogWarning("Heartbeat failed: {Status}" , res.StatusCode);
-                    await Task.Delay(TimeSpan.FromSeconds(30) , stoppingToken);
-                    continue;
                 }
             }
             catch ( Exception ex )

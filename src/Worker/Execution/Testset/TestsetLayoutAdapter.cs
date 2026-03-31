@@ -32,13 +32,13 @@ public sealed class TestsetLayoutAdapter
         if ( !File.Exists(sourceExpected) )
             throw new FileNotFoundException($"Expected output file not found: {sourceExpected}");
 
-        var caseDir = Path.Combine(workRoot , @case.Ordinal.ToString("000"));
+        var caseDir = Path.Combine(workRoot , "cases" , @case.Ordinal.ToString("000"));
         Directory.CreateDirectory(caseDir);
 
         var mappedInput = Path.Combine(caseDir , "input.txt");
         var mappedExpected = Path.Combine(caseDir , "expected.txt");
+        var mappedActual = Path.Combine(caseDir , "actual.txt");
 
-        // batch đầu cứ copy cho chắc; sau này có thể tối ưu sang hardlink/symlink
         await CopyFileAsync(sourceInput , mappedInput , ct);
         await CopyFileAsync(sourceExpected , mappedExpected , ct);
 
@@ -54,6 +54,7 @@ public sealed class TestsetLayoutAdapter
             IsSample = @case.IsSample ,
             InputPath = mappedInput ,
             ExpectedPath = mappedExpected ,
+            ActualPath = mappedActual ,
             CaseDirectory = caseDir
         };
     }
@@ -74,5 +75,6 @@ public sealed class PreparedJudgeCaseLayout
     public bool IsSample { get; init; }
     public string InputPath { get; init; } = null!;
     public string ExpectedPath { get; init; } = null!;
+    public string ActualPath { get; init; } = null!;
     public string CaseDirectory { get; init; } = null!;
 }

@@ -30,9 +30,9 @@ public sealed class DockerSandboxRunner
 
         using var process = new Process { StartInfo = psi };
 
-        _logger.LogInformation("Starting docker process: docker {Args}" , args);
+        _logger.LogInformation("Running docker command: docker {Args}" , args);
 
-        var startedAt = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         process.Start();
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
@@ -48,19 +48,19 @@ public sealed class DockerSandboxRunner
         catch ( OperationCanceledException ) when ( !ct.IsCancellationRequested )
         {
             try { process.Kill(entireProcessTree: true); } catch { }
-            startedAt.Stop();
+            stopwatch.Stop();
 
             return new DockerRunResult
             {
                 ExitCode = -1 ,
                 TimedOut = true ,
-                ElapsedMs = (int) startedAt.ElapsedMilliseconds ,
+                ElapsedMs = (int) stopwatch.ElapsedMilliseconds ,
                 Stdout = "" ,
                 Stderr = "Docker execution timed out."
             };
         }
 
-        startedAt.Stop();
+        stopwatch.Stop();
 
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
@@ -69,7 +69,7 @@ public sealed class DockerSandboxRunner
         {
             ExitCode = process.ExitCode ,
             TimedOut = false ,
-            ElapsedMs = (int) startedAt.ElapsedMilliseconds ,
+            ElapsedMs = (int) stopwatch.ElapsedMilliseconds ,
             Stdout = stdout ?? "" ,
             Stderr = stderr ?? ""
         };
@@ -84,6 +84,15 @@ public sealed class DockerSandboxRunner
             $"--name {request.ContainerName}"
         };
 
+        if ( request.NetworkDisabled )
+            parts.Add("--network none");
+
+        if ( !string.IsNullOrWhiteSpace(request.MemoryLimit) )
+            parts.Add($"--memory {request.MemoryLimit}");
+
+        if ( !string.IsNullOrWhiteSpace(request.CpuLimit) )
+            parts.Add($"--cpus {request.CpuLimit}");
+
         foreach ( var mount in request.Mounts )
         {
             parts.Add($"-v \"{mount.HostPath}\":\"{mount.ContainerPath}\"");
@@ -95,16 +104,12 @@ public sealed class DockerSandboxRunner
         }
 
         if ( !string.IsNullOrWhiteSpace(request.WorkingDirectory) )
-        {
             parts.Add($"-w \"{request.WorkingDirectory}\"");
-        }
 
         parts.Add($"\"{request.Image}\"");
 
         if ( !string.IsNullOrWhiteSpace(request.Command) )
-        {
             parts.Add(request.Command);
-        }
 
         return string.Join(" " , parts);
     }
@@ -117,6 +122,9 @@ public sealed class DockerRunRequest
     public string? WorkingDirectory { get; init; }
     public string? Command { get; init; }
     public int TimeoutMs { get; init; } = 1000;
+    public bool NetworkDisabled { get; init; } = true;
+    public string? MemoryLimit { get; init; }
+    public string? CpuLimit { get; init; }
     public List<DockerMount> Mounts { get; init; } = new();
     public Dictionary<string , string> EnvironmentVariables { get; init; } = new();
 }

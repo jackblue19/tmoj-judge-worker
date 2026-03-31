@@ -1,62 +1,40 @@
 ﻿using Contracts.Submissions.Judging;
 using Microsoft.Extensions.Logging;
-using Worker.Execution.Runtimes;
+using Worker.Execution;
+using Worker.Services;
 
 namespace Worker.Orchestration;
 
 public sealed class SubmissionProcessor
 {
     private readonly ILogger<SubmissionProcessor> _logger;
-    private readonly IEnumerable<IRuntimeExecutor> _executors;
+    private readonly JudgeEngine _judgeEngine;
+    private readonly JudgeCallbackClient _callbackClient;
 
     public SubmissionProcessor(
         ILogger<SubmissionProcessor> logger ,
-        IEnumerable<IRuntimeExecutor> executors)
+        JudgeEngine judgeEngine ,
+        JudgeCallbackClient callbackClient)
     {
         _logger = logger;
-        _executors = executors;
+        _judgeEngine = judgeEngine;
+        _callbackClient = callbackClient;
     }
 
-    public async Task<JudgeJobCompletedContract> ProcessAsync(
+    public async Task ProcessAsync(
         DispatchJudgeJobContract job ,
         CancellationToken ct)
     {
         _logger.LogInformation(
-            "Processing JobId={JobId}, SubmissionId={SubmissionId}, Runtime={RuntimeName}" ,
-            job.JobId , job.SubmissionId , job.RuntimeName);
+            "Start processing job. JobId={JobId}, JudgeRunId={JudgeRunId}, SubmissionId={SubmissionId}" ,
+            job.JobId , job.JudgeRunId , job.SubmissionId);
 
-        var executor = _executors.FirstOrDefault(x => x.CanHandle(job));
-        if ( executor is null )
-        {
-            return new JudgeJobCompletedContract
-            {
-                JobId = job.JobId ,
-                JudgeRunId = job.JudgeRunId ,
-                SubmissionId = job.SubmissionId ,
-                WorkerId = job.WorkerId ,
-                Status = "failed" ,
-                Note = $"No runtime executor found for runtime '{job.RuntimeName}'." ,
-                Compile = new JudgeCompileResultContract
-                {
-                    Ok = false ,
-                    ExitCode = -1 ,
-                    TimeMs = 0 ,
-                    Stdout = "" ,
-                    Stderr = "Unsupported runtime."
-                } ,
-                Summary = new JudgeSummaryResultContract
-                {
-                    Verdict = "ie" ,
-                    Passed = 0 ,
-                    Total = job.Cases.Count ,
-                    TimeMs = 0 ,
-                    MemoryKb = 0 ,
-                    FinalScore = 0
-                } ,
-                Cases = new List<JudgeCaseCompletedContract>()
-            };
-        }
+        var result = await _judgeEngine.ExecuteAsync(job , ct);
 
-        return await executor.ExecuteAsync(job , ct);
+        await _callbackClient.SendJobCompletedAsync(result , ct);
+
+        _logger.LogInformation(
+            "Finished processing job. JobId={JobId}, SubmissionId={SubmissionId}, Status={Status}, Verdict={Verdict}" ,
+            result.JobId , result.SubmissionId , result.Status , result.Summary.Verdict);
     }
 }

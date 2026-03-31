@@ -1,133 +1,133 @@
 ﻿using Contracts.Submissions.Judging;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Worker.Execution.Containers;
 using Worker.Execution.Testset;
+using Worker.Execution.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace Worker.Execution.Runtimes;
 
 public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
 {
     private readonly ILogger<CompetitiveProgrammingExecutor> _logger;
-    private readonly TestsetEnsureService _ensureService;
-    private readonly TestsetLayoutAdapter _layoutAdapter;
-    private readonly DockerSandboxRunner _dockerRunner;
-    private readonly string _runtimeWorkRoot;
-    private readonly string _competitiveImage;
+    private readonly TestsetEnsureService _ensure;
+    private readonly TestsetLayoutAdapter _adapter;
+    private readonly DockerSandboxRunner _docker;
 
     public CompetitiveProgrammingExecutor(
-        IConfiguration configuration ,
         ILogger<CompetitiveProgrammingExecutor> logger ,
-        TestsetEnsureService ensureService ,
-        TestsetLayoutAdapter layoutAdapter ,
-        DockerSandboxRunner dockerRunner)
+        TestsetEnsureService ensure ,
+        TestsetLayoutAdapter adapter ,
+        DockerSandboxRunner docker)
     {
         _logger = logger;
-        _ensureService = ensureService;
-        _layoutAdapter = layoutAdapter;
-        _dockerRunner = dockerRunner;
-
-        _runtimeWorkRoot =
-            configuration["Judge:RuntimeWorkRoot"]
-            ?? "/var/lib/tmoj/runtime";
-
-        _competitiveImage =
-            configuration["Docker:CompetitiveImage"]
-            ?? "vnoj/judge-tiericpc:amd64-latest";
+        _ensure = ensure;
+        _adapter = adapter;
+        _docker = docker;
     }
 
     public bool CanHandle(DispatchJudgeJobContract job)
-    {
-        var runtime = job.RuntimeName.Trim().ToLowerInvariant();
-
-        return runtime.Contains("c++")
-            || runtime.Contains("cpp")
-            || runtime.Contains("java")
-            || runtime.Contains("python")
-            || runtime.Contains("prf")
-            || runtime.Contains("pro")
-            || runtime.Contains("pfp");
-    }
+        => true; // only CP for now
 
     public async Task<JudgeJobCompletedContract> ExecuteAsync(
         DispatchJudgeJobContract job ,
         CancellationToken ct)
     {
-        var workDir = CreateWorkDir(job.SubmissionId);
+        var profile = RuntimeProfileRegistry.Resolve(job.RuntimeName);
+
+        var workDir = Path.Combine("/var/lib/tmoj/runtime" , $"{job.SubmissionId:N}");
+        Directory.CreateDirectory(workDir);
 
         try
         {
-            _logger.LogInformation(
-                "CP executor start. SubmissionId={SubmissionId}, Runtime={RuntimeName}, TestsetId={TestsetId}" ,
-                job.SubmissionId , job.RuntimeName , job.TestsetId);
+            // 1. ensure testset
+            await _ensure.EnsureAsync(job.ProblemSlug , job.TestsetId , job.ProblemId , ct);
 
-            await _ensureService.EnsureAsync(
-                job.ProblemSlug ,
-                job.TestsetId ,
-                job.ProblemId ,
-                ct);
+            // 2. write source
+            var sourcePath = Path.Combine(workDir , profile.SourceFileName);
+            await File.WriteAllTextAsync(sourcePath , job.SourceCode , ct);
 
-            var preparedCases = new List<PreparedJudgeCaseLayout>();
-            foreach ( var @case in job.Cases.OrderBy(x => x.Ordinal) )
+            // 3. compile (if needed)
+            if ( profile.HasCompileStep )
             {
-                var prepared = await _layoutAdapter.PrepareCaseAsync(
+                var compile = await _docker.RunAsync(new DockerRunRequest
+                {
+                    Image = "vnoj/judge-tiericpc:amd64-latest" ,
+                    WorkingDirectory = "/work" ,
+                    Mounts = new()
+                    {
+                        new() { HostPath = workDir, ContainerPath = "/work" }
+                    } ,
+                    Command = $"sh -lc \"{profile.CompileCommand}\"" ,
+                    TimeoutMs = job.TimeLimitMs * 2
+                } , ct);
+
+                if ( compile.ExitCode != 0 )
+                {
+                    return BuildCompileError(job , compile);
+                }
+            }
+
+            var results = new List<JudgeCaseCompletedContract>();
+            int passed = 0;
+
+            // 4. run testcases
+            foreach ( var c in job.Cases.OrderBy(x => x.Ordinal) )
+            {
+                var prepared = await _adapter.PrepareCaseAsync(
                     job.ProblemSlug ,
                     job.TestsetId ,
-                    @case ,
+                    c ,
                     workDir ,
                     ct);
 
-                preparedCases.Add(prepared);
+                var outputPath = Path.Combine(prepared.CaseDirectory , "actual.txt");
+
+                var run = await _docker.RunAsync(new DockerRunRequest
+                {
+                    Image = "vnoj/judge-tiericpc:amd64-latest" ,
+                    WorkingDirectory = "/work" ,
+                    Mounts = new()
+                    {
+                        new() { HostPath = workDir, ContainerPath = "/work" }
+                    } ,
+                    Command =
+                        $"sh -lc \"{profile.RunCommand} < {prepared.InputPath} > {outputPath}\"" ,
+                    TimeoutMs = job.TimeLimitMs
+                } , ct);
+
+                string actual = File.Exists(outputPath)
+                    ? await File.ReadAllTextAsync(outputPath , ct)
+                    : "";
+
+                string expected = await File.ReadAllTextAsync(prepared.ExpectedPath , ct);
+
+                string verdict;
+
+                if ( run.TimedOut ) verdict = "tle";
+                else if ( run.ExitCode != 0 ) verdict = "re";
+                else if ( OutputComparer.Compare(expected , actual) ) verdict = "ac";
+                else verdict = "wa";
+
+                if ( verdict == "ac" ) passed++;
+
+                results.Add(new JudgeCaseCompletedContract
+                {
+                    TestcaseId = c.TestcaseId ,
+                    Ordinal = c.Ordinal ,
+                    Verdict = verdict ,
+                    ExitCode = run.ExitCode ,
+                    TimedOut = run.TimedOut ,
+                    TimeMs = run.ElapsedMs ,
+                    MemoryKb = null ,
+                    ActualOutput = actual ,
+                    ExpectedOutput = null
+                });
+
+                if ( job.StopOnFirstFail && verdict != "ac" )
+                    break;
             }
 
-            // TODO batch 3:
-            // - resolve runtime profile (cpp/java/python)
-            // - write source file
-            // - compile in container
-            // - run each testcase in container
-            // - diff actual vs expected
-            // - aggregate verdict
-
-            // temporary placeholder docker ping
-            var ping = await _dockerRunner.RunAsync(
-                new DockerRunRequest
-                {
-                    Image = _competitiveImage ,
-                    TimeoutMs = 5000 ,
-                    Command = "sh -lc \"echo judge-runtime-ok\""
-                } ,
-                ct);
-
-            if ( ping.TimedOut || ping.ExitCode != 0 )
-            {
-                return new JudgeJobCompletedContract
-                {
-                    JobId = job.JobId ,
-                    JudgeRunId = job.JudgeRunId ,
-                    SubmissionId = job.SubmissionId ,
-                    WorkerId = job.WorkerId ,
-                    Status = "failed" ,
-                    Note = $"Runtime container bootstrap failed. exit={ping.ExitCode}" ,
-                    Compile = new JudgeCompileResultContract
-                    {
-                        Ok = false ,
-                        ExitCode = ping.ExitCode ,
-                        TimeMs = ping.ElapsedMs ,
-                        Stdout = ping.Stdout ,
-                        Stderr = ping.Stderr
-                    } ,
-                    Summary = new JudgeSummaryResultContract
-                    {
-                        Verdict = "ie" ,
-                        Passed = 0 ,
-                        Total = job.Cases.Count ,
-                        TimeMs = ping.ElapsedMs ,
-                        MemoryKb = 0 ,
-                        FinalScore = 0
-                    } ,
-                    Cases = new List<JudgeCaseCompletedContract>()
-                };
-            }
+            var finalVerdict = results.All(x => x.Verdict == "ac") ? "ac" : results.First(x => x.Verdict != "ac").Verdict;
 
             return new JudgeJobCompletedContract
             {
@@ -135,34 +135,21 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                 JudgeRunId = job.JudgeRunId ,
                 SubmissionId = job.SubmissionId ,
                 WorkerId = job.WorkerId ,
-                Status = "failed" ,
-                Note = "CompetitiveProgrammingExecutor skeleton only. Compile/run pipeline not wired yet." ,
-                Compile = new JudgeCompileResultContract
+                Status = "done" ,
+                Compile = new() { Ok = true , ExitCode = 0 } ,
+                Summary = new()
                 {
-                    Ok = false ,
-                    ExitCode = -1 ,
-                    TimeMs = 0 ,
-                    Stdout = ping.Stdout ,
-                    Stderr = "Compile/run not implemented yet."
+                    Verdict = finalVerdict ,
+                    Passed = passed ,
+                    Total = job.Cases.Count ,
+                    TimeMs = results.Max(x => x.TimeMs) ,
+                    FinalScore = (decimal) passed / job.Cases.Count * 100
                 } ,
-                Summary = new JudgeSummaryResultContract
-                {
-                    Verdict = "ie" ,
-                    Passed = 0 ,
-                    Total = preparedCases.Count ,
-                    TimeMs = 0 ,
-                    MemoryKb = 0 ,
-                    FinalScore = 0
-                } ,
-                Cases = new List<JudgeCaseCompletedContract>()
+                Cases = results
             };
         }
         catch ( Exception ex )
         {
-            _logger.LogError(ex ,
-                "CP executor crashed. SubmissionId={SubmissionId}, JobId={JobId}" ,
-                job.SubmissionId , job.JobId);
-
             return new JudgeJobCompletedContract
             {
                 JobId = job.JobId ,
@@ -171,40 +158,40 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                 WorkerId = job.WorkerId ,
                 Status = "failed" ,
                 Note = ex.Message ,
-                Compile = new JudgeCompileResultContract
-                {
-                    Ok = false ,
-                    ExitCode = -1 ,
-                    TimeMs = 0 ,
-                    Stdout = "" ,
-                    Stderr = ex.ToString()
-                } ,
-                Summary = new JudgeSummaryResultContract
-                {
-                    Verdict = "ie" ,
-                    Passed = 0 ,
-                    Total = job.Cases.Count ,
-                    TimeMs = 0 ,
-                    MemoryKb = 0 ,
-                    FinalScore = 0
-                } ,
-                Cases = new List<JudgeCaseCompletedContract>()
+                Compile = new() { Ok = false } ,
+                Summary = new() { Verdict = "ie" }
             };
         }
         finally
         {
-            try { Directory.Delete(workDir , recursive: true); } catch { }
+            try { Directory.Delete(workDir , true); } catch { }
         }
     }
 
-    private string CreateWorkDir(Guid submissionId)
+    private static JudgeJobCompletedContract BuildCompileError(
+        DispatchJudgeJobContract job ,
+        DockerRunResult compile)
     {
-        var dir = Path.Combine(
-            _runtimeWorkRoot ,
-            "cp" ,
-            $"{submissionId:N}-{Guid.NewGuid():N}");
-
-        Directory.CreateDirectory(dir);
-        return dir;
+        return new JudgeJobCompletedContract
+        {
+            JobId = job.JobId ,
+            JudgeRunId = job.JudgeRunId ,
+            SubmissionId = job.SubmissionId ,
+            WorkerId = job.WorkerId ,
+            Status = "compile_error" ,
+            Compile = new()
+            {
+                Ok = false ,
+                ExitCode = compile.ExitCode ,
+                Stdout = compile.Stdout ,
+                Stderr = compile.Stderr
+            } ,
+            Summary = new()
+            {
+                Verdict = "ce" ,
+                Passed = 0 ,
+                Total = job.Cases.Count
+            }
+        };
     }
 }

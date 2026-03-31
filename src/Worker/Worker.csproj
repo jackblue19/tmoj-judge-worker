@@ -27,4 +27,8 @@
     <ProjectReference Include="..\Domain\Domain.csproj" />
     <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Execution\Runtimes\Cp\" />
+  </ItemGroup>
 </Project>

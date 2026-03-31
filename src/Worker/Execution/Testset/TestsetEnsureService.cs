@@ -41,8 +41,8 @@ public sealed class TestsetEnsureService
         using var process = new Process { StartInfo = psi };
 
         _logger.LogInformation(
-            "Ensuring testset via script. Slug={Slug}, TestsetId={TestsetId}, ProblemId={ProblemId}, Script={ScriptPath}" ,
-            slug , testsetId , problemId , _scriptPath);
+            "Ensuring testset. Slug={Slug}, TestsetId={TestsetId}, ProblemId={ProblemId}" ,
+            slug , testsetId , problemId);
 
         process.Start();
 

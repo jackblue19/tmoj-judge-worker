@@ -106,6 +106,10 @@ public class TestsetsController : ControllerBase
         var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
         var isAdmin = User.IsInRole("Admin");
 
+        Console.WriteLine($"[DownloadZip] isInternal={isInternal}, hasApiKey={hasApiKey}, isAdmin={isAdmin}");
+        Console.WriteLine($"[DownloadZip] Header X-API-KEY = {HttpContext.Request.Headers["X-API-KEY"].ToString()}");
+        Console.WriteLine($"[DownloadZip] Config JudgeApiKey = {_configuration["InternalAuth:JudgeApiKey"]}");
+
         if ( !isInternal && !hasApiKey && !isAdmin )
             return Unauthorized("Invalid access");
 

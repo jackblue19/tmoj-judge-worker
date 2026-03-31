@@ -10,30 +10,28 @@ namespace Infrastructure.Configurations.Security;
 
 public static class InternalAuthHelper
 {
-    /*public static bool IsInternalRequest(HttpContext context)
+    public static bool HasValidApiKey(HttpContext httpContext , IConfiguration configuration)
     {
-        var ip = context.Connection.RemoteIpAddress?.ToString();
+        var provided = httpContext.Request.Headers["X-API-KEY"].FirstOrDefault();
+        if ( string.IsNullOrWhiteSpace(provided) )
+            return false;
 
-        if ( string.IsNullOrEmpty(ip) ) return false;
+        var expected = configuration["InternalAuth:JudgeApiKey"];
+        if ( string.IsNullOrWhiteSpace(expected) )
+            return false;
 
-        return ip.StartsWith("10.104."); // private network của judge-server => chung 1 vpc
-    }*/
-    public static bool IsInternalRequest(HttpContext context)
-    {
-        var ip = context.Connection.RemoteIpAddress?.ToString();
-
-        if ( string.IsNullOrEmpty(ip) ) return false;
-
-        return ip.StartsWith("10.104.")
-            || ip == "127.0.0.1"
-            || ip == "::1";
+        return string.Equals(provided , expected , StringComparison.Ordinal);
     }
-    public static bool HasValidApiKey(HttpContext context , IConfiguration config)
+
+    public static bool IsInternalRequest(HttpContext httpContext)
     {
-        var apiKey = context.Request.Headers["X-API-KEY"].FirstOrDefault();
+        var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
+        if ( string.IsNullOrWhiteSpace(remoteIp) )
+            return false;
 
-        if ( string.IsNullOrEmpty(apiKey) ) return false;
-
-        return apiKey == config["InternalAuth:JudgeApiKey"];
+        return remoteIp.StartsWith("10.104.")
+            || remoteIp.StartsWith("10.15.")
+            || remoteIp == "127.0.0.1"
+            || remoteIp == "::1";
     }
 }

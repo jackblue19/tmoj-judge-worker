@@ -45,10 +45,6 @@ public sealed class DownloadTestsetZipQueryHandler
         DownloadTestsetZipQuery request ,
         CancellationToken ct)
     {
-
-
-        //EnsureAuthenticated();
-
         var problem = await _problemReadRepository.GetByIdAsync(request.ProblemId , ct);
         if ( problem is null )
             throw new KeyNotFoundException("Problem not found.");
@@ -60,7 +56,6 @@ public sealed class DownloadTestsetZipQueryHandler
             EnsureAuthenticated();
             EnsureCanManageProblem(problem);
         }
-        EnsureCanManageProblem(problem);
 
         var testset = await _testsetReadRepository.GetByIdAsync(request.TestsetId , ct);
         if ( testset is null || testset.ProblemId != request.ProblemId )

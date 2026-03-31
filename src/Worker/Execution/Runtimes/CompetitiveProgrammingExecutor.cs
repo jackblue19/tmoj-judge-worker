@@ -99,6 +99,20 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
 
                 if ( compileResult.TimedOut || compileResult.ExitCode != 0 )
                     return BuildCompileError(job , compileResult);
+
+                //  logs bugs
+                var exePath = Path.Combine(workDir , "main");
+                if ( profile.HasCompileStep && !File.Exists(exePath) )
+                {
+                    throw new InvalidOperationException(
+                        $"Compiled binary not found at {exePath}");
+                }
+
+                if ( !File.Exists(exePath) )
+                {
+                    throw new InvalidOperationException(
+                        $"Compiled binary not found at {exePath}. Compile step likely failed silently.");
+                }
             }
 
             var caseResults = new List<JudgeCaseCompletedContract>();
@@ -132,10 +146,15 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
 
                 totalTimeMs += runResult.ElapsedMs;
 
-                var actualOutput = File.Exists(prepared.ActualPath)
-                    ? await File.ReadAllTextAsync(prepared.ActualPath , ct)
-                    : "";
+                if ( !File.Exists(prepared.ActualPath) )
+                {
+                    throw new InvalidOperationException(
+                        $"Execution produced no output file: {prepared.ActualPath}. " +
+                        $"ExitCode={runResult.ExitCode}, TimedOut={runResult.TimedOut}, " +
+                        $"Stdout=[{runResult.Stdout}], Stderr=[{runResult.Stderr}]");
+                }
 
+                var actualOutput = await File.ReadAllTextAsync(prepared.ActualPath , ct);
                 var expectedOutput = await File.ReadAllTextAsync(prepared.ExpectedPath , ct);
 
                 var verdict = DetermineVerdict(runResult , expectedOutput , actualOutput);

@@ -1,6 +1,6 @@
 ﻿using Domain.Abstractions;
-using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Extensions;
@@ -9,6 +9,10 @@ public sealed class AutoWrapResponseFilter : IAsyncResultFilter
 {
     public Task OnResultExecutionAsync(ResultExecutingContext context , ResultExecutionDelegate next)
     {
+        // Skip toàn bộ internal APIs: machine-to-machine contracts must stay raw
+        if ( IsInternalApi(context) )
+            return next();
+
         // Skip các response đặc biệt
         if ( context.Result is FileResult
             || context.Result is EmptyResult
@@ -47,6 +51,12 @@ public sealed class AutoWrapResponseFilter : IAsyncResultFilter
         return next();
     }
 
+    private static bool IsInternalApi(ResultExecutingContext context)
+    {
+        var path = context.HttpContext.Request.Path;
+        return path.StartsWithSegments("/api/internal" , StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsAlreadyWrapped(object? value)
     {
         if ( value is null ) return false;
@@ -61,7 +71,6 @@ public sealed class AutoWrapResponseFilter : IAsyncResultFilter
     private static IActionResult WrapNormal(ObjectResult obj , string traceId)
     {
         var status = obj.StatusCode;
-
         var value = obj.Value ?? new object();
         var valueType = obj.Value?.GetType() ?? typeof(object);
 
@@ -82,17 +91,12 @@ public sealed class AutoWrapResponseFilter : IAsyncResultFilter
         if ( t.GetGenericTypeDefinition() != typeof(PagedResult<>) ) return false;
 
         var itemType = t.GetGenericArguments()[0];
-
-        // PagedResult<T>
-        //var items = (System.Collections.IEnumerable) t.GetProperty("Items")!.GetValue(obj.Value)!;
         var itemsObj = t.GetProperty("Items")!.GetValue(obj.Value)!;
 
         var page = (int) t.GetProperty("Page")!.GetValue(obj.Value)!;
         var pageSize = (int) t.GetProperty("PageSize")!.GetValue(obj.Value)!;
-
         var totalCount = (long) t.GetProperty("TotalCount")!.GetValue(obj.Value)!;
         var totalPages = (long) t.GetProperty("TotalPages")!.GetValue(obj.Value)!;
-
         var hasPrev = (bool) t.GetProperty("HasPrevious")!.GetValue(obj.Value)!;
         var hasNext = (bool) t.GetProperty("HasNext")!.GetValue(obj.Value)!;
 

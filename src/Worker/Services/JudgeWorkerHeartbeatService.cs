@@ -35,7 +35,15 @@ public sealed class JudgeWorkerHeartbeatService : BackgroundService
                 ?? throw new InvalidOperationException("Judge:WorkerId is missing.")) ,
             Name = configuration["Judge:WorkerName"] ?? "judge-server-tmoj" ,
             Version = "v2" ,
-            Capabilities = "cp,cpp,java,python,docker,vnoj-tier3" ,
+            Capabilities = new List<string>
+                {
+                    "cp",
+                    "cpp",
+                    "java",
+                    "python",
+                    "docker",
+                    "vnoj-tier3"
+                } ,
             Status = "online"
         };
     }

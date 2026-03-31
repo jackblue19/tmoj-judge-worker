@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.Persistence.Scaffolded.Context;
 
@@ -1193,7 +1194,10 @@ public partial class TmojDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("judge_runs_worker_id_fkey");
         });
-
+        //var converter = new ValueConverter<List<string> , string>(
+        //    v => JsonSerializer.Serialize(v , (JsonSerializerOptions) null) ,
+        //    v => JsonSerializer.Deserialize<List<string>>(v , (JsonSerializerOptions) null)!
+        //);
         modelBuilder.Entity<JudgeWorker>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("judge_workers_pkey");

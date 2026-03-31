@@ -65,6 +65,13 @@ public sealed class DockerSandboxRunner
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
 
+        _logger.LogInformation(
+            "Docker finished. ExitCode={ExitCode}, ElapsedMs={ElapsedMs}, Stdout={Stdout}, Stderr={Stderr}" ,
+            process.ExitCode ,
+            stopwatch.ElapsedMilliseconds ,
+            stdout ,
+            stderr);
+
         return new DockerRunResult
         {
             ExitCode = process.ExitCode ,
@@ -106,6 +113,10 @@ public sealed class DockerSandboxRunner
         if ( !string.IsNullOrWhiteSpace(request.WorkingDirectory) )
             parts.Add($"-w \"{request.WorkingDirectory}\"");
 
+        // 🔥 FIX QUAN TRỌNG
+        if ( !string.IsNullOrWhiteSpace(request.Entrypoint) )
+            parts.Add($"--entrypoint \"{request.Entrypoint}\"");
+
         parts.Add($"\"{request.Image}\"");
 
         if ( !string.IsNullOrWhiteSpace(request.Command) )
@@ -119,6 +130,7 @@ public sealed class DockerRunRequest
 {
     public string ContainerName { get; init; } = $"tmoj-{Guid.NewGuid():N}";
     public string Image { get; init; } = null!;
+    public string? Entrypoint { get; init; }   // 🔥 NEW
     public string? WorkingDirectory { get; init; }
     public string? Command { get; init; }
     public int TimeoutMs { get; init; } = 1000;

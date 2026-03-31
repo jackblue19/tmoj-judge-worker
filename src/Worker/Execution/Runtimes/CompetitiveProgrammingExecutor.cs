@@ -85,6 +85,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     new DockerRunRequest
                     {
                         Image = ResolveImage(job) ,
+                        Entrypoint = "/bin/bash" ,
                         WorkingDirectory = "/work" ,
                         TimeoutMs = Math.Max(job.TimeLimitMs * 2 , 5000) ,
                         MemoryLimit = ResolveMemoryLimit(job.MemoryLimitKb) ,
@@ -93,7 +94,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                         {
                             new DockerMount { HostPath = workDir, ContainerPath = "/work" }
                         } ,
-                        Command = $"bash -lc \"{profile.CompileCommand}\""
+                        Command = $"-lc \"{profile.CompileCommand}\""
                     } ,
                     ct);
 
@@ -129,20 +130,21 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     ct);
 
                 var runResult = await _dockerRunner.RunAsync(
-                    new DockerRunRequest
-                    {
-                        Image = ResolveImage(job) ,
-                        WorkingDirectory = "/work" ,
-                        TimeoutMs = Math.Max(job.TimeLimitMs , 1000) ,
-                        MemoryLimit = ResolveMemoryLimit(job.MemoryLimitKb) ,
-                        CpuLimit = "1.0" ,
-                        Mounts = new()
-                        {
+                     new DockerRunRequest
+                     {
+                         Image = ResolveImage(job) ,
+                         Entrypoint = "/bin/bash" , // 🔥 FIX
+                         WorkingDirectory = "/work" ,
+                         TimeoutMs = Math.Max(job.TimeLimitMs , 1000) ,
+                         MemoryLimit = ResolveMemoryLimit(job.MemoryLimitKb) ,
+                         CpuLimit = "1.0" ,
+                         Mounts = new()
+                         {
                             new DockerMount { HostPath = workDir, ContainerPath = "/work" }
-                        } ,
-                        Command = BuildRunCommand(profile , prepared)
-                    } ,
-                    ct);
+                         } ,
+                         Command = BuildRunCommand(profile , prepared)
+                     } ,
+                     ct);
 
                 totalTimeMs += runResult.ElapsedMs;
 
@@ -304,7 +306,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         var inputRelative = GetRelativeUnixPath(prepared.InputPath , GetWorkRoot(prepared.CaseDirectory));
         var outputRelative = GetRelativeUnixPath(prepared.ActualPath , GetWorkRoot(prepared.CaseDirectory));
 
-        return $"bash -lc \"{profile.RunCommand} < '{inputRelative}' > '{outputRelative}'\"";
+        return $"-lc \"{profile.RunCommand} < '{inputRelative}' > '{outputRelative}'\"";
     }
 
     private static string GetWorkRoot(string caseDirectory)

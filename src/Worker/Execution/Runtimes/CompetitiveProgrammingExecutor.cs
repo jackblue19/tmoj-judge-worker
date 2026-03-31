@@ -61,6 +61,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         var profile = _profileRegistry.Resolve(job.RuntimeName);
         var workDir = CreateWorkDir(job.SubmissionId);
 
+        var shouldCleanup = true;
         try
         {
             _logger.LogInformation(
@@ -139,6 +140,16 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
 
                 var verdict = DetermineVerdict(runResult , expectedOutput , actualOutput);
 
+                if ( verdict == "wa" )
+                {
+                    _logger.LogWarning(
+                        "WA detected. SubmissionId={SubmissionId}, Ordinal={Ordinal}, Expected={Expected}, Actual={Actual}" ,
+                        job.SubmissionId ,
+                        c.Ordinal ,
+                        Normalize(expectedOutput) ,
+                        Normalize(actualOutput));
+                }
+
                 caseResults.Add(new JudgeCaseCompletedContract
                 {
                     TestcaseId = c.TestcaseId ,
@@ -151,10 +162,12 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     Stdout = runResult.Stdout ,
                     Stderr = runResult.Stderr ,
                     ActualOutput = actualOutput ,
-                    ExpectedOutput = null ,
+                    ExpectedOutput = expectedOutput ,
                     CheckerMessage = verdict == "wa" ? "Wrong Answer" : null ,
                     Message = verdict ,
-                    Note = null
+                    Note = verdict == "wa"
+                            ? $"Expected(normalized)=[{Normalize(expectedOutput)}] | Actual(normalized)=[{Normalize(actualOutput)}]"
+                            : null
                 });
 
                 if ( job.StopOnFirstFail && verdict != "ac" )
@@ -165,6 +178,8 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
             var finalVerdict = caseResults.Any(x => x.Verdict != "ac")
                 ? caseResults.First(x => x.Verdict != "ac").Verdict
                 : "ac";
+            if ( finalVerdict != "ac" )
+                shouldCleanup = false;
 
             var finalScore = job.Cases.Count == 0
                 ? 0m
@@ -204,6 +219,8 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                 "CP executor crashed. SubmissionId={SubmissionId}, JobId={JobId}" ,
                 job.SubmissionId , job.JobId);
 
+            shouldCleanup = false;
+
             return new JudgeJobCompletedContract
             {
                 JobId = job.JobId ,
@@ -234,7 +251,17 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         }
         finally
         {
-            try { Directory.Delete(workDir , recursive: true); } catch { }
+            if ( shouldCleanup )
+            {
+                try { Directory.Delete(workDir , recursive: true); } catch { }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Keeping workDir for debugging. SubmissionId={SubmissionId}, WorkDir={WorkDir}" ,
+                    job.SubmissionId , workDir);
+            }
+            //try { Directory.Delete(workDir , recursive: true); } catch { }
         }
     }
 
@@ -366,7 +393,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
             JudgeRunId = job.JudgeRunId ,
             SubmissionId = job.SubmissionId ,
             WorkerId = job.WorkerId ,
-            Status = "compile_error" ,
+            Status = "failed" ,
             Note = "Compile failed." ,
             Compile = new JudgeCompileResultContract
             {

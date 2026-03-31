@@ -95,21 +95,21 @@ public class TestsetsController : ControllerBase
     [HttpGet("{problemId:guid}/{testsetId:guid}/download-zip")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [AllowAnonymous]
-    //[Authorize] // enable auth
+    //[AllowAnonymous]
+    [Authorize] // enable auth
     public async Task<IActionResult> DownloadZip(
     Guid problemId ,
     Guid testsetId ,
     CancellationToken ct)
     {
-        //var isInternal = InternalAuthHelper.IsInternalRequest(HttpContext);
-        //var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
-        //var isAdmin = User.IsInRole("Admin");
+        var isInternal = InternalAuthHelper.IsInternalRequest(HttpContext);
+        var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
+        var isAdmin = User.IsInRole("Admin");
 
-        //if ( !isInternal && !hasApiKey && !isAdmin )
-            //return Unauthorized("Invalid access");
+        if ( !isInternal && !hasApiKey && !isAdmin )
+            return Unauthorized("Invalid access");
 
-        //HttpContext.Items["IsInternal"] = isInternal || hasApiKey;
+        HttpContext.Items["IsInternal"] = isInternal || hasApiKey;
 
         var result = await _mediator.Send(
             new DownloadTestsetZipQuery(problemId , testsetId) ,

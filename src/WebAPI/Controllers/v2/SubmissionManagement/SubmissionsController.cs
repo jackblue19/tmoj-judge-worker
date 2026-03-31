@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebAPI.Controllers.v2.SubmissionManagement;
 
@@ -23,6 +25,7 @@ public sealed class SubmissionsController : ControllerBase
         _db = db;
     }
 
+    [Authorize]
     [HttpPost]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> Submit(
@@ -133,10 +136,20 @@ public sealed class SubmissionsController : ControllerBase
             WorkerId = null ,
             StartedAt = DateTime.UtcNow ,
             FinishedAt = null ,
-            Status = "queued" ,
+
+            // judge_runs chỉ nên là running/done/failed
+            Status = "running" ,
+
             RuntimeId = runtime.Id ,
             DockerImage = runtime.ImageRef ,
-            Limits = $"time={timeLimitMs};memory={memoryLimitKb}" ,
+
+            // json hợp lệ cho cột jsonb
+            Limits = JsonSerializer.Serialize(new
+            {
+                timeMs = timeLimitMs ,
+                memoryKb = memoryLimitKb
+            }) ,
+
             Note = null ,
             CompileLogBlobId = null ,
             CompileExitCode = null ,

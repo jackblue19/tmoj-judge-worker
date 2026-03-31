@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using Domain.Entities;
@@ -1203,14 +1203,23 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity
-                .Property(x => x.Capabilities)
+
+            var capabilitiesConverter = new ValueConverter<List<string> , string>(
+                v => JsonSerializer.Serialize(v ?? new List<string>() , (JsonSerializerOptions?) null) ,
+                v => DeserializeCapabilities(v)
+            );
+            entity.Property(e => e.Capabilities)
                 .HasColumnName("capabilities")
                 .HasColumnType("jsonb")
-                .HasConversion(
-                    v => JsonSerializer.Serialize(v , (JsonSerializerOptions?) null) ,
-                    v => JsonSerializer.Deserialize<List<string>>(v , (JsonSerializerOptions?) null) ?? new List<string>()
-                );
+                .HasConversion(capabilitiesConverter);
+
+
+
+            entity.Property(e => e.Capabilities)
+                .HasColumnName("capabilities")
+                .HasColumnType("jsonb")
+                .HasConversion(capabilitiesConverter);
+
             entity.Property(e => e.LastSeenAt).HasColumnName("last_seen_at");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Status).HasColumnName("status");
@@ -2678,4 +2687,26 @@ public partial class TmojDbContext : DbContext
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+
+    //  helpers for jsonb
+    private static string SerializeCapabilities(List<string>? value)
+    {
+        return JsonSerializer.Serialize(value ?? new List<string>() , (JsonSerializerOptions?) null);
+    }
+
+    static List<string> DeserializeCapabilities(string? value)
+    {
+        if ( string.IsNullOrWhiteSpace(value) )
+            return new List<string>();
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(value , (JsonSerializerOptions?) null)
+                   ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string> { value };
+        }
+    }
 }

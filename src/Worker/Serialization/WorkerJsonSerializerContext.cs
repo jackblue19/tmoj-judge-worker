@@ -5,8 +5,7 @@ namespace Worker.Serialization;
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase ,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull ,
-    WriteIndented = false)]
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(JudgeWorkerHeartbeatContract))]
 [JsonSerializable(typeof(JudgeJobCompletedContract))]
 [JsonSerializable(typeof(JudgeCompileResultContract))]

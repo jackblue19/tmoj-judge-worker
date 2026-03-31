@@ -115,6 +115,7 @@ public sealed class SubmissionsController : ControllerBase
             IsDeleted = false ,
             CreatedAt = DateTime.UtcNow ,
             TeamId = null ,
+            SourceCode = sourceCode ,
             ContestProblemId = null ,
             TestcaseId = null ,
             CustomInput = null ,

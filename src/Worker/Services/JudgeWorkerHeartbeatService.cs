@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
+using Worker.Serialization;
 
 namespace Worker.Services;
 
@@ -52,7 +53,10 @@ public sealed class JudgeWorkerHeartbeatService : BackgroundService
                     $"{_baseUrl.TrimEnd('/')}/api/internal/judge/workers/heartbeat");
 
                 req.Headers.Add("X-API-KEY" , _apiKey);
-                req.Content = JsonContent.Create(_payload);
+
+                req.Content = JsonContent.Create(
+                    _payload ,
+                    WorkerJsonSerializerContext.Default.JudgeWorkerHeartbeatContract);
 
                 using var res = await client.SendAsync(req , stoppingToken);
                 res.EnsureSuccessStatusCode();

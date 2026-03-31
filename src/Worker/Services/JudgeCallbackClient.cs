@@ -2,6 +2,7 @@
 using Contracts.Submissions.Judging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Worker.Serialization;
 
 namespace Worker.Services;
 
@@ -37,7 +38,10 @@ public sealed class JudgeCallbackClient
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post , url);
                 req.Headers.Add("X-API-KEY" , _apiKey);
-                req.Content = JsonContent.Create(payload);
+                //req.Content = JsonContent.Create(payload);
+                req.Content = JsonContent.Create(
+                    payload ,
+                    WorkerJsonSerializerContext.Default.JudgeJobCompletedContract);
 
                 using var res = await _httpClient.SendAsync(req , ct);
                 var body = await res.Content.ReadAsStringAsync(ct);

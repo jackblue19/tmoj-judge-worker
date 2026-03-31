@@ -3,7 +3,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
+using System.Threading;
 using Worker.Orchestration;
+using Worker.Serialization;
 
 namespace Worker.Consumers;
 
@@ -87,6 +89,10 @@ public sealed class SubmissionCreatedConsumer : BackgroundService
 
         res.EnsureSuccessStatusCode();
 
-        return await res.Content.ReadFromJsonAsync<DispatchJudgeJobContract>(cancellationToken: ct);
+        var job = await res.Content.ReadFromJsonAsync(
+                                WorkerJsonSerializerContext.Default.DispatchJudgeJobContract ,
+                                cancellationToken: ct);
+
+        return job;
     }
 }

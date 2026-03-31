@@ -1213,13 +1213,6 @@ public partial class TmojDbContext : DbContext
                 .HasColumnType("jsonb")
                 .HasConversion(capabilitiesConverter);
 
-
-
-            entity.Property(e => e.Capabilities)
-                .HasColumnName("capabilities")
-                .HasColumnType("jsonb")
-                .HasConversion(capabilitiesConverter);
-
             entity.Property(e => e.LastSeenAt).HasColumnName("last_seen_at");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Status).HasColumnName("status");

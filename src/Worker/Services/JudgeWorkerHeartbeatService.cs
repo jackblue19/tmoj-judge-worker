@@ -73,7 +73,7 @@ public sealed class JudgeWorkerHeartbeatService : BackgroundService
                 req.Headers.Add("X-API-KEY" , _apiKey);
                 req.Content = JsonContent.Create(
                     _payload ,
-                    JudgeContractsJsonContext.Default.JudgeWorkerHeartbeatContract);
+                    WorkerJsonSerializerContext.Default.JudgeWorkerHeartbeatContract);
 
                 using var res = await client.SendAsync(req , stoppingToken);
 

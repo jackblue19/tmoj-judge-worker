@@ -27,7 +27,7 @@ public sealed class JudgeBackendClient
         res.EnsureSuccessStatusCode();
 
         return await res.Content.ReadFromJsonAsync(
-            JudgeContractsJsonContext.Default.DispatchJudgeJobContract ,
+            WorkerJsonSerializerContext.Default.DispatchJudgeJobContract ,
             ct);
     }
 
@@ -36,7 +36,7 @@ public sealed class JudgeBackendClient
         using var res = await _http.PostAsJsonAsync(
             "api/internal/judge/jobs/complete" ,
             req ,
-            JudgeContractsJsonContext.Default.JudgeJobCompletedContract ,
+            WorkerJsonSerializerContext.Default.JudgeJobCompletedContract ,
             ct);
 
         res.EnsureSuccessStatusCode();

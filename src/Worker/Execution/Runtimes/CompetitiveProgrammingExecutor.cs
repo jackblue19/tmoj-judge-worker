@@ -384,8 +384,8 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
     }
 
     private static JudgeJobCompletedContract BuildCompileError(
-        DispatchJudgeJobContract job ,
-        DockerRunResult compile)
+    DispatchJudgeJobContract job ,
+    DockerRunResult compile)
     {
         return new JudgeJobCompletedContract
         {
@@ -393,7 +393,9 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
             JudgeRunId = job.JudgeRunId ,
             SubmissionId = job.SubmissionId ,
             WorkerId = job.WorkerId ,
+
             Status = "failed" ,
+
             Note = "Compile failed." ,
             Compile = new JudgeCompileResultContract
             {
@@ -405,6 +407,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
             } ,
             Summary = new JudgeSummaryResultContract
             {
+                // CE vẫn đúng ở verdict
                 Verdict = "ce" ,
                 Passed = 0 ,
                 Total = job.Cases.Count ,

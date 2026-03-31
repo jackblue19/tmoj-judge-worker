@@ -87,7 +87,12 @@ public sealed class SubmissionCreatedConsumer : BackgroundService
         if ( res.StatusCode == System.Net.HttpStatusCode.NoContent )
             return null;
 
-        res.EnsureSuccessStatusCode();
+        //res.EnsureSuccessStatusCode();
+        if ( !res.IsSuccessStatusCode )
+        {
+            _logger.LogWarning("Claim failed: {Status}" , res.StatusCode);
+            return null;
+        }
 
         var job = await res.Content.ReadFromJsonAsync(
                                 WorkerJsonSerializerContext.Default.DispatchJudgeJobContract ,

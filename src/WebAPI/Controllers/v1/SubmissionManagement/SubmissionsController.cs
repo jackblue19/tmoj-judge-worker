@@ -456,16 +456,6 @@ public sealed class SubmissionsController : ControllerBase
             Console.WriteLine("Invalid GUID format");
         }
 
-        /*var userId = GetUserId();
-
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value?? 
-        User.FindFirst("sub")?.Value;
-
-        if ( userIdClaim == null )
-            return Unauthorized("UserId not found in token");
-
-        var userId = Guid.Parse(userIdClaim);
-*/
         var submissions = await _db.Submissions.AsNoTracking()
             // .Where(x => x.ProblemId == problemId && x.UserId == userId && !x.IsDeleted)
             .Where(x => x.ProblemId == problemId)

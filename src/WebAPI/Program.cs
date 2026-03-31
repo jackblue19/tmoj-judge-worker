@@ -87,7 +87,10 @@ builder.Services.AddSingleton<JudgeConnectionRegistry>();
 builder.Services.AddSingleton<JudgeDispatchService>();
 builder.Services.AddScoped<LocalJudgeService>();
 builder.Services.AddHostedService<JudgeBridgeBackgroundService>();
-builder.Services.AddControllers();
+//builder.Services.AddControllers();
+
+//  v2  -   Judge Worker
+builder.Services.AddScoped<WebAPI.Services.Judging.JudgeResultApplyService>();
 
 //builder.WebHost.UseUrls("http://+:8080"); //  comment cái này là test local được deploy thì mở ra
 

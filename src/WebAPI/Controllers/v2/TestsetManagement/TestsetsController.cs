@@ -95,8 +95,7 @@ public class TestsetsController : ControllerBase
     [HttpGet("{problemId:guid}/{testsetId:guid}/download-zip")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    //[AllowAnonymous]
-    [Authorize] // enable auth
+    [AllowAnonymous]    //  auth through X-API-KEY
     public async Task<IActionResult> DownloadZip(
     Guid problemId ,
     Guid testsetId ,

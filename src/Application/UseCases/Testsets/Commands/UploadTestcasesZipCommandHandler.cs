@@ -88,11 +88,21 @@ public sealed class UploadTestcasesZipCommandHandler
 
             ZipFile.ExtractToDirectory(zipPath , extractDir);
 
-            var pairs = CollectTestcasePairsByFolder(extractDir);
+            //var pairs = CollectTestcasePairsByFolder(extractDir);
+            //if ( pairs.Count == 0 )
+            //{
+            //    throw new InvalidOperationException(
+            //        "No valid testcase pairs found. Expected folder structure like 001/input.inp + output.out");
+            //}
+
+            var pairs = CollectTestcasePairsFlexible(extractDir);
             if ( pairs.Count == 0 )
             {
                 throw new InvalidOperationException(
-                    "No valid testcase pairs found. Expected folder structure like 001/input.inp + output.out");
+                    "No valid testcase pairs found. Supported formats: " +
+                    "001/input.inp + output.out, " +
+                    "flat test001.inp + test001.out, " +
+                    "flat sub1_01.inp + sub1_01.out.");
             }
 
             var prefix = $"{request.TestsetId:D}/";
@@ -257,6 +267,7 @@ public sealed class UploadTestcasesZipCommandHandler
         };
     }
 
+    //  Parse zip file ver 1
     private static SortedDictionary<int , TestcasePair> CollectTestcasePairsByFolder(string root)
     {
         var result = new SortedDictionary<int , TestcasePair>();
@@ -293,6 +304,187 @@ public sealed class UploadTestcasesZipCommandHandler
         return result;
     }
 
+    //  parse zip file ver 2 with helpers
+    private static SortedDictionary<int , TestcasePair> CollectTestcasePairsFlexible(string root)
+    {
+        // 1) Ưu tiên format thư mục số: 001/input.inp + output.out
+        var byFolder = CollectTestcasePairsByNumericFolder(root);
+        if ( byFolder.Count > 0 )
+            return byFolder;
+
+        // 2) Fallback: quét toàn bộ file phẳng / nested file
+        var allFiles = Directory.EnumerateFiles(root , "*" , SearchOption.AllDirectories)
+            .Where(f =>
+            {
+                var ext = Path.GetExtension(f);
+                return ext.Equals(".inp" , StringComparison.OrdinalIgnoreCase)
+                    || ext.Equals(".out" , StringComparison.OrdinalIgnoreCase)
+                    || Path.GetFileName(f).Equals("input.txt" , StringComparison.OrdinalIgnoreCase)
+                    || Path.GetFileName(f).Equals("output.txt" , StringComparison.OrdinalIgnoreCase)
+                    || f.EndsWith("-inp.txt" , StringComparison.OrdinalIgnoreCase)
+                    || f.EndsWith("-out.txt" , StringComparison.OrdinalIgnoreCase);
+            })
+            .ToList();
+
+        if ( allFiles.Count == 0 )
+            return new SortedDictionary<int , TestcasePair>();
+
+        // Group theo "logical testcase key"
+        // ví dụ:
+        // test001.inp / test001.out        -> test001
+        // sub1_01.inp / sub1_01.out        -> sub1_01
+        // foo-inp.txt / foo-out.txt        -> foo
+        // input.txt / output.txt trong cùng folder -> folder relative path
+        var grouped = new Dictionary<string , TempPair>(StringComparer.OrdinalIgnoreCase);
+
+        foreach ( var file in allFiles )
+        {
+            var key = BuildLogicalPairKey(root , file);
+            if ( key is null )
+                continue;
+
+            if ( !grouped.TryGetValue(key , out var pair) )
+            {
+                pair = new TempPair();
+                grouped[key] = pair;
+            }
+
+            if ( IsInputFile(file) )
+            {
+                if ( pair.InputPath is not null )
+                    throw new InvalidOperationException($"Duplicate input file detected for testcase key '{key}'.");
+                pair.InputPath = file;
+            }
+            else if ( IsOutputFile(file) )
+            {
+                if ( pair.OutputPath is not null )
+                    throw new InvalidOperationException($"Duplicate output file detected for testcase key '{key}'.");
+                pair.OutputPath = file;
+            }
+        }
+
+        var validPairs = grouped
+            .Where(x => x.Value.InputPath is not null && x.Value.OutputPath is not null)
+            .OrderBy(x => x.Key , StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if ( validPairs.Count == 0 )
+            return new SortedDictionary<int , TestcasePair>();
+
+        // Normalize ordinal liên tục 1..N
+        var result = new SortedDictionary<int , TestcasePair>();
+        var ordinal = 1;
+
+        foreach ( var item in validPairs )
+        {
+            result[ordinal++] = new TestcasePair
+            {
+                InputPath = item.Value.InputPath! ,
+                OutputPath = item.Value.OutputPath!
+            };
+        }
+
+        return result;
+    }
+
+    private static SortedDictionary<int , TestcasePair> CollectTestcasePairsByNumericFolder(string root)
+    {
+        var result = new SortedDictionary<int , TestcasePair>();
+
+        foreach ( var dir in Directory.EnumerateDirectories(root , "*" , SearchOption.AllDirectories) )
+        {
+            var dirName = Path.GetFileName(dir);
+
+            if ( !int.TryParse(dirName , out var ordinal) )
+                continue;
+
+            var files = Directory.EnumerateFiles(dir).ToList();
+
+            var inputPath =
+                files.FirstOrDefault(IsInpExtension)
+                ?? files.FirstOrDefault(x => Path.GetFileName(x).Equals("input.txt" , StringComparison.OrdinalIgnoreCase))
+                ?? files.FirstOrDefault(x => x.EndsWith("-inp.txt" , StringComparison.OrdinalIgnoreCase));
+
+            var outputPath =
+                files.FirstOrDefault(IsOutExtension)
+                ?? files.FirstOrDefault(x => Path.GetFileName(x).Equals("output.txt" , StringComparison.OrdinalIgnoreCase))
+                ?? files.FirstOrDefault(x => x.EndsWith("-out.txt" , StringComparison.OrdinalIgnoreCase));
+
+            if ( inputPath is null || outputPath is null )
+                continue;
+
+            result[ordinal] = new TestcasePair
+            {
+                InputPath = inputPath ,
+                OutputPath = outputPath
+            };
+        }
+
+        return result;
+    }
+
+    private static string? BuildLogicalPairKey(string root , string filePath)
+    {
+        var fileName = Path.GetFileName(filePath);
+        var relativeDir = Path.GetRelativePath(root , Path.GetDirectoryName(filePath) ?? root);
+
+        // input.txt / output.txt => key theo folder chứa nó
+        if ( fileName.Equals("input.txt" , StringComparison.OrdinalIgnoreCase) ||
+            fileName.Equals("output.txt" , StringComparison.OrdinalIgnoreCase) )
+        {
+            return $"folder::{relativeDir}";
+        }
+
+        // foo-inp.txt / foo-out.txt => key = foo
+        if ( fileName.EndsWith("-inp.txt" , StringComparison.OrdinalIgnoreCase) )
+            return $"name::{fileName[..^"-inp.txt".Length]}";
+
+        if ( fileName.EndsWith("-out.txt" , StringComparison.OrdinalIgnoreCase) )
+            return $"name::{fileName[..^"-out.txt".Length]}";
+
+        // *.inp / *.out => key = file name without extension
+        var ext = Path.GetExtension(fileName);
+        if ( ext.Equals(".inp" , StringComparison.OrdinalIgnoreCase) ||
+            ext.Equals(".out" , StringComparison.OrdinalIgnoreCase) )
+        {
+            return $"name::{Path.GetFileNameWithoutExtension(fileName)}";
+        }
+
+        return null;
+    }
+
+    private static bool IsInputFile(string path)
+    {
+        var fileName = Path.GetFileName(path);
+
+        return IsInpExtension(path)
+            || fileName.Equals("input.txt" , StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith("-inp.txt" , StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsOutputFile(string path)
+    {
+        var fileName = Path.GetFileName(path);
+
+        return IsOutExtension(path)
+            || fileName.Equals("output.txt" , StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith("-out.txt" , StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsInpExtension(string path)
+        => Path.GetExtension(path).Equals(".inp" , StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsOutExtension(string path)
+        => Path.GetExtension(path).Equals(".out" , StringComparison.OrdinalIgnoreCase);
+
+    private sealed class TempPair
+    {
+        public string? InputPath { get; set; }
+        public string? OutputPath { get; set; }
+    }
+
+
+    //  helper v1
     private sealed class TestcasePair
     {
         public string InputPath { get; init; } = null!;

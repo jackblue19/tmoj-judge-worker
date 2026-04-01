@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.OData;
 using System.Net.WebSockets;
 using System.Text;
 using WebAPI.Extensions;
-using WebAPI.Judging;
+//using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -81,13 +81,9 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
 
-//  DI LOCAL JUDGE
-
-builder.Services.AddSingleton<JudgeConnectionRegistry>();
-builder.Services.AddSingleton<JudgeDispatchService>();
-builder.Services.AddScoped<LocalJudgeService>();
-builder.Services.AddHostedService<JudgeBridgeBackgroundService>();
-builder.Services.AddControllers();
+//  v2  -   Judge Worker    -   DI
+builder.Services.AddScoped<WebAPI.Services.Judging.JudgeJobDispatchService>();
+builder.Services.AddScoped<WebAPI.Services.Judging.JudgeResultApplyService>();
 
 //builder.WebHost.UseUrls("http://+:8080"); //  comment cái này là test local được deploy thì mở ra
 
@@ -140,12 +136,12 @@ builder.Services.AddOutputCache(options =>
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
+    options.Limits.MaxRequestBodySize = 200 * 1024 * 1024; // 100 MB
 });
 
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+    options.MultipartBodyLengthLimit = 200 * 1024 * 1024; // 100 MB
 });
 
 var app = builder.Build();

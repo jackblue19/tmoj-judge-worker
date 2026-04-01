@@ -11,8 +11,8 @@ public interface IR2Service
     /// <param name="fileStream">The file content stream.</param>
     /// <param name="contentType">MIME content type.</param>
     /// <param name="cancellationToken"></param>
-    Task UploadAsync(string type, Guid id, string fileExtension, Stream fileStream, string? contentType = null, CancellationToken cancellationToken = default);
-    Task ReplaceIfExistsAsync(string type, Guid id, string fileExtension, Stream fileStream, string? contentType = null, CancellationToken cancellationToken = default);
+    Task UploadAsync(string type , Guid id , string fileExtension , Stream fileStream , string? contentType = null , CancellationToken cancellationToken = default);
+    Task ReplaceIfExistsAsync(string type , Guid id , string fileExtension , Stream fileStream , string? contentType = null , CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Generates a pre-signed URL for temporary access to an object determined by the given type and id.
@@ -21,7 +21,7 @@ public interface IR2Service
     /// <param name="id">The GUID identifier of the file.</param>
     /// <param name="presignUrlMinute">Optional expiration time in minutes. Defaults to settings value if null.</param>
     /// <param name="cancellationToken"></param>
-    Task<string?> GetPresignedUrlForViewAsync(string type, Guid id, int? presignUrlMinute = null, CancellationToken cancellationToken = default);
+    Task<string?> GetPresignedUrlForViewAsync(string type , Guid id , int? presignUrlMinute = null , CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Generates a pre-signed URL for downloading an object determined by the given type and id (Attachment).
@@ -30,7 +30,7 @@ public interface IR2Service
     /// <param name="id">The GUID identifier of the file.</param>
     /// <param name="presignUrlMinute">Optional expiration time in minutes. Defaults to settings value if null.</param>
     /// <param name="cancellationToken"></param>
-    Task<string?> GetPresignedUrlForDownloadAsync(string type, Guid id, int? presignUrlMinute = null, CancellationToken cancellationToken = default);
+    Task<string?> GetPresignedUrlForDownloadAsync(string type , Guid id , int? presignUrlMinute = null , CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Generates a public, unsigned URL (no expiration) for an object determined by the given type and id.
@@ -39,7 +39,7 @@ public interface IR2Service
     /// <param name="type">The type defining the bucket.</param>
     /// <param name="id">The GUID identifier of the file.</param>
     /// <param name="cancellationToken"></param>
-    Task<string?> GetPublicUrlAsync(string type, Guid id, CancellationToken cancellationToken = default);
+    Task<string?> GetPublicUrlAsync(string type , Guid id , CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes a file from the bucket determined by the given type and id.
@@ -48,5 +48,41 @@ public interface IR2Service
     /// <param name="id">The GUID identifier of the file.</param>
     /// <param name="cancellationToken"></param>
     /// <returns>The full object key of the deleted file, or null if not found.</returns>
-    Task<string?> DeleteAsync(string type, Guid id, CancellationToken cancellationToken = default);
+    Task<string?> DeleteAsync(string type , Guid id , CancellationToken cancellationToken = default);
+
+    //  Support testset implementation
+    Task UploadObjectAsync(
+        string type ,
+        string objectKey ,
+        Stream fileStream ,
+        string? contentType = null ,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteByPrefixAsync(
+        string type ,
+        string prefix ,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<string>> ListObjectKeysAsync(
+        string type ,
+        string prefix ,
+        CancellationToken cancellationToken = default);
+
+    Task<string> GetPresignedObjectUrlForViewAsync(
+        string bucketType ,
+        string objectKey ,
+        TimeSpan? expiresIn = null ,
+        CancellationToken cancellationToken = default);
+
+    Task<string> GetPresignedObjectUrlForDownloadAsync(
+        string bucketType ,
+        string objectKey ,
+        string fileName ,
+        TimeSpan? expiresIn = null ,
+        CancellationToken cancellationToken = default);
+
+    Task<string> GetObjectTextAsync(
+        string bucketType ,
+        string objectKey ,
+        CancellationToken cancellationToken = default);
 }

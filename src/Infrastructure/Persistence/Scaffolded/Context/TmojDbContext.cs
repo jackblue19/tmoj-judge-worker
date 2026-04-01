@@ -1,12 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.Persistence.Scaffolded.Context;
 
 public partial class TmojDbContext : DbContext
 {
+    public TmojDbContext()
+    {
+    }
+
     public TmojDbContext(DbContextOptions<TmojDbContext> options)
         : base(options)
     {
@@ -27,6 +33,8 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<Class> Classes { get; set; }
 
     public virtual DbSet<ClassMember> ClassMembers { get; set; }
+
+    public virtual DbSet<ClassSemester> ClassSemesters { get; set; }
 
     public virtual DbSet<ClassSlot> ClassSlots { get; set; }
 
@@ -359,7 +367,7 @@ public partial class TmojDbContext : DbContext
 
             entity.HasIndex(e => e.ClassCode , "class_class_code_key").IsUnique();
 
-            entity.HasIndex(e => e.InviteCode , "class_invite_code_key").IsUnique();
+            entity.HasIndex(e => e.ClassCode , "uq_class_code").IsUnique();
 
             entity.Property(e => e.ClassId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -368,35 +376,12 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
-            entity.Property(e => e.Description).HasColumnName("description");
-            entity.Property(e => e.EndDate).HasColumnName("end_date");
-            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
-            entity.Property(e => e.InviteCodeExpiresAt).HasColumnName("invite_code_expires_at");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
-            entity.Property(e => e.SemesterId).HasColumnName("semester_id");
-            entity.Property(e => e.StartDate).HasColumnName("start_date");
-            entity.Property(e => e.SubjectId).HasColumnName("subject_id");
-            entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
             entity.Property(e => e.UpdatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
-
-            entity.HasOne(d => d.Semester).WithMany(p => p.Classes)
-                .HasForeignKey(d => d.SemesterId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("class_semester_id_fkey");
-
-            entity.HasOne(d => d.Subject).WithMany(p => p.Classes)
-                .HasForeignKey(d => d.SubjectId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("class_subject_id_fkey");
-
-            entity.HasOne(d => d.Teacher).WithMany(p => p.Classes)
-                .HasForeignKey(d => d.TeacherId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("class_teacher_id_fkey");
         });
 
         modelBuilder.Entity<ClassMember>(entity =>
@@ -405,12 +390,10 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("class_member");
 
-            entity.HasIndex(e => new { e.ClassId , e.UserId } , "uq_class_user").IsUnique();
-
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.ClassSemesterId).HasColumnName("class_semester_id");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
@@ -419,14 +402,58 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("joined_at");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 
-            entity.HasOne(d => d.Class).WithMany(p => p.ClassMembers)
-                .HasForeignKey(d => d.ClassId)
-                .HasConstraintName("class_member_class_id_fkey");
+            entity.HasOne(d => d.ClassSemester).WithMany(p => p.ClassMembers)
+                .HasForeignKey(d => d.ClassSemesterId)
+                .HasConstraintName("class_member_class_semester_id_fkey");
 
             entity.HasOne(d => d.User).WithMany(p => p.ClassMembers)
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("class_member_user_id_fkey");
+        });
+
+        modelBuilder.Entity<ClassSemester>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("class_semester_pkey");
+
+            entity.ToTable("class_semester");
+
+            entity.HasIndex(e => new { e.ClassId , e.SemesterId , e.SubjectId } , "uq_class_semester").IsUnique();
+
+            entity.HasIndex(e => e.InviteCode , "uq_class_semester_invite_code")
+                .IsUnique()
+                .HasFilter("(invite_code IS NOT NULL)");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.InviteCode).HasColumnName("invite_code");
+            entity.Property(e => e.InviteCodeExpiresAt).HasColumnName("invite_code_expires_at");
+            entity.Property(e => e.SemesterId).HasColumnName("semester_id");
+            entity.Property(e => e.SubjectId).HasColumnName("subject_id");
+            entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
+
+            entity.HasOne(d => d.Class).WithMany(p => p.ClassSemesters)
+                .HasForeignKey(d => d.ClassId)
+                .HasConstraintName("fk_class");
+
+            entity.HasOne(d => d.Semester).WithMany(p => p.ClassSemesters)
+                .HasForeignKey(d => d.SemesterId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_semester");
+
+            entity.HasOne(d => d.Subject).WithMany(p => p.ClassSemesters)
+                .HasForeignKey(d => d.SubjectId)
+                .HasConstraintName("fk_subject");
+
+            entity.HasOne(d => d.Teacher).WithMany(p => p.ClassSemesters)
+                .HasForeignKey(d => d.TeacherId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_teacher");
         });
 
         modelBuilder.Entity<ClassSlot>(entity =>
@@ -435,12 +462,10 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("class_slot");
 
-            entity.HasIndex(e => new { e.ClassId , e.SlotNo } , "ux_class_slot").IsUnique();
-
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.ClassSemesterId).HasColumnName("class_semester_id");
             entity.Property(e => e.CloseAt).HasColumnName("close_at");
             entity.Property(e => e.ContestId).HasColumnName("contest_id");
             entity.Property(e => e.CreatedAt)
@@ -464,9 +489,9 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("updated_at");
             entity.Property(e => e.UpdatedBy).HasColumnName("updated_by");
 
-            entity.HasOne(d => d.Class).WithMany(p => p.ClassSlots)
-                .HasForeignKey(d => d.ClassId)
-                .HasConstraintName("class_slot_class_id_fkey");
+            entity.HasOne(d => d.ClassSemester).WithMany(p => p.ClassSlots)
+                .HasForeignKey(d => d.ClassSemesterId)
+                .HasConstraintName("class_slot_class_semester_id_fkey");
 
             entity.HasOne(d => d.Contest).WithMany(p => p.ClassSlots)
                 .HasForeignKey(d => d.ContestId)
@@ -1077,6 +1102,8 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("judge_jobs");
 
+            entity.HasIndex(e => new { e.Status , e.EnqueueAt } , "ix_judge_jobs_status_enqueue_at");
+
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
@@ -1120,6 +1147,8 @@ public partial class TmojDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("judge_runs_pkey");
 
             entity.ToTable("judge_runs");
+
+            entity.HasIndex(e => e.SubmissionId , "ix_judge_runs_submission_id");
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -1169,12 +1198,21 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("judge_workers");
 
+            entity.HasIndex(e => e.LastSeenAt , "ix_judge_workers_last_seen_at");
+
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
+
+            var capabilitiesConverter = new ValueConverter<List<string> , string>(
+                v => JsonSerializer.Serialize(v ?? new List<string>() , (JsonSerializerOptions?) null) ,
+                v => DeserializeCapabilities(v)
+            );
             entity.Property(e => e.Capabilities)
+                .HasColumnName("capabilities")
                 .HasColumnType("jsonb")
-                .HasColumnName("capabilities");
+                .HasConversion(capabilitiesConverter);
+
             entity.Property(e => e.LastSeenAt).HasColumnName("last_seen_at");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Status).HasColumnName("status");
@@ -1603,6 +1641,10 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("result");
 
+            entity.HasIndex(e => e.JudgeRunId , "ix_results_judge_run_id");
+
+            entity.HasIndex(e => e.SubmissionId , "ix_results_submission_id");
+
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
@@ -1960,6 +2002,7 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.MemoryKb).HasColumnName("memory_kb");
             entity.Property(e => e.ProblemId).HasColumnName("problem_id");
             entity.Property(e => e.RuntimeId).HasColumnName("runtime_id");
+            entity.Property(e => e.SourceCode).HasColumnName("source_code");
             entity.Property(e => e.StatusCode)
                 .HasDefaultValueSql("'queued'::text")
                 .HasColumnName("status_code");
@@ -2637,4 +2680,26 @@ public partial class TmojDbContext : DbContext
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+
+    //  helpers for jsonb
+    private static string SerializeCapabilities(List<string>? value)
+    {
+        return JsonSerializer.Serialize(value ?? new List<string>() , (JsonSerializerOptions?) null);
+    }
+
+    static List<string> DeserializeCapabilities(string? value)
+    {
+        if ( string.IsNullOrWhiteSpace(value) )
+            return new List<string>();
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(value , (JsonSerializerOptions?) null)
+                   ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string> { value };
+        }
+    }
 }

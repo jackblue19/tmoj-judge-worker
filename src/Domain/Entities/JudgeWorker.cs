@@ -9,7 +9,8 @@ public partial class JudgeWorker
 
     public string Name { get; set; } = null!;
 
-    public string? Capabilities { get; set; }
+    //public string? Capabilities { get; set; }
+    public List<string> Capabilities { get; set; } = new();
 
     public DateTime? LastSeenAt { get; set; }
 

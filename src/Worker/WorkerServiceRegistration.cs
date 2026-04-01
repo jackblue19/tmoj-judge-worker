@@ -4,9 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Worker
+namespace Worker;
+
+internal class WorkerServiceRegistration
 {
-    internal class WorkerServiceRegistration
-    {
-    }
 }

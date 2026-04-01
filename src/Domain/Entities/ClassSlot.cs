@@ -7,8 +7,6 @@ public partial class ClassSlot
 {
     public Guid Id { get; set; }
 
-    public Guid ClassId { get; set; }
-
     public int SlotNo { get; set; }
 
     public string Title { get; set; } = null!;
@@ -37,7 +35,9 @@ public partial class ClassSlot
 
     public Guid? UpdatedBy { get; set; }
 
-    public virtual Class Class { get; set; } = null!;
+    public Guid ClassSemesterId { get; set; }
+
+    public virtual ClassSemester ClassSemester { get; set; } = null!;
 
     public virtual ICollection<ClassSlotProblem> ClassSlotProblems { get; set; } = new List<ClassSlotProblem>();
 

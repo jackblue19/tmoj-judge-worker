@@ -1,4 +1,7 @@
-﻿using Contracts.Submissions.Judging;
+﻿using System.Data;
+using System.Text.Json;
+using Contracts.Submissions.Judging;
+using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,14 +24,28 @@ public sealed class JudgeJobDispatchService
         if ( worker is null )
             throw new InvalidOperationException($"JudgeWorker {workerId} not found.");
 
+        await using var tx = await _db.Database.BeginTransactionAsync(
+            IsolationLevel.ReadCommitted , ct);
+
         var job = await _db.JudgeJobs
-            .Where(x => x.Status == "queued")
-            .OrderBy(x => x.Priority)
-            .ThenBy(x => x.EnqueueAt)
+            .FromSqlInterpolated($@"
+                SELECT *
+                FROM judge_jobs
+                WHERE id = (
+                    SELECT id
+                    FROM judge_jobs
+                    WHERE status = 'queued'
+                    ORDER BY priority, enqueue_at
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )")
             .FirstOrDefaultAsync(ct);
 
         if ( job is null )
+        {
+            await tx.CommitAsync(ct);
             return null;
+        }
 
         var submission = await _db.Submissions
             .FirstOrDefaultAsync(x => x.Id == job.SubmissionId , ct)
@@ -61,22 +78,53 @@ public sealed class JudgeJobDispatchService
             })
             .ToListAsync(ct);
 
-        var judgeRun = await _db.JudgeRuns
-            .OrderByDescending(x => x.StartedAt)
-            .FirstOrDefaultAsync(x => x.SubmissionId == submission.Id , ct)
-            ?? throw new InvalidOperationException($"JudgeRun for Submission {submission.Id} not found.");
+        var options = DeserializeOptions(job.OptionsJson , problem , runtime);
 
         job.Status = "running";
         job.DequeuedAt = DateTime.UtcNow;
         job.DequeuedByWorkerId = workerId;
         job.Attempts += 1;
-
-        judgeRun.WorkerId = workerId;
-        judgeRun.Status = "running";
+        job.LastError = null;
 
         submission.StatusCode = "running";
+        submission.VerdictCode = null;
+        submission.FinalScore = null;
+        submission.TimeMs = null;
+        submission.MemoryKb = null;
+        submission.JudgedAt = null;
+
+        var resolvedTimeLimitMs = problem.TimeLimitMs ?? options.TimeLimitMs;
+        var resolvedMemoryLimitKb = problem.MemoryLimitKb ?? options.MemoryLimitKb;
+
+        var judgeRun = new JudgeRun
+        {
+            Id = Guid.NewGuid() ,
+            SubmissionId = submission.Id ,
+            WorkerId = workerId ,
+            StartedAt = DateTime.UtcNow ,
+            FinishedAt = null ,
+            Status = "running" ,
+            RuntimeId = runtime.Id ,
+            DockerImage = runtime.ImageRef ,
+            Limits = JsonSerializer.Serialize(new
+            {
+                timeMs = resolvedTimeLimitMs ,
+                memoryKb = resolvedMemoryLimitKb ,
+                compareMode = options.CompareMode ,
+                stopOnFirstFail = options.StopOnFirstFail
+            }) ,
+            Note = null ,
+            CompileLogBlobId = null ,
+            CompileExitCode = null ,
+            CompileTimeMs = null ,
+            TotalTimeMs = null ,
+            TotalMemoryKb = null
+        };
+
+        _db.JudgeRuns.Add(judgeRun);
 
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         return new DispatchJudgeJobContract
         {
@@ -89,17 +137,71 @@ public sealed class JudgeJobDispatchService
             TestsetId = testset.Id ,
             RuntimeId = runtime.Id ,
             RuntimeName = runtime.RuntimeName ,
+            RuntimeVersion = runtime.RuntimeVersion ,
+            RuntimeProfileKey = ResolveRuntimeProfileKey(runtime) ,
             RuntimeImage = runtime.ImageRef ,
-            TimeLimitMs = problem.TimeLimitMs ?? runtime.DefaultTimeLimitMs ,
-            MemoryLimitKb = problem.MemoryLimitKb ?? runtime.DefaultMemoryLimitKb ,
-            CompareMode = "trim" ,
-            StopOnFirstFail = true ,
+            TimeLimitMs = resolvedTimeLimitMs ,
+            MemoryLimitKb = resolvedMemoryLimitKb ,
+            CompareMode = options.CompareMode ,
+            StopOnFirstFail = options.StopOnFirstFail ,
             SourceCode = await ResolveSourceCodeAsync(submission , ct) ,
             Cases = cases
         };
     }
 
-    private Task<string> ResolveSourceCodeAsync(Domain.Entities.Submission submission , CancellationToken ct)
+    private static JudgeExecutionOptionsContract DeserializeOptions(
+        string? optionsJson ,
+        Problem problem ,
+        Runtime runtime)
+    {
+        if ( !string.IsNullOrWhiteSpace(optionsJson) )
+        {
+            var parsed = JsonSerializer.Deserialize<JudgeExecutionOptionsContract>(optionsJson);
+            if ( parsed is not null )
+            {
+                return new JudgeExecutionOptionsContract
+                {
+                    TimeLimitMs = problem.TimeLimitMs ?? parsed.TimeLimitMs ,
+                    MemoryLimitKb = problem.MemoryLimitKb ?? parsed.MemoryLimitKb ,
+                    CompareMode = string.IsNullOrWhiteSpace(parsed.CompareMode) ? "trim" : parsed.CompareMode ,
+                    StopOnFirstFail = parsed.StopOnFirstFail
+                };
+            }
+        }
+
+        return new JudgeExecutionOptionsContract
+        {
+            TimeLimitMs = problem.TimeLimitMs ?? runtime.DefaultTimeLimitMs ,
+            MemoryLimitKb = problem.MemoryLimitKb ?? runtime.DefaultMemoryLimitKb ,
+            CompareMode = "trim" ,
+            StopOnFirstFail = true
+        };
+    }
+
+    private static string ResolveRuntimeProfileKey(Runtime runtime)
+    {
+        var runtimeName = runtime.RuntimeName.Trim().ToLowerInvariant();
+        var runtimeVersion = runtime.RuntimeVersion?.Trim().ToLowerInvariant();
+
+        if ( runtimeName.Contains("cpp") || runtimeName.Contains("c++") )
+        {
+            if ( runtimeVersion is not null && runtimeVersion.Contains("17") )
+                return "cpp17-gcc";
+
+            return "cpp17-gcc";
+        }
+
+        if ( runtimeName.Contains("java") )
+            return "java-default";
+
+        if ( runtimeName.Contains("python") )
+            return "python3-default";
+
+        throw new InvalidOperationException(
+            $"Cannot resolve runtime profile key for runtime '{runtime.RuntimeName}' version '{runtime.RuntimeVersion}'.");
+    }
+
+    private Task<string> ResolveSourceCodeAsync(Submission submission , CancellationToken ct)
     {
         if ( !string.IsNullOrWhiteSpace(submission.SourceCode) )
             return Task.FromResult(submission.SourceCode);

@@ -1122,6 +1122,7 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.Status).HasColumnName("status");
             entity.Property(e => e.SubmissionId).HasColumnName("submission_id");
             entity.Property(e => e.TriggerReason).HasColumnName("trigger_reason");
+            entity.Property(e => e.OptionsJson).HasColumnName("options_json");
             entity.Property(e => e.TriggerType)
                 .HasDefaultValueSql("'submit'::text")
                 .HasColumnName("trigger_type");

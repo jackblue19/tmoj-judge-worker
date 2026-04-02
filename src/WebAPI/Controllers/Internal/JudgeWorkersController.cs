@@ -1,9 +1,6 @@
 ﻿using Contracts.Submissions.Judging;
-using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
-using Domain.Entities;
+using WebAPI.Services.Judging;
 
 namespace WebAPI.Controllers.Internal;
 
@@ -11,11 +8,24 @@ namespace WebAPI.Controllers.Internal;
 [Route("api/internal/judge/workers")]
 public sealed class JudgeWorkersController : ControllerBase
 {
-    private readonly TmojDbContext _db;
+    private readonly JudgeWorkerHeartbeatService _heartbeatService;
+    private readonly JudgeMetricsService _metricsService;
 
-    public JudgeWorkersController(TmojDbContext db)
+    public JudgeWorkersController(
+        JudgeWorkerHeartbeatService heartbeatService ,
+        JudgeMetricsService metricsService)
     {
-        _db = db;
+        _heartbeatService = heartbeatService;
+        _metricsService = metricsService;
+    }
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register(
+        [FromBody] JudgeWorkerRegistrationContract req ,
+        CancellationToken ct)
+    {
+        var workerId = await _heartbeatService.RegisterAsync(req , ct);
+        return Ok(new { workerId });
     }
 
     [HttpPost("heartbeat")]
@@ -23,76 +33,24 @@ public sealed class JudgeWorkersController : ControllerBase
         [FromBody] JudgeWorkerHeartbeatContract req ,
         CancellationToken ct)
     {
-        if ( req.WorkerId == Guid.Empty )
-            return BadRequest(new { error = "WorkerId is required." });
+        await _heartbeatService.HeartbeatAsync(req , ct);
+        return Ok(new { ok = true });
+    }
 
-        if ( string.IsNullOrWhiteSpace(req.Name) )
-            return BadRequest(new { error = "Name is required." });
+    [HttpGet]
+    public async Task<IActionResult> GetWorkers(CancellationToken ct)
+    {
+        var workers = await _metricsService.GetWorkersAsync(ct);
+        return Ok(workers);
+    }
 
-        var worker = await _db.JudgeWorkers
-            .FirstOrDefaultAsync(x => x.Id == req.WorkerId , ct);
-
+    [HttpGet("{workerId:guid}")]
+    public async Task<IActionResult> GetWorker(Guid workerId , CancellationToken ct)
+    {
+        var worker = await _metricsService.GetWorkerByIdAsync(workerId , ct);
         if ( worker is null )
-        {
-            worker = new JudgeWorker
-            {
-                Id = req.WorkerId ,
-                Name = req.Name ,
-                LastSeenAt = DateTime.UtcNow ,
-                Status = req.Status ,
-                Version = req.Version
-            };
+            return NotFound();
 
-            SetCapabilities(worker , req.Capabilities);
-            _db.JudgeWorkers.Add(worker);
-        }
-        else
-        {
-            worker.Name = req.Name;
-            worker.LastSeenAt = DateTime.UtcNow;
-            worker.Status = req.Status;
-            worker.Version = req.Version;
-
-            SetCapabilities(worker , req.Capabilities);
-        }
-
-        await _db.SaveChangesAsync(ct);
-
-        return Ok(new
-        {
-            ok = true ,
-            workerId = worker.Id ,
-            worker.Name ,
-            worker.Status ,
-            worker.LastSeenAt
-        });
-    }
-
-    [HttpGet("online")]
-    public async Task<IActionResult> GetOnline(CancellationToken ct)
-    {
-        var since = DateTime.UtcNow.AddMinutes(-2);
-
-        var items = await _db.JudgeWorkers
-            .AsNoTracking()
-            .Where(x => x.LastSeenAt != null && x.LastSeenAt >= since)
-            .OrderBy(x => x.Name)
-            .Select(x => new
-            {
-                x.Id ,
-                x.Name ,
-                x.Status ,
-                x.Version ,
-                x.Capabilities ,
-                x.LastSeenAt
-            })
-            .ToListAsync(ct);
-
-        return Ok(items);
-    }
-
-    private static void SetCapabilities(JudgeWorker worker , List<string> capabilities)
-    {
-        worker.Capabilities = capabilities ?? new List<string>();
+        return Ok(worker);
     }
 }

@@ -13,6 +13,8 @@ public sealed class DispatchJudgeJobContract
 
     public Guid RuntimeId { get; init; }
     public string RuntimeName { get; init; } = null!;
+    public string? RuntimeVersion { get; init; }
+    public string RuntimeProfileKey { get; init; } = null!;
     public string? RuntimeImage { get; init; }
 
     public int TimeLimitMs { get; init; }

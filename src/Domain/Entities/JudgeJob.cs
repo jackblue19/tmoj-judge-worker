@@ -29,6 +29,8 @@ public partial class JudgeJob
 
     public string? TriggerReason { get; set; }
 
+    public string? OptionsJson { get; set; }
+
     public virtual JudgeWorker? DequeuedByWorker { get; set; }
 
     public virtual Submission Submission { get; set; } = null!;

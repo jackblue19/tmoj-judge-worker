@@ -16,6 +16,8 @@ public sealed class JudgeResultApplyService
 
     public async Task ApplyAsync(JudgeJobCompletedContract req , CancellationToken ct)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
         var submission = await _db.Submissions
             .FirstOrDefaultAsync(x => x.Id == req.SubmissionId , ct)
             ?? throw new InvalidOperationException($"Submission {req.SubmissionId} not found.");
@@ -28,12 +30,14 @@ public sealed class JudgeResultApplyService
             .FirstOrDefaultAsync(x => x.Id == req.JobId , ct)
             ?? throw new InvalidOperationException($"JudgeJob {req.JobId} not found.");
 
-        var normalizedJobStatus = req.Status == "done" ? "done" : "failed";
+        var judgeJobStatus = JudgeStatusClassifier.NormalizeJudgeJobStatus(req);
+        var judgeRunStatus = JudgeStatusClassifier.NormalizeJudgeRunStatus(req);
+        var submissionStatus = JudgeStatusClassifier.NormalizeSubmissionStatus(req);
 
-        judgeJob.Status = normalizedJobStatus;
-        judgeJob.LastError = normalizedJobStatus == "done" ? null : req.Note;
+        judgeJob.Status = judgeJobStatus;
+        judgeJob.LastError = judgeJobStatus == "failed" ? req.Note : null;
 
-        judgeRun.Status = normalizedJobStatus;
+        judgeRun.Status = judgeRunStatus;
         judgeRun.FinishedAt = DateTime.UtcNow;
         judgeRun.Note = req.Note;
         judgeRun.CompileExitCode = req.Compile.ExitCode;
@@ -42,10 +46,33 @@ public sealed class JudgeResultApplyService
         judgeRun.TotalMemoryKb = req.Summary.MemoryKb;
         judgeRun.WorkerId = req.WorkerId;
 
+        submission.StatusCode = submissionStatus;
+
+        var oldResults = await _db.Results
+            .Where(x => x.JudgeRunId == judgeRun.Id)
+            .ToListAsync(ct);
+
+        if ( oldResults.Count > 0 )
+            _db.Results.RemoveRange(oldResults);
+
+        if ( JudgeStatusClassifier.IsInfrastructureFailure(req) )
+        {
+            submission.VerdictCode = "ie";
+            submission.TimeMs = req.Summary.TimeMs;
+            submission.MemoryKb = req.Summary.MemoryKb;
+            submission.FinalScore = req.Summary.FinalScore ?? 0;
+            submission.JudgedAt = DateTime.UtcNow;
+
+            await UpsertRunMetricAsync(submission.Id , req , ct);
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return;
+        }
+
         if ( !req.Compile.Ok )
         {
             submission.StatusCode = "done";
-            submission.VerdictCode = "ce";
+            submission.VerdictCode = ResultStatusMapper.NormalizeVerdict(req.Summary.Verdict);
             submission.TimeMs = req.Summary.TimeMs;
             submission.MemoryKb = req.Summary.MemoryKb;
             submission.FinalScore = req.Summary.FinalScore ?? 0;
@@ -57,7 +84,7 @@ public sealed class JudgeResultApplyService
                 SubmissionId = submission.Id ,
                 JudgeRunId = judgeRun.Id ,
                 TestcaseId = null ,
-                StatusCode = "ce" ,
+                StatusCode = ResultStatusMapper.NormalizeVerdict(req.Summary.Verdict) ,
                 RuntimeMs = req.Summary.TimeMs ,
                 MemoryKb = req.Summary.MemoryKb ,
                 Input = null ,
@@ -65,18 +92,19 @@ public sealed class JudgeResultApplyService
                 ActualOutput = null ,
                 StdoutBlobId = null ,
                 StderrBlobId = null ,
-                CheckerMessage = null ,
+                CheckerMessage = BuildCompileCheckerMessage(req.Summary.Verdict) ,
                 ExitCode = req.Compile.ExitCode ,
                 Signal = null ,
                 CreatedAt = DateTime.UtcNow ,
                 OutputUrl = null ,
                 Type = "compile" ,
-                Message = "compile error" ,
-                Note = $"{req.Compile.Stderr}\n{req.Compile.Stdout}"
+                Message = BuildCompileMessage(req.Summary.Verdict) ,
+                Note = $"{req.Compile.Stderr}\n{req.Compile.Stdout}".Trim()
             });
 
             await UpsertRunMetricAsync(submission.Id , req , ct);
             await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
             return;
         }
 
@@ -108,8 +136,34 @@ public sealed class JudgeResultApplyService
 
         SubmissionFinalizer.ApplySubmissionSummary(submission , req.Summary);
 
+        submission.StatusCode = "done";
+        submission.JudgedAt ??= DateTime.UtcNow;
+
         await UpsertRunMetricAsync(submission.Id , req , ct);
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+    }
+
+    private static string BuildCompileCheckerMessage(string verdict)
+    {
+        return verdict switch
+        {
+            "ce" => "Compile Error",
+            "tle" => "Compile Time Limit Exceeded",
+            "mle" => "Compile Memory Limit Exceeded",
+            _ => "Compile Failed"
+        };
+    }
+
+    private static string BuildCompileMessage(string verdict)
+    {
+        return verdict switch
+        {
+            "ce" => "compile error",
+            "tle" => "compile time limit exceeded",
+            "mle" => "compile memory limit exceeded",
+            _ => "compile failed"
+        };
     }
 
     private async Task UpsertRunMetricAsync(

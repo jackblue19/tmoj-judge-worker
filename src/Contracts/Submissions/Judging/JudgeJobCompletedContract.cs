@@ -7,7 +7,7 @@ public sealed class JudgeJobCompletedContract
     public Guid SubmissionId { get; init; }
     public Guid? WorkerId { get; init; }
 
-    public string Status { get; init; } = null!; // done / failed 
+    public string Status { get; init; } = null!; // done / failed
 
     public JudgeCompileResultContract Compile { get; init; } = new();
     public JudgeSummaryResultContract Summary { get; init; } = new();

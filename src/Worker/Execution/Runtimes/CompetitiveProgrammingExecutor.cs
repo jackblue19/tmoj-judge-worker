@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Worker.Execution.Containers;
 using Worker.Execution.Runtimes.Cp;
 using Worker.Execution.Testset;
+using Worker.Execution.Utils;
 
 namespace Worker.Execution.Runtimes;
 
@@ -42,31 +43,31 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
 
     public bool CanHandle(DispatchJudgeJobContract job)
     {
+        if ( !string.IsNullOrWhiteSpace(job.RuntimeProfileKey) )
+            return true;
+
         var runtime = job.RuntimeName.Trim().ToLowerInvariant();
 
         return runtime.Contains("c++")
             || runtime.Contains("cpp")
             || runtime.Contains("java")
-            || runtime.Contains("python")
-            || runtime.Contains("prf")
-            || runtime.Contains("pro")
-            || runtime.Contains("pfp");
+            || runtime.Contains("python");
     }
 
     public async Task<JudgeJobCompletedContract> ExecuteAsync(
         DispatchJudgeJobContract job ,
         CancellationToken ct)
     {
-        //var profile = ResolveProfile(job.RuntimeName);
-        var profile = _profileRegistry.Resolve(job.RuntimeName);
+        var profile = _profileRegistry.Resolve(job.RuntimeProfileKey);
         var workDir = CreateWorkDir(job.SubmissionId);
 
         var shouldCleanup = true;
+
         try
         {
             _logger.LogInformation(
-                "CP executor start. SubmissionId={SubmissionId}, Runtime={RuntimeName}, TestsetId={TestsetId}" ,
-                job.SubmissionId , job.RuntimeName , job.TestsetId);
+                "CP executor start. SubmissionId={SubmissionId}, RuntimeProfileKey={RuntimeProfileKey}, TestsetId={TestsetId}, TimeLimitMs={TimeLimitMs}, MemoryLimitKb={MemoryLimitKb}" ,
+                job.SubmissionId , job.RuntimeProfileKey , job.TestsetId , job.TimeLimitMs , job.MemoryLimitKb);
 
             await _ensureService.EnsureAsync(
                 job.ProblemSlug ,
@@ -98,21 +99,14 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     } ,
                     ct);
 
-                if ( compileResult.TimedOut || compileResult.ExitCode != 0 )
+                if ( compileResult.TimedOut || compileResult.ExitCode != 0 || compileResult.OomKilled )
                     return BuildCompileError(job , compileResult);
 
-                //  logs bugs
-                var exePath = Path.Combine(workDir , "main");
-                if ( profile.HasCompileStep && !File.Exists(exePath) )
+                var artifactPath = ResolveCompiledArtifactPath(workDir , profile);
+                if ( !string.IsNullOrWhiteSpace(artifactPath) && !File.Exists(artifactPath) )
                 {
                     throw new InvalidOperationException(
-                        $"Compiled binary not found at {exePath}");
-                }
-
-                if ( !File.Exists(exePath) )
-                {
-                    throw new InvalidOperationException(
-                        $"Compiled binary not found at {exePath}. Compile step likely failed silently.");
+                        $"Compiled artifact not found at {artifactPath}");
                 }
             }
 
@@ -130,46 +124,50 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     ct);
 
                 var runResult = await _dockerRunner.RunAsync(
-                     new DockerRunRequest
-                     {
-                         Image = ResolveImage(job) ,
-                         Entrypoint = "/bin/bash" , // FIX
-                         WorkingDirectory = "/work" ,
-                         TimeoutMs = Math.Max(job.TimeLimitMs , 1000) ,
-                         MemoryLimit = ResolveMemoryLimit(job.MemoryLimitKb) ,
-                         CpuLimit = "1.0" ,
-                         Mounts = new()
-                         {
+                    new DockerRunRequest
+                    {
+                        Image = ResolveImage(job) ,
+                        Entrypoint = "/bin/bash" ,
+                        WorkingDirectory = "/work" ,
+                        TimeoutMs = Math.Max(job.TimeLimitMs , 1000) ,
+                        MemoryLimit = ResolveMemoryLimit(job.MemoryLimitKb) ,
+                        CpuLimit = "1.0" ,
+                        Mounts = new()
+                        {
                             new DockerMount { HostPath = workDir, ContainerPath = "/work" }
-                         } ,
-                         Command = BuildRunCommand(profile , prepared)
-                     } ,
-                     ct);
+                        } ,
+                        Command = BuildRunCommand(profile , prepared)
+                    } ,
+                    ct);
 
                 totalTimeMs += runResult.ElapsedMs;
 
-                if ( !File.Exists(prepared.ActualPath) )
+                if ( runResult.PeakMemoryKb.HasValue )
+                {
+                    peakMemoryKb = !peakMemoryKb.HasValue
+                        ? runResult.PeakMemoryKb.Value
+                        : Math.Max(peakMemoryKb.Value , runResult.PeakMemoryKb.Value);
+                }
+
+                if ( !runResult.TimedOut && !runResult.OomKilled && !File.Exists(prepared.ActualPath) )
                 {
                     throw new InvalidOperationException(
                         $"Execution produced no output file: {prepared.ActualPath}. " +
-                        $"ExitCode={runResult.ExitCode}, TimedOut={runResult.TimedOut}, " +
+                        $"ExitCode={runResult.ExitCode}, TimedOut={runResult.TimedOut}, OomKilled={runResult.OomKilled}, " +
                         $"Stdout=[{runResult.Stdout}], Stderr=[{runResult.Stderr}]");
                 }
 
-                var actualOutput = await File.ReadAllTextAsync(prepared.ActualPath , ct);
+                var actualOutput = File.Exists(prepared.ActualPath)
+                    ? await File.ReadAllTextAsync(prepared.ActualPath , ct)
+                    : string.Empty;
+
                 var expectedOutput = await File.ReadAllTextAsync(prepared.ExpectedPath , ct);
 
-                var verdict = DetermineVerdict(runResult , expectedOutput , actualOutput);
-
-                if ( verdict == "wa" )
-                {
-                    _logger.LogWarning(
-                        "WA detected. SubmissionId={SubmissionId}, Ordinal={Ordinal}, Expected={Expected}, Actual={Actual}" ,
-                        job.SubmissionId ,
-                        c.Ordinal ,
-                        Normalize(expectedOutput) ,
-                        Normalize(actualOutput));
-                }
+                var verdict = DetermineVerdict(
+                    runResult ,
+                    expectedOutput ,
+                    actualOutput ,
+                    job.CompareMode);
 
                 caseResults.Add(new JudgeCaseCompletedContract
                 {
@@ -179,32 +177,38 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     ExitCode = runResult.ExitCode ,
                     TimedOut = runResult.TimedOut ,
                     TimeMs = runResult.ElapsedMs ,
-                    MemoryKb = null ,
+                    MemoryKb = runResult.PeakMemoryKb ,
                     Stdout = runResult.Stdout ,
                     Stderr = runResult.Stderr ,
                     ActualOutput = actualOutput ,
                     ExpectedOutput = expectedOutput ,
-                    CheckerMessage = verdict == "wa" ? "Wrong Answer" : null ,
+                    CheckerMessage = BuildCheckerMessage(verdict) ,
                     Message = verdict ,
-                    Note = verdict == "wa"
-                            ? $"Expected(normalized)=[{Normalize(expectedOutput)}] | Actual(normalized)=[{Normalize(actualOutput)}]"
-                            : null
+                    Note = BuildCaseNote(verdict , expectedOutput , actualOutput , runResult)
                 });
 
                 if ( job.StopOnFirstFail && verdict != "ac" )
                     break;
             }
 
-            var passed = caseResults.Count(x => x.Verdict == "ac");
             var finalVerdict = caseResults.Any(x => x.Verdict != "ac")
                 ? caseResults.First(x => x.Verdict != "ac").Verdict
                 : "ac";
+
+            var passed = caseResults.Count(x => x.Verdict == "ac");
+
+            var weightByCaseId = job.Cases.ToDictionary(x => x.TestcaseId , x => x.Weight);
+            var totalWeight = job.Cases.Sum(x => x.Weight);
+            var passedWeight = caseResults
+                .Where(x => x.Verdict == "ac")
+                .Sum(x => weightByCaseId.TryGetValue(x.TestcaseId , out var w) ? w : 0);
+
+            var finalScore = totalWeight <= 0
+                ? 0m
+                : Math.Round((decimal) passedWeight * 100m / totalWeight , 2);
+
             if ( finalVerdict != "ac" )
                 shouldCleanup = false;
-
-            var finalScore = job.Cases.Count == 0
-                ? 0m
-                : Math.Round((decimal) passed * 100m / job.Cases.Count , 2);
 
             return new JudgeJobCompletedContract
             {
@@ -282,7 +286,6 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     "Keeping workDir for debugging. SubmissionId={SubmissionId}, WorkDir={WorkDir}" ,
                     job.SubmissionId , workDir);
             }
-            //try { Directory.Delete(workDir , recursive: true); } catch { }
         }
     }
 
@@ -327,32 +330,49 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
     private static string DetermineVerdict(
         DockerRunResult runResult ,
         string expected ,
-        string actual)
+        string actual ,
+        string compareMode)
     {
         if ( runResult.TimedOut )
             return "tle";
 
+        if ( runResult.OomKilled )
+            return "mle";
+
         if ( runResult.ExitCode != 0 )
             return "re";
 
-        return CompareOutputs(expected , actual) ? "ac" : "wa";
+        return OutputComparer.Compare(expected , actual , compareMode) ? "ac" : "wa";
     }
 
-    private static bool CompareOutputs(string expected , string actual)
+    private static string? BuildCheckerMessage(string verdict)
     {
-        return Normalize(expected) == Normalize(actual);
+        return verdict switch
+        {
+            "wa" => "Wrong Answer",
+            "tle" => "Time Limit Exceeded",
+            "mle" => "Memory Limit Exceeded",
+            "re" => "Runtime Error",
+            "ce" => "Compile Error",
+            _ => null
+        };
     }
 
-    private static string Normalize(string value)
+    private static string? BuildCaseNote(
+        string verdict ,
+        string expected ,
+        string actual ,
+        DockerRunResult runResult)
     {
-        return string.Join('\n' ,
-            value.Replace("\r\n" , "\n")
-                 .Replace("\r" , "\n")
-                 .Split('\n')
-                 .Select(x => x.TrimEnd()))
-            .Trim();
+        return verdict switch
+        {
+            "wa" => $"Expected(normalized)=[{OutputComparer.NormalizeForNote(expected)}] | Actual(normalized)=[{OutputComparer.NormalizeForNote(actual)}]",
+            "tle" => "Execution exceeded time limit.",
+            "mle" => "Execution exceeded memory limit.",
+            "re" => string.IsNullOrWhiteSpace(runResult.Stderr) ? "Runtime error." : runResult.Stderr,
+            _ => null
+        };
     }
-
 
     private string CreateWorkDir(Guid submissionId)
     {
@@ -366,18 +386,18 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
     }
 
     private static JudgeJobCompletedContract BuildCompileError(
-    DispatchJudgeJobContract job ,
-    DockerRunResult compile)
+        DispatchJudgeJobContract job ,
+        DockerRunResult compile)
     {
+        var compileVerdict = compile.OomKilled ? "mle" : compile.TimedOut ? "tle" : "ce";
+
         return new JudgeJobCompletedContract
         {
             JobId = job.JobId ,
             JudgeRunId = job.JudgeRunId ,
             SubmissionId = job.SubmissionId ,
             WorkerId = job.WorkerId ,
-
-            Status = "failed" ,
-
+            Status = "done" ,
             Note = "Compile failed." ,
             Compile = new JudgeCompileResultContract
             {
@@ -389,16 +409,22 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
             } ,
             Summary = new JudgeSummaryResultContract
             {
-                // CE vẫn đúng ở verdict
-                Verdict = "ce" ,
+                Verdict = compileVerdict ,
                 Passed = 0 ,
                 Total = job.Cases.Count ,
                 TimeMs = compile.ElapsedMs ,
-                MemoryKb = 0 ,
+                MemoryKb = compile.PeakMemoryKb ,
                 FinalScore = 0
             } ,
             Cases = new List<JudgeCaseCompletedContract>()
         };
     }
 
+    private static string? ResolveCompiledArtifactPath(string workDir , ICpExecutorProfile profile)
+    {
+        if ( string.IsNullOrWhiteSpace(profile.CompiledArtifactFileName) )
+            return null;
+
+        return Path.Combine(workDir , profile.CompiledArtifactFileName);
+    }
 }

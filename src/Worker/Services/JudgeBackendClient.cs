@@ -14,6 +14,35 @@ public sealed class JudgeBackendClient
         _http = http;
     }
 
+    public async Task<Guid> RegisterWorkerAsync(
+        JudgeWorkerRegistrationContract req ,
+        CancellationToken ct)
+    {
+        using var res = await _http.PostAsJsonAsync(
+            "api/internal/judge/workers/register" ,
+            req ,
+            cancellationToken: ct);
+
+        res.EnsureSuccessStatusCode();
+
+        var payload = await res.Content.ReadFromJsonAsync<RegisterWorkerResponse>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("Register worker response is empty.");
+
+        return payload.WorkerId;
+    }
+
+    public async Task HeartbeatAsync(
+        JudgeWorkerHeartbeatContract req ,
+        CancellationToken ct)
+    {
+        using var res = await _http.PostAsJsonAsync(
+            "api/internal/judge/workers/heartbeat" ,
+            req ,
+            cancellationToken: ct);
+
+        res.EnsureSuccessStatusCode();
+    }
+
     public async Task<DispatchJudgeJobContract?> ClaimNextAsync(Guid workerId , CancellationToken ct)
     {
         using var res = await _http.PostAsync(
@@ -40,5 +69,10 @@ public sealed class JudgeBackendClient
             ct);
 
         res.EnsureSuccessStatusCode();
+    }
+
+    private sealed class RegisterWorkerResponse
+    {
+        public Guid WorkerId { get; set; }
     }
 }

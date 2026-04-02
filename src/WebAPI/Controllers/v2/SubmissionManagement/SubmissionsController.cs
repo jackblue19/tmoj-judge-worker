@@ -82,7 +82,6 @@ public sealed class SubmissionsController : ControllerBase
         var codeHash = Convert.ToHexString(SHA256.HashData(codeBytes)).ToLowerInvariant();
 
         var submissionId = Guid.NewGuid();
-        var judgeRunId = Guid.NewGuid();
         var judgeJobId = Guid.NewGuid();
 
         var timeLimitMs = req.TimeLimitMs ?? problem.TimeLimitMs ?? runtime.DefaultTimeLimitMs;
@@ -92,6 +91,14 @@ public sealed class SubmissionsController : ControllerBase
         var memoryLimitKb = problem.MemoryLimitKb ?? runtime.DefaultMemoryLimitKb;
         if ( memoryLimitKb <= 0 )
             memoryLimitKb = runtime.DefaultMemoryLimitKb;
+
+        var executionOptions = new JudgeExecutionOptionsContract
+        {
+            TimeLimitMs = timeLimitMs ,
+            MemoryLimitKb = memoryLimitKb ,
+            CompareMode = string.IsNullOrWhiteSpace(req.CompareMode) ? "trim" : req.CompareMode!.Trim().ToLowerInvariant() ,
+            StopOnFirstFail = req.StopOnFirstFail ?? true
+        };
 
         var submission = new Submission
         {
@@ -123,31 +130,6 @@ public sealed class SubmissionsController : ControllerBase
             SourceCode = sourceCode
         };
 
-        // Schema judge_runs không có queued, chỉ running/done/failed.
-        // Với flow hiện tại, tạo sẵn judge_run từ lúc submit thì status hợp lệ duy nhất là running.
-        var judgeRun = new JudgeRun
-        {
-            Id = judgeRunId ,
-            SubmissionId = submissionId ,
-            WorkerId = null ,
-            StartedAt = DateTime.UtcNow ,
-            FinishedAt = null ,
-            Status = "running" ,
-            RuntimeId = runtime.Id ,
-            DockerImage = runtime.ImageRef ,
-            Limits = JsonSerializer.Serialize(new JudgeRunLimits
-            {
-                TimeMs = timeLimitMs ,
-                MemoryKb = memoryLimitKb
-            }) ,
-            Note = null ,
-            CompileLogBlobId = null ,
-            CompileExitCode = null ,
-            CompileTimeMs = null ,
-            TotalTimeMs = null ,
-            TotalMemoryKb = null
-        };
-
         var judgeJob = new JudgeJob
         {
             Id = judgeJobId ,
@@ -161,11 +143,11 @@ public sealed class SubmissionsController : ControllerBase
             Priority = 0 ,
             TriggeredByUserId = userId ,
             TriggerType = "submit" ,
-            TriggerReason = null
+            TriggerReason = null ,
+            OptionsJson = JsonSerializer.Serialize(executionOptions)
         };
 
         _db.Submissions.Add(submission);
-        _db.JudgeRuns.Add(judgeRun);
         _db.JudgeJobs.Add(judgeJob);
 
         await _db.SaveChangesAsync(ct);
@@ -173,7 +155,7 @@ public sealed class SubmissionsController : ControllerBase
         return Ok(new SubmitResponseV2
         {
             SubmissionId = submissionId ,
-            JudgeRunId = judgeRunId ,
+            JudgeRunId = null ,
             JudgeJobId = judgeJobId ,
             Status = "queued"
         });
@@ -226,7 +208,7 @@ public sealed class SubmitRequestV2
 public sealed class SubmitResponseV2
 {
     public Guid SubmissionId { get; set; }
-    public Guid JudgeRunId { get; set; }
+    public Guid? JudgeRunId { get; set; }
     public Guid JudgeJobId { get; set; }
     public string Status { get; set; } = null!;
 }

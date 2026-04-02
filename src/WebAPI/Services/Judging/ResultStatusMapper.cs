@@ -4,21 +4,21 @@ public static class ResultStatusMapper
 {
     public static string NormalizeVerdict(string? verdict)
     {
-        if ( string.IsNullOrWhiteSpace(verdict) )
-            return "ie";
+        var v = string.IsNullOrWhiteSpace(verdict)
+            ? "ie"
+            : verdict.Trim().ToLowerInvariant();
 
-        return verdict.Trim().ToLowerInvariant() switch
+        return v switch
         {
             "ac" => "ac",
             "wa" => "wa",
             "tle" => "tle",
             "mle" => "mle",
-            "ole" => "ole",
+            "ce" => "ce",
             "re" => "re",
             "rte" => "re",
-            "ce" => "ce",
-            "ie" => "ie",
             "skipped" => "ie",
+            "ie" => "ie",
             _ => "ie"
         };
     }

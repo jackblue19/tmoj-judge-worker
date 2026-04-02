@@ -147,10 +147,27 @@ public sealed class SubmissionsController : ControllerBase
             OptionsJson = JsonSerializer.Serialize(executionOptions)
         };
 
-        _db.Submissions.Add(submission);
-        _db.JudgeJobs.Add(judgeJob);
+        try
+        {
+            _db.Submissions.Add(submission);
+            _db.JudgeJobs.Add(judgeJob);
 
-        await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync(ct);
+        }
+        catch ( DbUpdateException ex )
+        {
+            return Problem(
+                statusCode: 500 ,
+                title: "DbUpdateException" ,
+                detail: ex.InnerException?.Message ?? ex.Message);
+        }
+        catch ( Exception ex )
+        {
+            return Problem(
+                statusCode: 500 ,
+                title: "Unhandled exception" ,
+                detail: ex.Message);
+        }
 
         return Ok(new SubmitResponseV2
         {

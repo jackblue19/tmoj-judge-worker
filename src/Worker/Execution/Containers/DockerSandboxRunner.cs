@@ -130,7 +130,7 @@ public sealed class DockerRunRequest
 {
     public string ContainerName { get; init; } = $"tmoj-{Guid.NewGuid():N}";
     public string Image { get; init; } = null!;
-    public string? Entrypoint { get; init; }   // 🔥 NEW
+    public string? Entrypoint { get; init; }   // NEW
     public string? WorkingDirectory { get; init; }
     public string? Command { get; init; }
     public int TimeoutMs { get; init; } = 1000;

@@ -133,7 +133,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                      new DockerRunRequest
                      {
                          Image = ResolveImage(job) ,
-                         Entrypoint = "/bin/bash" , // 🔥 FIX
+                         Entrypoint = "/bin/bash" , // FIX
                          WorkingDirectory = "/work" ,
                          TimeoutMs = Math.Max(job.TimeLimitMs , 1000) ,
                          MemoryLimit = ResolveMemoryLimit(job.MemoryLimitKb) ,
@@ -353,45 +353,6 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
             .Trim();
     }
 
-    //private static CpRuntimeProfile ResolveProfile(string runtimeName)
-    //{
-    //    var r = runtimeName.ToLowerInvariant();
-
-    //    if ( r.Contains("cpp") || r.Contains("c++") || r.Contains("prf") )
-    //    {
-    //        return new CpRuntimeProfile
-    //        {
-    //            SourceFileName = "main.cpp" ,
-    //            CompileCommand = "g++ -O2 -std=c++17 main.cpp -o main" ,
-    //            RunCommand = "./main" ,
-    //            HasCompileStep = true
-    //        };
-    //    }
-
-    //    if ( r.Contains("java") || r.Contains("pro") )
-    //    {
-    //        return new CpRuntimeProfile
-    //        {
-    //            SourceFileName = "Main.java" ,
-    //            CompileCommand = "javac Main.java" ,
-    //            RunCommand = "java Main" ,
-    //            HasCompileStep = true
-    //        };
-    //    }
-
-    //    if ( r.Contains("python") || r.Contains("pfp") )
-    //    {
-    //        return new CpRuntimeProfile
-    //        {
-    //            SourceFileName = "main.py" ,
-    //            CompileCommand = "" ,
-    //            RunCommand = "python3 main.py" ,
-    //            HasCompileStep = false
-    //        };
-    //    }
-
-    //    throw new InvalidOperationException($"Unsupported competitive runtime: {runtimeName}");
-    //}
 
     private string CreateWorkDir(Guid submissionId)
     {
@@ -440,11 +401,4 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         };
     }
 
-    //private sealed class CpRuntimeProfile
-    //{
-    //    public string SourceFileName { get; init; } = null!;
-    //    public string CompileCommand { get; init; } = null!;
-    //    public string RunCommand { get; init; } = null!;
-    //    public bool HasCompileStep { get; init; }
-    //}
 }

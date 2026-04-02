@@ -1107,25 +1107,36 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
+
             entity.Property(e => e.Attempts)
                 .HasDefaultValue(0)
                 .HasColumnName("attempts");
+
             entity.Property(e => e.DequeuedAt).HasColumnName("dequeued_at");
             entity.Property(e => e.DequeuedByWorkerId).HasColumnName("dequeued_by_worker_id");
+
             entity.Property(e => e.EnqueueAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("enqueue_at");
+
             entity.Property(e => e.LastError).HasColumnName("last_error");
+
             entity.Property(e => e.Priority)
                 .HasDefaultValue(0)
                 .HasColumnName("priority");
+
             entity.Property(e => e.Status).HasColumnName("status");
             entity.Property(e => e.SubmissionId).HasColumnName("submission_id");
             entity.Property(e => e.TriggerReason).HasColumnName("trigger_reason");
-            entity.Property(e => e.OptionsJson).HasColumnName("options_json");
+
+            entity.Property(e => e.OptionsJson)
+                .HasColumnName("options_json")
+                .HasColumnType("jsonb");
+
             entity.Property(e => e.TriggerType)
                 .HasDefaultValueSql("'submit'::text")
                 .HasColumnName("trigger_type");
+
             entity.Property(e => e.TriggeredByUserId).HasColumnName("triggered_by_user_id");
 
             entity.HasOne(d => d.DequeuedByWorker).WithMany(p => p.JudgeJobs)

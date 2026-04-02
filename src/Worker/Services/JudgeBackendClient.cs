@@ -21,11 +21,14 @@ public sealed class JudgeBackendClient
         using var res = await _http.PostAsJsonAsync(
             "api/internal/judge/workers/register" ,
             req ,
-            cancellationToken: ct);
+            WorkerJsonSerializerContext.Default.JudgeWorkerRegistrationContract ,
+            ct);
 
         res.EnsureSuccessStatusCode();
 
-        var payload = await res.Content.ReadFromJsonAsync<RegisterWorkerResponse>(cancellationToken: ct)
+        var payload = await res.Content.ReadFromJsonAsync(
+            WorkerJsonSerializerContext.Default.RegisterWorkerResponse ,
+            ct)
             ?? throw new InvalidOperationException("Register worker response is empty.");
 
         return payload.WorkerId;
@@ -38,7 +41,8 @@ public sealed class JudgeBackendClient
         using var res = await _http.PostAsJsonAsync(
             "api/internal/judge/workers/heartbeat" ,
             req ,
-            cancellationToken: ct);
+            WorkerJsonSerializerContext.Default.JudgeWorkerHeartbeatContract ,
+            ct);
 
         res.EnsureSuccessStatusCode();
     }
@@ -69,10 +73,5 @@ public sealed class JudgeBackendClient
             ct);
 
         res.EnsureSuccessStatusCode();
-    }
-
-    private sealed class RegisterWorkerResponse
-    {
-        public Guid WorkerId { get; set; }
     }
 }

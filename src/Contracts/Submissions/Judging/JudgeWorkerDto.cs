@@ -7,5 +7,5 @@ public sealed class JudgeWorkerDto
     public string? Status { get; init; }
     public string? Version { get; init; }
     public DateTime? LastSeenAt { get; init; }
-    public string? CapabilitiesJson { get; init; }
+    public List<string> Capabilities { get; init; } = new();
 }

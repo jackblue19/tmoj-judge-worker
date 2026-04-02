@@ -25,7 +25,10 @@ public sealed class JudgeWorkersController : ControllerBase
         CancellationToken ct)
     {
         var workerId = await _heartbeatService.RegisterAsync(req , ct);
-        return Ok(new { workerId });
+        return Ok(new RegisterWorkerResponse
+        {
+            WorkerId = workerId
+        });
     }
 
     [HttpPost("heartbeat")]
@@ -34,7 +37,14 @@ public sealed class JudgeWorkersController : ControllerBase
         CancellationToken ct)
     {
         await _heartbeatService.HeartbeatAsync(req , ct);
-        return Ok(new { ok = true });
+
+        return Ok(new
+        {
+            ok = true ,
+            workerId = req.WorkerId ,
+            req.Name ,
+            req.Status
+        });
     }
 
     [HttpGet]
@@ -53,4 +63,23 @@ public sealed class JudgeWorkersController : ControllerBase
 
         return Ok(worker);
     }
+
+    [HttpGet("online")]
+    public async Task<IActionResult> GetOnline(CancellationToken ct)
+    {
+        var workers = await _metricsService.GetWorkersAsync(ct);
+        var since = DateTime.UtcNow.AddMinutes(-2);
+
+        var items = workers
+            .Where(x => x.LastSeenAt.HasValue && x.LastSeenAt.Value >= since)
+            .OrderBy(x => x.Name)
+            .ToList();
+
+        return Ok(items);
+    }
+}
+
+public sealed class RegisterWorkerResponse
+{
+    public Guid WorkerId { get; set; }
 }

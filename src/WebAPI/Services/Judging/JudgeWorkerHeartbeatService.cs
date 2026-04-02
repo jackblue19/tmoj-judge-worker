@@ -1,5 +1,4 @@
-﻿using System.Text.Json;
-using Contracts.Submissions.Judging;
+﻿using Contracts.Submissions.Judging;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
@@ -33,15 +32,11 @@ public sealed class JudgeWorkerHeartbeatService
         if ( worker is null )
         {
             worker = await _db.JudgeWorkers
-                .OrderBy(x => x.Id)
                 .FirstOrDefaultAsync(x => x.Name == req.Name , ct);
         }
 
-        var capabilitiesJson = JsonSerializer.Serialize(new
-        {
-            maxParallelJobs = req.MaxParallelJobs ,
-            supportedRuntimeProfileKeys = req.SupportedRuntimeProfileKeys
-        });
+        var capabilities = req.SupportedRuntimeProfileKeys?.Distinct().ToList()
+            ?? new List<string>();
 
         if ( worker is null )
         {
@@ -52,7 +47,7 @@ public sealed class JudgeWorkerHeartbeatService
                 Status = req.Status ,
                 Version = req.Version ,
                 LastSeenAt = DateTime.UtcNow ,
-                Capabilities = JsonDocument.Parse(capabilitiesJson).RootElement
+                Capabilities = capabilities
             };
 
             _db.JudgeWorkers.Add(worker);
@@ -63,7 +58,7 @@ public sealed class JudgeWorkerHeartbeatService
             worker.Status = req.Status;
             worker.Version = req.Version;
             worker.LastSeenAt = DateTime.UtcNow;
-            worker.Capabilities = JsonDocument.Parse(capabilitiesJson).RootElement;
+            worker.Capabilities = capabilities;
         }
 
         await _db.SaveChangesAsync(ct);
@@ -74,26 +69,37 @@ public sealed class JudgeWorkerHeartbeatService
         JudgeWorkerHeartbeatContract req ,
         CancellationToken ct)
     {
+        if ( req.WorkerId == Guid.Empty )
+            throw new InvalidOperationException("WorkerId is required.");
+
+        if ( string.IsNullOrWhiteSpace(req.Name) )
+            throw new InvalidOperationException("Worker name is required.");
+
         var worker = await _db.JudgeWorkers
-            .FirstOrDefaultAsync(x => x.Id == req.WorkerId , ct)
-            ?? throw new InvalidOperationException($"JudgeWorker {req.WorkerId} not found.");
+            .FirstOrDefaultAsync(x => x.Id == req.WorkerId , ct);
 
-        var capabilitiesJson = JsonSerializer.Serialize(new
+        if ( worker is null )
         {
-            maxParallelJobs = req.MaxParallelJobs ,
-            runningJobs = req.RunningJobs ,
-            cpuUsagePercent = req.CpuUsagePercent ,
-            memoryUsedMb = req.MemoryUsedMb ,
-            memoryTotalMb = req.MemoryTotalMb ,
-            loadAverage1m = req.LoadAverage1m ,
-            uptimeSeconds = req.UptimeSeconds ,
-            supportedRuntimeProfileKeys = req.SupportedRuntimeProfileKeys
-        });
+            worker = new JudgeWorker
+            {
+                Id = req.WorkerId ,
+                Name = req.Name ,
+                LastSeenAt = DateTime.UtcNow ,
+                Status = req.Status ,
+                Version = req.Version ,
+                Capabilities = req.Capabilities?.Distinct().ToList() ?? new List<string>()
+            };
 
-        worker.Status = req.Status;
-        worker.Version = req.Version;
-        worker.LastSeenAt = DateTime.UtcNow;
-        worker.Capabilities = JsonDocument.Parse(capabilitiesJson).RootElement;
+            _db.JudgeWorkers.Add(worker);
+        }
+        else
+        {
+            worker.Name = req.Name;
+            worker.LastSeenAt = DateTime.UtcNow;
+            worker.Status = req.Status;
+            worker.Version = req.Version;
+            worker.Capabilities = req.Capabilities?.Distinct().ToList() ?? new List<string>();
+        }
 
         await _db.SaveChangesAsync(ct);
     }

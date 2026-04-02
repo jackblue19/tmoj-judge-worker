@@ -2004,6 +2004,7 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.ProblemId).HasColumnName("problem_id");
             entity.Property(e => e.RuntimeId).HasColumnName("runtime_id");
             entity.Property(e => e.SourceCode).HasColumnName("source_code");
+            entity.Property(e => e.Note).HasColumnName("note");
             entity.Property(e => e.StatusCode)
                 .HasDefaultValueSql("'queued'::text")
                 .HasColumnName("status_code");

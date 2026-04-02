@@ -16,6 +16,13 @@ namespace Worker.Serialization;
 [JsonSerializable(typeof(DispatchJudgeJobContract))]
 [JsonSerializable(typeof(DispatchJudgeCaseContract))]
 [JsonSerializable(typeof(List<DispatchJudgeCaseContract>))]
+[JsonSerializable(typeof(RegisterWorkerResponse))]
+[JsonSerializable(typeof(JudgeWorkerRegistrationContract))]
 internal partial class WorkerJsonSerializerContext : JsonSerializerContext
 {
+}
+
+public sealed class RegisterWorkerResponse
+{
+    public Guid WorkerId { get; set; }
 }

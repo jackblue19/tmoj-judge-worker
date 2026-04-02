@@ -3,8 +3,13 @@
 public sealed class JudgeWorkerHeartbeatContract
 {
     public Guid WorkerId { get; init; }
-    public string Status { get; init; } = "idle";
-    public string Version { get; init; } = "1.0.0";
+
+    public string Name { get; init; } = null!;
+    public string? Version { get; init; }
+
+    public List<string> Capabilities { get; init; } = new();
+
+    public string Status { get; init; } = "online";
 
     public int RunningJobs { get; init; }
     public int MaxParallelJobs { get; init; }
@@ -15,6 +20,4 @@ public sealed class JudgeWorkerHeartbeatContract
     public double? LoadAverage1m { get; init; }
 
     public long UptimeSeconds { get; init; }
-
-    public List<string> SupportedRuntimeProfileKeys { get; init; } = new();
 }

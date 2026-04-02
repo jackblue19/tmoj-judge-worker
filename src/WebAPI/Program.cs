@@ -14,6 +14,7 @@ using WebAPI.OData;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Features;
 using Infrastructure.ExternalServices;
+using WebAPI.Services.Judging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,17 +86,19 @@ builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
 builder.Services.AddScoped<WebAPI.Services.Judging.JudgeJobDispatchService>();
 builder.Services.AddScoped<WebAPI.Services.Judging.JudgeResultApplyService>();
 
+builder.Services.AddScoped<JudgeWorkerHeartbeatService>();
+builder.Services.AddScoped<JudgeMetricsService>();
+
+builder.Services.AddScoped<SubmissionQueryService>();
+builder.Services.AddScoped<SubmissionRejudgeService>();
+
+builder.Services.AddSignalR();
+
+builder.Services.AddScoped<SubmissionNoteService>();
+builder.Services.AddScoped<SubmissionRealtimeNotifier>();
+
 //builder.WebHost.UseUrls("http://+:8080"); //  comment cái này là test local được deploy thì mở ra
 
-
-//  mediatr -> sau này refactor thì sẽ dùng
-//builder.Services.AddMediatR(cfg =>
-//    cfg.RegisterServicesFromAssembly(typeof(ApplicationAssemblyMarker).Assembly));
-//builder.Services.AddMediatR(cfg =>
-//{
-//    cfg.RegisterServicesFromAssembly(
-//        typeof(GetProblemsQuery).Assembly);
-//});
 builder.Services.AddApplication();
 
 builder.Services.AddHttpLogging(o =>
@@ -217,6 +220,7 @@ app.UseStatusCodePages();
 app.UseHttpLogging();
 app.UseMiddleware<RequestLogScopeMiddleware>();
 
+app.MapHub<WebAPI.Hubs.SubmissionHub>("/hubs/submissions");
 
 
 //  minimal apis    +   judge-server (vnoj-tier)

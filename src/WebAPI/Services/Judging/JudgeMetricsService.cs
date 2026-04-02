@@ -25,7 +25,7 @@ public sealed class JudgeMetricsService
                 Status = x.Status ,
                 Version = x.Version ,
                 LastSeenAt = x.LastSeenAt ,
-                CapabilitiesJson = x.Capabilities.HasValue ? x.Capabilities.Value.ToString() : null
+                Capabilities = x.Capabilities ?? new List<string>()
             })
             .ToListAsync(ct);
 
@@ -44,7 +44,7 @@ public sealed class JudgeMetricsService
                 Status = x.Status ,
                 Version = x.Version ,
                 LastSeenAt = x.LastSeenAt ,
-                CapabilitiesJson = x.Capabilities.HasValue ? x.Capabilities.Value.ToString() : null
+                Capabilities = x.Capabilities ?? new List<string>()
             })
             .FirstOrDefaultAsync(ct);
     }
@@ -52,7 +52,7 @@ public sealed class JudgeMetricsService
     public async Task<JudgeMetricsOverviewDto> GetOverviewAsync(CancellationToken ct)
     {
         var now = DateTime.UtcNow;
-        var onlineThreshold = now.AddSeconds(-30);
+        var onlineThreshold = now.AddMinutes(-2);
 
         var queuedJobs = await _db.JudgeJobs.AsNoTracking().CountAsync(x => x.Status == "queued" , ct);
         var runningJobs = await _db.JudgeJobs.AsNoTracking().CountAsync(x => x.Status == "running" , ct);

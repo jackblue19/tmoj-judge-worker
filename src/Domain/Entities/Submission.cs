@@ -58,6 +58,8 @@ public partial class Submission
 
     public string? SourceCode { get; set; }
 
+    public string? Note { get; set; }
+
     public virtual ArtifactBlob? CodeArtifact { get; set; }
 
     public virtual ContestProblem? ContestProblem { get; set; }

@@ -2,16 +2,21 @@
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
+using WebAPI.Models.Submissions;
 
 namespace WebAPI.Services.Judging;
 
 public sealed class JudgeResultApplyService
 {
     private readonly TmojDbContext _db;
+    private readonly SubmissionRealtimeNotifier _notifier;
 
-    public JudgeResultApplyService(TmojDbContext db)
+    public JudgeResultApplyService(
+        TmojDbContext db ,
+        SubmissionRealtimeNotifier notifier)
     {
         _db = db;
+        _notifier = notifier;
     }
 
     public async Task ApplyAsync(JudgeJobCompletedContract req , CancellationToken ct)
@@ -66,6 +71,8 @@ public sealed class JudgeResultApplyService
             await UpsertRunMetricAsync(submission.Id , req , ct);
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            await NotifyAsync(submission , ct);
             return;
         }
 
@@ -105,6 +112,8 @@ public sealed class JudgeResultApplyService
             await UpsertRunMetricAsync(submission.Id , req , ct);
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            await NotifyAsync(submission , ct);
             return;
         }
 
@@ -142,6 +151,27 @@ public sealed class JudgeResultApplyService
         await UpsertRunMetricAsync(submission.Id , req , ct);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+
+        await NotifyAsync(submission , ct);
+    }
+
+    private async Task NotifyAsync(
+        Submission submission ,
+        CancellationToken ct)
+    {
+        await _notifier.NotifySubmissionCompletedAsync(
+            new SubmissionVerdictEventDto
+            {
+                SubmissionId = submission.Id ,
+                UserId = submission.UserId ,
+                StatusCode = submission.StatusCode ,
+                VerdictCode = submission.VerdictCode ,
+                FinalScore = submission.FinalScore ,
+                TimeMs = submission.TimeMs ,
+                MemoryKb = submission.MemoryKb ,
+                JudgedAt = submission.JudgedAt
+            } ,
+            ct);
     }
 
     private static string BuildCompileCheckerMessage(string verdict)

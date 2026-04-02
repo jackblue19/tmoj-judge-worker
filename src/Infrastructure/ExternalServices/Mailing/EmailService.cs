@@ -20,7 +20,7 @@ public class EmailService : IEmailService
     public async Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
     {
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("TMOJ", _settings.Email));
+        message.From.Add(new MailboxAddress(_settings.DisplayName, _settings.FromEmail));
         message.To.Add(new MailboxAddress("", to));
         message.Subject = subject;
 

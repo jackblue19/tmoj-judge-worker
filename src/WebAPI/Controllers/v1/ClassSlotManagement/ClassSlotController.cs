@@ -235,7 +235,8 @@ public class ClassSlotController : ControllerBase
                 .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            var problemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId).ToList();
+            var slotProblems = slot.ClassSlotProblems?.ToList() ?? new List<ClassSlotProblem>();
+            var problemIds = slotProblems.Select(sp => sp.ProblemId).ToList();
 
             var members = await _db.ClassMembers.AsNoTracking()
                 .Include(m => m.User)
@@ -246,11 +247,13 @@ public class ClassSlotController : ControllerBase
 
             foreach (var m in members)
             {
-                var subs = await _db.Submissions.AsNoTracking()
-                    .Where(s => s.UserId == m.UserId && problemIds.Contains(s.ProblemId))
-                    .ToListAsync(ct);
+                var subs = problemIds.Count > 0
+                    ? await _db.Submissions.AsNoTracking()
+                        .Where(s => s.UserId == m.UserId && problemIds.Contains(s.ProblemId))
+                        .ToListAsync(ct)
+                    : new List<Submission>();
 
-                var problemScores = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).OrderBy(sp => sp.Ordinal).Select(sp =>
+                var problemScores = slotProblems.OrderBy(sp => sp.Ordinal).Select(sp =>
                 {
                     var pSubs = subs.Where(s => s.ProblemId == sp.ProblemId).ToList();
                     var best = pSubs.Where(s => s.FinalScore.HasValue)
@@ -261,7 +264,7 @@ public class ClassSlotController : ControllerBase
                         best?.VerdictCode,
                         best?.FinalScore,
                         pSubs.Count,
-                        pSubs.Max(s => (DateTime?)s.CreatedAt));
+                        pSubs.Any() ? pSubs.Max(s => (DateTime?)s.CreatedAt) : null);
                 }).ToList();
 
                 var total = problemScores.Where(p => p.Score.HasValue).Sum(p => p.Score!.Value);
@@ -297,13 +300,16 @@ public class ClassSlotController : ControllerBase
                 .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            var problemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).Select(sp => sp.ProblemId).ToList();
+            var slotProblems = slot.ClassSlotProblems?.ToList() ?? new List<ClassSlotProblem>();
+            var problemIds = slotProblems.Select(sp => sp.ProblemId).ToList();
 
-            var submissions = await _db.Submissions.AsNoTracking()
-                .Include(s => s.Problem)
-                .Where(s => s.UserId == userId && problemIds.Contains(s.ProblemId))
-                .OrderByDescending(s => s.CreatedAt)
-                .ToListAsync(ct);
+            var submissions = problemIds.Count > 0
+                ? await _db.Submissions.AsNoTracking()
+                    .Include(s => s.Problem)
+                    .Where(s => s.UserId == userId && problemIds.Contains(s.ProblemId))
+                    .OrderByDescending(s => s.CreatedAt)
+                    .ToListAsync(ct)
+                : new List<Submission>();
 
             var result = new List<StudentSubmissionDetailResponse>();
 
@@ -329,6 +335,200 @@ public class ClassSlotController : ControllerBase
         catch (Exception)
         {
             return StatusCode(500, new { Message = "An error occurred while fetching submissions." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // PUT .../slots/{slotId}  →  Update Slot details (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPut("{slotId:guid}")]
+    public async Task<IActionResult> Update(
+        Guid instanceId, Guid slotId,
+        [FromBody] UpdateClassSlotRequest req,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var slot = await _db.ClassSlots
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
+            if (slot is null) return NotFound(new { Message = "Slot not found." });
+
+            if (req.Title is not null) slot.Title = req.Title.Trim();
+            if (req.Description is not null) slot.Description = req.Description.Trim();
+            if (req.Rules is not null) slot.Rules = req.Rules.Trim();
+            if (req.OpenAt.HasValue) slot.OpenAt = req.OpenAt.Value.ToUniversalTime();
+            if (req.DueAt.HasValue) slot.DueAt = req.DueAt.Value.ToUniversalTime();
+            if (req.CloseAt.HasValue) slot.CloseAt = req.CloseAt.Value.ToUniversalTime();
+            if (req.IsPublished.HasValue) slot.IsPublished = req.IsPublished.Value;
+            slot.UpdatedBy = userId;
+
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = "Slot updated successfully.", slot.Id });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating the slot." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // DELETE .../slots/{slotId}  →  Delete Slot (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpDelete("{slotId:guid}")]
+    public async Task<IActionResult> Delete(
+        Guid instanceId, Guid slotId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var slot = await _db.ClassSlots
+                .Include(s => s.ClassSlotProblems)
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
+            if (slot is null) return NotFound(new { Message = "Slot not found." });
+
+            // Remove associated problems first
+            if (slot.ClassSlotProblems?.Any() == true)
+                _db.ClassSlotProblems.RemoveRange(slot.ClassSlotProblems);
+
+            _db.ClassSlots.Remove(slot);
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = "Slot deleted successfully." });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while deleting the slot." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // POST .../slots/{slotId}/problems  →  Add problems to slot (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("{slotId:guid}/problems")]
+    public async Task<IActionResult> AddProblems(
+        Guid instanceId, Guid slotId,
+        [FromBody] List<SlotProblemItem> problems,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var slot = await _db.ClassSlots
+                .Include(s => s.ClassSlotProblems)
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
+            if (slot is null) return NotFound(new { Message = "Slot not found." });
+
+            if (problems is not { Count: > 0 })
+                return BadRequest(new { Message = "At least one problem is required." });
+
+            var existingProblemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>())
+                .Select(sp => sp.ProblemId).ToHashSet();
+
+            var added = 0;
+            foreach (var p in problems)
+            {
+                if (existingProblemIds.Contains(p.ProblemId))
+                    continue; // skip duplicates
+
+                if (!await _db.Problems.AnyAsync(pr => pr.Id == p.ProblemId, ct))
+                    return BadRequest(new { Message = $"Problem {p.ProblemId} not found." });
+
+                _db.ClassSlotProblems.Add(new ClassSlotProblem
+                {
+                    SlotId = slot.Id,
+                    ProblemId = p.ProblemId,
+                    Ordinal = p.Ordinal,
+                    Points = p.Points,
+                    IsRequired = p.IsRequired
+                });
+                added++;
+            }
+
+            slot.UpdatedBy = userId;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = $"{added} problem(s) added to slot.", Added = added });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while adding problems." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // DELETE .../slots/{slotId}/problems  →  Remove problems from slot (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpDelete("{slotId:guid}/problems")]
+    public async Task<IActionResult> RemoveProblems(
+        Guid instanceId, Guid slotId,
+        [FromBody] List<Guid> problemIds,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var slot = await _db.ClassSlots
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
+            if (slot is null) return NotFound(new { Message = "Slot not found." });
+
+            if (problemIds is not { Count: > 0 })
+                return BadRequest(new { Message = "At least one problem ID is required." });
+
+            var toRemove = await _db.ClassSlotProblems
+                .Where(sp => sp.SlotId == slotId && problemIds.Contains(sp.ProblemId))
+                .ToListAsync(ct);
+
+            if (toRemove.Count == 0)
+                return NotFound(new { Message = "None of the specified problems were found in this slot." });
+
+            _db.ClassSlotProblems.RemoveRange(toRemove);
+            slot.UpdatedBy = userId;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(new { Message = $"{toRemove.Count} problem(s) removed from slot.", Removed = toRemove.Count });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while removing problems." });
         }
     }
 

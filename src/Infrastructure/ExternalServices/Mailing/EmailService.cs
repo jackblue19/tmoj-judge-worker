@@ -17,11 +17,11 @@ public class EmailService : IEmailService
         _settings = settings.Value;
     }
 
-    public async Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
+    public async Task SendEmailAsync(string to , string subject , string body , CancellationToken cancellationToken = default)
     {
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_settings.DisplayName, _settings.FromEmail));
-        message.To.Add(new MailboxAddress("", to));
+        message.From.Add(new MailboxAddress(_settings.DisplayName , _settings.FromEmail));
+        message.To.Add(new MailboxAddress("" , to));
         message.Subject = subject;
 
         var bodyBuilder = new BodyBuilder { HtmlBody = body };
@@ -31,13 +31,13 @@ public class EmailService : IEmailService
 
         try
         {
-            await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.Auto, cancellationToken);
-            await client.AuthenticateAsync(_settings.Email, _settings.Password, cancellationToken);
-            await client.SendAsync(message, cancellationToken);
+            await client.ConnectAsync(_settings.Host , _settings.Port , SecureSocketOptions.SslOnConnect , cancellationToken);
+            await client.AuthenticateAsync(_settings.Email , _settings.Password , cancellationToken);
+            await client.SendAsync(message , cancellationToken);
         }
         finally
         {
-            await client.DisconnectAsync(true, cancellationToken);
+            await client.DisconnectAsync(true , cancellationToken);
         }
     }
 }

@@ -43,22 +43,14 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
 
     public bool CanHandle(DispatchJudgeJobContract job)
     {
-        if ( !string.IsNullOrWhiteSpace(job.RuntimeProfileKey) )
-            return true;
-
-        var runtime = job.RuntimeName.Trim().ToLowerInvariant();
-
-        return runtime.Contains("c++")
-            || runtime.Contains("cpp")
-            || runtime.Contains("java")
-            || runtime.Contains("python");
+        return !string.IsNullOrWhiteSpace(job.RuntimeProfileKey);
     }
 
     public async Task<JudgeJobCompletedContract> ExecuteAsync(
         DispatchJudgeJobContract job ,
         CancellationToken ct)
     {
-        var profile = _profileRegistry.Resolve(job.RuntimeProfileKey);
+        var plan = _profileRegistry.ResolveExecutionPlan(job);
         var workDir = CreateWorkDir(job.SubmissionId);
 
         var shouldCleanup = true;
@@ -75,12 +67,12 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                 job.ProblemId ,
                 ct);
 
-            var sourcePath = Path.Combine(workDir , profile.SourceFileName);
+            var sourcePath = Path.Combine(workDir , plan.SourceFileName);
             await File.WriteAllTextAsync(sourcePath , job.SourceCode , ct);
 
             DockerRunResult? compileResult = null;
 
-            if ( profile.HasCompileStep )
+            if ( plan.HasCompileStep )
             {
                 compileResult = await _dockerRunner.RunAsync(
                     new DockerRunRequest
@@ -95,18 +87,17 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                         {
                             new DockerMount { HostPath = workDir, ContainerPath = "/work" }
                         } ,
-                        Command = $"-lc \"{profile.CompileCommand}\""
+                        Command = $"-lc \"{plan.CompileCommand}\""
                     } ,
                     ct);
 
                 if ( compileResult.TimedOut || compileResult.ExitCode != 0 || compileResult.OomKilled )
                     return BuildCompileError(job , compileResult);
 
-                var artifactPath = ResolveCompiledArtifactPath(workDir , profile);
+                var artifactPath = ResolveCompiledArtifactPath(workDir , plan);
                 if ( !string.IsNullOrWhiteSpace(artifactPath) && !File.Exists(artifactPath) )
                 {
-                    throw new InvalidOperationException(
-                        $"Compiled artifact not found at {artifactPath}");
+                    throw new InvalidOperationException($"Compiled artifact not found at {artifactPath}");
                 }
             }
 
@@ -136,7 +127,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                         {
                             new DockerMount { HostPath = workDir, ContainerPath = "/work" }
                         } ,
-                        Command = BuildRunCommand(profile , prepared)
+                        Command = BuildRunCommand(plan , prepared)
                     } ,
                     ct);
 
@@ -303,13 +294,13 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
     }
 
     private static string BuildRunCommand(
-        ICpExecutorProfile profile ,
+        RuntimeExecutionPlan plan ,
         PreparedJudgeCaseLayout prepared)
     {
         var inputRelative = GetRelativeUnixPath(prepared.InputPath , GetWorkRoot(prepared.CaseDirectory));
         var outputRelative = GetRelativeUnixPath(prepared.ActualPath , GetWorkRoot(prepared.CaseDirectory));
 
-        return $"-lc \"{profile.RunCommand} < '{inputRelative}' > '{outputRelative}'\"";
+        return $"-lc \"{plan.RunCommand} < '{inputRelative}' > '{outputRelative}'\"";
     }
 
     private static string GetWorkRoot(string caseDirectory)
@@ -420,11 +411,11 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         };
     }
 
-    private static string? ResolveCompiledArtifactPath(string workDir , ICpExecutorProfile profile)
+    private static string? ResolveCompiledArtifactPath(string workDir , RuntimeExecutionPlan plan)
     {
-        if ( string.IsNullOrWhiteSpace(profile.CompiledArtifactFileName) )
+        if ( string.IsNullOrWhiteSpace(plan.CompiledArtifactFileName) )
             return null;
 
-        return Path.Combine(workDir , profile.CompiledArtifactFileName);
+        return Path.Combine(workDir , plan.CompiledArtifactFileName);
     }
 }

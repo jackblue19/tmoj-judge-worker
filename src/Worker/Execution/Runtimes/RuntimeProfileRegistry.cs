@@ -1,4 +1,5 @@
-﻿using Worker.Execution.Runtimes.Cp;
+﻿using Contracts.Submissions.Judging;
+using Worker.Execution.Runtimes.Cp;
 
 namespace Worker.Execution.Runtimes;
 
@@ -19,7 +20,7 @@ public sealed class RuntimeProfileRegistry
         };
     }
 
-    public ICpExecutorProfile Resolve(string runtimeProfileKey)
+    public ICpExecutorProfile ResolveProfile(string runtimeProfileKey)
     {
         if ( string.IsNullOrWhiteSpace(runtimeProfileKey) )
             throw new InvalidOperationException("Runtime profile key is required.");
@@ -28,5 +29,34 @@ public sealed class RuntimeProfileRegistry
             return profile;
 
         throw new InvalidOperationException($"Unsupported runtime profile key: {runtimeProfileKey}");
+    }
+
+    public RuntimeExecutionPlan ResolveExecutionPlan(DispatchJudgeJobContract job)
+    {
+        var profile = ResolveProfile(job.RuntimeProfileKey);
+
+        var sourceFileName = string.IsNullOrWhiteSpace(job.SourceFileName)
+            ? profile.DefaultSourceFileName
+            : job.SourceFileName.Trim();
+
+        var hasCompileStep = job.HasCompileStep;
+
+        var compileCommand = string.IsNullOrWhiteSpace(job.CompileCommand)
+            ? profile.DefaultCompileCommand
+            : job.CompileCommand.Trim();
+
+        var runCommand = string.IsNullOrWhiteSpace(job.RunCommand)
+            ? profile.DefaultRunCommand
+            : job.RunCommand.Trim();
+
+        return new RuntimeExecutionPlan
+        {
+            ProfileKey = profile.ProfileKey ,
+            SourceFileName = sourceFileName ,
+            HasCompileStep = hasCompileStep ,
+            CompileCommand = compileCommand ,
+            RunCommand = runCommand ,
+            CompiledArtifactFileName = profile.CompiledArtifactFileName
+        };
     }
 }

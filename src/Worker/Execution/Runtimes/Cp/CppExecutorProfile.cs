@@ -7,9 +7,9 @@ public sealed class CppExecutorProfile : ICpExecutorProfile
     public string Version => "17";
 
     public string Name => "cpp17";
-    public string SourceFileName => "main.cpp";
-    public bool HasCompileStep => true;
-    public string CompileCommand => "g++ -O2 -std=c++17 main.cpp -o main";
-    public string RunCommand => "./main";
+    public string DefaultSourceFileName => "main.cpp";
+    public bool DefaultHasCompileStep => true;
+    public string DefaultCompileCommand => "g++ -O2 -std=c++17 main.cpp -o main";
+    public string DefaultRunCommand => "./main";
     public string? CompiledArtifactFileName => "main";
 }

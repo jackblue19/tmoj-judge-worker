@@ -1769,18 +1769,40 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity.Property(e => e.DefaultMemoryLimitKb)
-                .HasDefaultValue(262144)
-                .HasColumnName("default_memory_limit_kb");
+
+            entity.Property(e => e.RuntimeName)
+                .HasColumnName("runtime_name")
+                .IsRequired();
+
+            entity.Property(e => e.RuntimeVersion)
+                .HasColumnName("runtime_version");
+
+            entity.Property(e => e.ImageRef)
+                .HasColumnName("image_ref");
+
+            entity.Property(e => e.ProfileKey)
+                .HasColumnName("profile_key");
+
+            entity.Property(e => e.SourceFileName)
+                .HasColumnName("source_file_name");
+
+            entity.Property(e => e.CompileCommand)
+                .HasColumnName("compile_command");
+
+            entity.Property(e => e.RunCommand)
+                .HasColumnName("run_command");
+
             entity.Property(e => e.DefaultTimeLimitMs)
                 .HasDefaultValue(1000)
                 .HasColumnName("default_time_limit_ms");
-            entity.Property(e => e.ImageRef).HasColumnName("image_ref");
+
+            entity.Property(e => e.DefaultMemoryLimitKb)
+                .HasDefaultValue(262144)
+                .HasColumnName("default_memory_limit_kb");
+
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
-            entity.Property(e => e.RuntimeName).HasColumnName("runtime_name");
-            entity.Property(e => e.RuntimeVersion).HasColumnName("runtime_version");
         });
 
         modelBuilder.Entity<ScoreRecalcJob>(entity =>

@@ -96,6 +96,12 @@ public sealed class JudgeJobDispatchService
         var resolvedTimeLimitMs = problem.TimeLimitMs ?? options.TimeLimitMs;
         var resolvedMemoryLimitKb = problem.MemoryLimitKb ?? options.MemoryLimitKb;
 
+        var runtimeProfileKey = ResolveRuntimeProfileKey(runtime);
+        var sourceFileName = ResolveSourceFileName(runtime);
+        var compileCommand = runtime.CompileCommand?.Trim() ?? "";
+        var runCommand = ResolveRunCommand(runtime);
+        var hasCompileStep = !string.IsNullOrWhiteSpace(compileCommand);
+
         var judgeRun = new JudgeRun
         {
             Id = Guid.NewGuid() ,
@@ -111,7 +117,8 @@ public sealed class JudgeJobDispatchService
                 timeMs = resolvedTimeLimitMs ,
                 memoryKb = resolvedMemoryLimitKb ,
                 compareMode = options.CompareMode ,
-                stopOnFirstFail = options.StopOnFirstFail
+                stopOnFirstFail = options.StopOnFirstFail ,
+                profileKey = runtimeProfileKey
             }) ,
             Note = null ,
             CompileLogBlobId = null ,
@@ -138,8 +145,12 @@ public sealed class JudgeJobDispatchService
             RuntimeId = runtime.Id ,
             RuntimeName = runtime.RuntimeName ,
             RuntimeVersion = runtime.RuntimeVersion ,
-            RuntimeProfileKey = ResolveRuntimeProfileKey(runtime) ,
+            RuntimeProfileKey = runtimeProfileKey ,
             RuntimeImage = runtime.ImageRef ,
+            SourceFileName = sourceFileName ,
+            HasCompileStep = hasCompileStep ,
+            CompileCommand = compileCommand ,
+            RunCommand = runCommand ,
             TimeLimitMs = resolvedTimeLimitMs ,
             MemoryLimitKb = resolvedMemoryLimitKb ,
             CompareMode = options.CompareMode ,
@@ -180,25 +191,29 @@ public sealed class JudgeJobDispatchService
 
     private static string ResolveRuntimeProfileKey(Runtime runtime)
     {
-        var runtimeName = runtime.RuntimeName.Trim().ToLowerInvariant();
-        var runtimeVersion = runtime.RuntimeVersion?.Trim().ToLowerInvariant();
-
-        if ( runtimeName.Contains("cpp") || runtimeName.Contains("c++") )
-        {
-            if ( runtimeVersion is not null && runtimeVersion.Contains("17") )
-                return "cpp17-gcc";
-
-            return "cpp17-gcc";
-        }
-
-        if ( runtimeName.Contains("java") )
-            return "java-default";
-
-        if ( runtimeName.Contains("python") )
-            return "python3-default";
+        if ( !string.IsNullOrWhiteSpace(runtime.ProfileKey) )
+            return runtime.ProfileKey.Trim();
 
         throw new InvalidOperationException(
-            $"Cannot resolve runtime profile key for runtime '{runtime.RuntimeName}' version '{runtime.RuntimeVersion}'.");
+            $"Runtime '{runtime.RuntimeName}' (Id={runtime.Id}) has no profile_key configured.");
+    }
+
+    private static string ResolveSourceFileName(Runtime runtime)
+    {
+        if ( !string.IsNullOrWhiteSpace(runtime.SourceFileName) )
+            return runtime.SourceFileName.Trim();
+
+        throw new InvalidOperationException(
+            $"Runtime '{runtime.RuntimeName}' (Id={runtime.Id}) has no source_file_name configured.");
+    }
+
+    private static string ResolveRunCommand(Runtime runtime)
+    {
+        if ( !string.IsNullOrWhiteSpace(runtime.RunCommand) )
+            return runtime.RunCommand.Trim();
+
+        throw new InvalidOperationException(
+            $"Runtime '{runtime.RuntimeName}' (Id={runtime.Id}) has no run_command configured.");
     }
 
     private Task<string> ResolveSourceCodeAsync(Submission submission , CancellationToken ct)

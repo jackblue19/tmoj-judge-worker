@@ -3,6 +3,7 @@ using Infrastructure.Configurations;
 using Infrastructure.Configurations.Auth;
 using MailKit.Net.Smtp;
 using MailKit.Security;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using MimeKit;
 
@@ -32,6 +33,7 @@ public class EmailService : IEmailService
         try
         {
             await client.ConnectAsync(_settings.Host , _settings.Port , SecureSocketOptions.SslOnConnect , cancellationToken);
+            //await client.ConnectAsync(_settings.Host , 2587 , SecureSocketOptions.StartTls , cancellationToken);  //  mailgun
             await client.AuthenticateAsync(_settings.Email , _settings.Password , cancellationToken);
             await client.SendAsync(message , cancellationToken);
         }

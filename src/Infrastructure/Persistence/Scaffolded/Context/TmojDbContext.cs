@@ -2338,6 +2338,13 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("updated_at");
             entity.Property(e => e.Username).HasColumnName("username");
 
+            entity.Property(e => e.IsBanned)
+                .HasDefaultValue(false)
+                .HasColumnName("is_banned");
+
+            entity.Property(e => e.BannedUntil)
+                .HasColumnName("banned_until");
+
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .HasForeignKey(d => d.RoleId)
                 .HasConstraintName("users_role_id_fkey");

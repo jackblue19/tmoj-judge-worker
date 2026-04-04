@@ -17,6 +17,10 @@ public partial class StudyPlan
 
     public DateTime? CreatedAt { get; set; }
 
+    public bool IsPaid { get; set; }
+
+    public int Price { get; set; }
+
     public virtual User Creator { get; set; } = null!;
 
     public virtual ICollection<StudyPlanItem> StudyPlanItems { get; set; } = new List<StudyPlanItem>();

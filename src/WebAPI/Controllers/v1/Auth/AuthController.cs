@@ -139,13 +139,14 @@ public class AuthController : ControllerBase
                 _db.EmailVerifications.Add(verification);
                 await _db.SaveChangesAsync(ct);
 
-                var confirmLink = $"https://localhost:7210/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(existingUser.Email)}&token={Uri.EscapeDataString(verification.Token)}";
+                var confirmLink = $"https://api.tmoj.id.vn/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(existingUser.Email)}&token={Uri.EscapeDataString(verification.Token)}";
 
                 var subject = "Xác nhận địa chỉ email - TMOJ";
                 var body = GenerateEmailVerificationHtml(confirmLink);
                 await _emailService.SendEmailAsync(existingUser.Email, subject, body, ct);
 
-                return Ok(new { Message = "Registration successful. Please check your email to verify your account.", Token = verification.Token });
+                // Tạm thời tự động gọi để bypass việc confirm email (DEV Mode)
+                return await ConfirmEmail(existingUser.Email, verification.Token, ct);
             }
 
             var user = new User
@@ -174,17 +175,24 @@ public class AuthController : ControllerBase
             _db.EmailVerifications.Add(newVerification);
             await _db.SaveChangesAsync(ct);
 
-            var newConfirmLink = $"https://localhost:7210/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(newVerification.Token)}";
+            var newConfirmLink = $"https://api.tmoj.id.vn/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(newVerification.Token)}";
 
             var subjectNew = "Xác nhận địa chỉ email - TMOJ";
             var bodyNew = GenerateEmailVerificationHtml(newConfirmLink);
             await _emailService.SendEmailAsync(user.Email, subjectNew, bodyNew, ct);
 
-            return Ok(new { Message = "Registration successful. Please check your email to verify your account." , Token = newVerification.Token });
+            // Tạm thời tự động gọi để bypass việc confirm email (DEV Mode)
+            return await ConfirmEmail(user.Email, newVerification.Token, ct);
         }
-        catch ( Exception )
+        catch ( Exception ex )
         {
-            return StatusCode(500 , new { Message = "An error occurred during registration. Please try again later." });
+            _logger.LogError(ex, "Register Error");
+            return StatusCode(500 , new { 
+                Message = "An error occurred during registration. Please try again later.", 
+                Error = ex.Message,
+                Inner = ex.InnerException?.Message,
+                StackTrace = ex.StackTrace 
+            });
         }
     }
 
@@ -564,6 +572,7 @@ public class AuthController : ControllerBase
             _db.EmailVerifications.Add(verification);
             await _db.SaveChangesAsync(ct);
 
+            // localhost:3000 là bên front end
             var resetLink = $"http://localhost:3000/reset-password?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verification.Token)}";
 
             var emailSettings = _config.GetSection("EmailSettings");

@@ -16,3 +16,4 @@ public record CreateUserRequest(
     string? Username,
     List<string>? Roles);
 
+public record UpdateRoleRequest(string RoleCode);

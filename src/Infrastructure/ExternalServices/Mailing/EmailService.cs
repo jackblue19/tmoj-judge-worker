@@ -1,10 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
 using Application.Abstractions.Outbound.Services;
-using Infrastructure.Configurations;
 using Infrastructure.Configurations.Auth;
-using MailKit.Net.Smtp;
-using MailKit.Security;
 using Microsoft.Extensions.Options;
-using MimeKit;
+using brevo_csharp.Api;
+using brevo_csharp.Model;
 
 namespace Infrastructure.ExternalServices.Mailing;
 
@@ -12,32 +13,33 @@ public class EmailService : IEmailService
 {
     private readonly EmailSettings _settings;
 
-    public EmailService(IOptions<EmailSettings> settings)
+    public EmailService(IOptionsSnapshot<EmailSettings> settings)
     {
         _settings = settings.Value;
     }
 
-    public async Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
+    public async System.Threading.Tasks.Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
     {
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_settings.DisplayName, _settings.FromEmail));
-        message.To.Add(new MailboxAddress("", to));
-        message.Subject = subject;
-
-        var bodyBuilder = new BodyBuilder { HtmlBody = body };
-        message.Body = bodyBuilder.ToMessageBody();
-
-        using var client = new SmtpClient();
-
-        try
+        if (!brevo_csharp.Client.Configuration.Default.ApiKey.ContainsKey("api-key"))
         {
-            await client.ConnectAsync(_settings.Host, _settings.Port, SecureSocketOptions.Auto, cancellationToken);
-            await client.AuthenticateAsync(_settings.Email, _settings.Password, cancellationToken);
-            await client.SendAsync(message, cancellationToken);
+            brevo_csharp.Client.Configuration.Default.ApiKey.Add("api-key", _settings.BrevoApiKey);
         }
-        finally
+        else
         {
-            await client.DisconnectAsync(true, cancellationToken);
+            brevo_csharp.Client.Configuration.Default.ApiKey["api-key"] = _settings.BrevoApiKey;
         }
+
+        var apiInstance = new TransactionalEmailsApi();
+
+        var sendSmtpEmail = new SendSmtpEmail(
+            sender: new SendSmtpEmailSender(email: _settings.FromEmail, name: _settings.DisplayName),
+            to: new List<SendSmtpEmailTo> { new SendSmtpEmailTo(email: to) },
+            htmlContent: body,
+            subject: subject
+        );
+
+        // Tạm thời tắt gửi mail theo yêu cầu:
+        // await apiInstance.SendTransacEmailAsync(sendSmtpEmail);
+        await System.Threading.Tasks.Task.CompletedTask;
     }
 }

@@ -591,11 +591,11 @@ public class UserController : ControllerBase
     }
 
     [Authorize(Roles = "admin")]
-    [HttpPost("{id}/assign-role")]
-    public async Task<IActionResult> AssignRole(Guid id, [FromBody] AssignRoleRequest req, CancellationToken ct)
+    [HttpPut("{id}/role")]
+    public async Task<IActionResult> UpdateRole(Guid id, [FromBody] AssignRoleRequest req, CancellationToken ct)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id, ct);
-        if (user == null) return NotFound();
+        if (user == null) return NotFound(new { Message = "User not found." });
 
         var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant(), ct);
         if (role == null) return BadRequest(new { Message = "Role not found." });
@@ -607,23 +607,6 @@ public class UserController : ControllerBase
         }
 
         return Ok(new { Message = $"Role {req.RoleCode} assigned." });
-    }
-
-    [Authorize(Roles = "admin")]
-    [HttpDelete("{id}/roles/{roleCode}")]
-    public async Task<IActionResult> RemoveRole(Guid id, string roleCode, CancellationToken ct)
-    {
-        var user = await _db.Users.Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.UserId == id, ct);
-        if (user == null) return NotFound();
-
-        if (user.Role != null && user.Role.RoleCode == roleCode.ToLowerInvariant())
-        {
-            user.RoleId = null;
-            await _db.SaveChangesAsync(ct);
-        }
-
-        return Ok(new { Message = $"Role {roleCode} removed." });
     }
 
     private Guid GetUserId()

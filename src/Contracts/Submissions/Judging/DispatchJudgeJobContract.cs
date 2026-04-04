@@ -17,6 +17,11 @@ public sealed class DispatchJudgeJobContract
     public string RuntimeProfileKey { get; init; } = null!;
     public string? RuntimeImage { get; init; }
 
+    public string SourceFileName { get; init; } = null!;
+    public bool HasCompileStep { get; init; }
+    public string CompileCommand { get; init; } = "";
+    public string RunCommand { get; init; } = null!;
+
     public int TimeLimitMs { get; init; }
     public int MemoryLimitKb { get; init; }
 

@@ -13,6 +13,14 @@ public partial class Runtime
 
     public string? ImageRef { get; set; }
 
+    public string? ProfileKey { get; set; }
+
+    public string? SourceFileName { get; set; }
+
+    public string? CompileCommand { get; set; }
+
+    public string? RunCommand { get; set; }
+
     public int DefaultTimeLimitMs { get; set; }
 
     public int DefaultMemoryLimitKb { get; set; }

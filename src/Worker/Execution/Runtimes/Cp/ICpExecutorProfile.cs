@@ -7,10 +7,10 @@ public interface ICpExecutorProfile
     string Version { get; }
 
     string Name { get; }
-    string SourceFileName { get; }
-    bool HasCompileStep { get; }
-    string CompileCommand { get; }
-    string RunCommand { get; }
+    string DefaultSourceFileName { get; }
+    bool DefaultHasCompileStep { get; }
+    string DefaultCompileCommand { get; }
+    string DefaultRunCommand { get; }
 
     string? CompiledArtifactFileName { get; }
 }

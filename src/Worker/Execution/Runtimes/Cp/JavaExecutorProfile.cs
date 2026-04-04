@@ -7,9 +7,9 @@ public sealed class JavaExecutorProfile : ICpExecutorProfile
     public string Version => "default";
 
     public string Name => "java";
-    public string SourceFileName => "Main.java";
-    public bool HasCompileStep => true;
-    public string CompileCommand => "javac Main.java";
-    public string RunCommand => "java Main";
+    public string DefaultSourceFileName => "Main.java";
+    public bool DefaultHasCompileStep => true;
+    public string DefaultCompileCommand => "javac Main.java";
+    public string DefaultRunCommand => "java Main";
     public string? CompiledArtifactFileName => "Main.class";
 }

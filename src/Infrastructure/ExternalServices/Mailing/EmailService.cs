@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Application.Abstractions.Outbound.Services;
 using Infrastructure.Configurations.Auth;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using brevo_csharp.Api;
 using brevo_csharp.Model;

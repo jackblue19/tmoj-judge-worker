@@ -41,6 +41,10 @@ public partial class User
 
     public string? MemberCode { get; set; }
 
+    //public bool IsBanned { get; set; }
+
+    //public DateTime? BannedUntil { get; set; }
+
     public virtual ICollection<Announcement> Announcements { get; set; } = new List<Announcement>();
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();

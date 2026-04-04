@@ -84,7 +84,7 @@ public sealed class SubmissionsController : ControllerBase
         var submissionId = Guid.NewGuid();
         var judgeJobId = Guid.NewGuid();
 
-        var timeLimitMs = req.TimeLimitMs ?? problem.TimeLimitMs ?? runtime.DefaultTimeLimitMs;
+        var timeLimitMs = problem.TimeLimitMs ?? runtime.DefaultTimeLimitMs;
         if ( timeLimitMs <= 0 )
             timeLimitMs = runtime.DefaultTimeLimitMs;
 
@@ -147,10 +147,27 @@ public sealed class SubmissionsController : ControllerBase
             OptionsJson = JsonSerializer.Serialize(executionOptions)
         };
 
-        _db.Submissions.Add(submission);
-        _db.JudgeJobs.Add(judgeJob);
+        try
+        {
+            _db.Submissions.Add(submission);
+            _db.JudgeJobs.Add(judgeJob);
 
-        await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync(ct);
+        }
+        catch ( DbUpdateException ex )
+        {
+            return Problem(
+                statusCode: 500 ,
+                title: "DbUpdateException" ,
+                detail: ex.InnerException?.Message ?? ex.Message);
+        }
+        catch ( Exception ex )
+        {
+            return Problem(
+                statusCode: 500 ,
+                title: "Unhandled exception" ,
+                detail: ex.Message);
+        }
 
         return Ok(new SubmitResponseV2
         {
@@ -184,12 +201,6 @@ public sealed class SubmissionsController : ControllerBase
         using var sr = new StreamReader(fs , Encoding.UTF8 , detectEncodingFromByteOrderMarks: true);
         return await sr.ReadToEndAsync(ct);
     }
-
-    private sealed class JudgeRunLimits
-    {
-        public int TimeMs { get; set; }
-        public int MemoryKb { get; set; }
-    }
 }
 
 public sealed class SubmitRequestV2
@@ -200,7 +211,6 @@ public sealed class SubmitRequestV2
     //[FromForm(Name = "file")]
     public IFormFile? CodeFile { get; set; }
 
-    public int? TimeLimitMs { get; set; }
     public string? CompareMode { get; set; }
     public bool? StopOnFirstFail { get; set; }
 }

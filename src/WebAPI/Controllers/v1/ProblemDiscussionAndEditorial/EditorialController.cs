@@ -1,4 +1,4 @@
-﻿using Application.UseCases.Editorials;
+using Application.UseCases.Editorials;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -68,5 +68,42 @@ public class EditorialController : ControllerBase
         {
             EditorialId = id
         }, "Editorial created successfully"));
+    }
+
+    /// UPDATE
+    [Authorize(Roles = "admin,manager")]
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(
+        Guid id,
+        [FromBody] UpdateEditorialCommand body,
+        CancellationToken ct)
+    {
+        var cmd = body with { EditorialId = id };
+
+        await _mediator.Send(cmd, ct);
+
+        return Ok(ApiResponse<object>.Ok(null, "Editorial updated"));
+    }
+
+    /// DELETE
+    [Authorize(Roles = "admin,manager")]
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        await _mediator.Send(new DeleteEditorialCommand(id), ct);
+
+        return Ok(ApiResponse<object>.Ok(null, "Editorial deleted"));
+    }
+
+    /// GET BY ID
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new GetEditorialByIdQuery(id), ct);
+
+        if (result == null)
+            return NotFound(new { Message = "Editorial not found" });
+       
+        return Ok(ApiResponse<object>.Ok(result, "Fetched editorial successfully"));
     }
 }

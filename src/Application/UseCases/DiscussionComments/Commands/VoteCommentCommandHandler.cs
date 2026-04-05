@@ -1,4 +1,4 @@
-using Domain.Abstractions;
+﻿using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 using Application.Common.Interfaces;
@@ -47,6 +47,9 @@ public class VoteCommentCommandHandler
         var existingVote = await _voteReadRepo.FirstOrDefaultAsync(
             new CommentVoteByUserAndCommentSpec(userId.Value, request.CommentId), ct);
 
+        // =========================
+        // CASE 1: UNVOTE
+        // =========================
         if (request.VoteType == 0)
         {
             if (existingVote != null)
@@ -54,8 +57,16 @@ public class VoteCommentCommandHandler
                 comment.VoteCount -= existingVote.Vote;
                 _voteWriteRepo.Remove(existingVote);
             }
+
+            _commentWriteRepo.Update(comment);
+            await _uow.SaveChangesAsync(ct);
+            return true;
         }
-        else if (existingVote == null)
+
+        // =========================
+        // CASE 2: FIRST TIME VOTE
+        // =========================
+        if (existingVote == null)
         {
             var vote = new CommentVote
             {
@@ -63,23 +74,39 @@ public class VoteCommentCommandHandler
                 CommentId = request.CommentId,
                 UserId = userId.Value,
                 Vote = (short)request.VoteType,
-                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                CreatedAt = DateTime.UtcNow,
             };
+
             await _voteWriteRepo.AddAsync(vote, ct);
             comment.VoteCount += request.VoteType;
+
+            _commentWriteRepo.Update(comment);
+            await _uow.SaveChangesAsync(ct);
+            return true;
+        }
+
+        // =========================
+        // CASE 3: TOGGLE / CHANGE VOTE
+        // =========================
+        if (existingVote.Vote == request.VoteType)
+        {
+            // user click lại cùng loại => unvote
+            comment.VoteCount -= existingVote.Vote;
+            _voteWriteRepo.Remove(existingVote);
         }
         else
         {
+            // đổi từ up -> down hoặc ngược lại
             comment.VoteCount -= existingVote.Vote;
             existingVote.Vote = (short)request.VoteType;
             comment.VoteCount += request.VoteType;
+
             _voteWriteRepo.Update(existingVote);
         }
 
-        // Re-attach comment so VoteCount change is tracked and saved
         _commentWriteRepo.Update(comment);
-
         await _uow.SaveChangesAsync(ct);
+
         return true;
     }
 }

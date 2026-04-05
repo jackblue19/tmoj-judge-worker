@@ -20,7 +20,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 //  database
-builder.Services.AddScoped<IEditorialRepository , EditorialRepository>();
+builder.Services.AddScoped<IEditorialRepository, EditorialRepository>();
+builder.Services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {

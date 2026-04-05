@@ -1,16 +1,17 @@
-using Ardalis.Specification.EntityFrameworkCore;
-using Ardalis.Specification;
-using Domain.Abstractions;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Infrastructure.Persistence.Scaffolded.Context;
-using Microsoft.EntityFrameworkCore;
-using Infrastructure.Persistence.Common;
 using Application.Common.Interfaces;
 using Application.UseCases.Problems;
-using Infrastructure.Persistence.Repositories.Problems;
-using Infrastructure.ExternalServices;
+using Ardalis.Specification;
+using Ardalis.Specification.EntityFrameworkCore;
+using Domain.Abstractions;
 using Infrastructure.Configurations.FileStorage;
+using Infrastructure.ExternalServices;
+using Infrastructure.Persistence.Common;
+using Infrastructure.Persistence.Common.Repositories;
+using Infrastructure.Persistence.Repositories.Problems;
+using Infrastructure.Persistence.Scaffolded.Context;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Infrastructure;
 
@@ -40,7 +41,8 @@ public static class InfrastructureRegistration
         services.AddScoped<IUnitOfWork , EfUnitOfWork>();
 
         services.AddScoped<ICurrentUserService , CurrentUserService>();
-
+        services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
+        services.AddScoped<IDiscussionCommentRepository, DiscussionCommentRepository>();
         services.AddScoped<IProblemRepository , ProblemRepository>();
         services.AddScoped<ITagRepository , TagRepository>();
         return services;

@@ -61,7 +61,7 @@ public class DiscussionCommentController : ControllerBase
         await _mediator.Send(
             new DeleteCommentCommand(id), ct);
 
-        return Ok(ApiResponse<object>.Ok(null, "Comment deleted successfully"));
+        return Ok(ApiResponse<object>.Ok(new {}, "Comment deleted successfully"));
     }
 
     // ===============================
@@ -100,7 +100,7 @@ public class DiscussionCommentController : ControllerBase
         // Gọi handler
         await _mediator.Send(new VoteCommentCommand(id, dto.VoteType), ct);
 
-        return Ok(ApiResponse<object>.Ok(null, action));
+        return Ok(ApiResponse<object>.Ok(new {}, action));
     }
     // ===============================
     // POST: /api/v1/comments/{id}/Hide/Unhide
@@ -116,7 +116,7 @@ public class DiscussionCommentController : ControllerBase
 
         var action = dto.Hide ? "Comment hidden" : "Comment unhidden";
 
-        return Ok(ApiResponse<object>.Ok(null, action));
+        return Ok(ApiResponse<object>.Ok(new {}, action));
     }
 
 

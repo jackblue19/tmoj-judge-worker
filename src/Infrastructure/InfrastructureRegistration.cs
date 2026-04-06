@@ -42,6 +42,7 @@ public static class InfrastructureRegistration
 
         services.AddScoped<ICurrentUserService , CurrentUserService>();
         services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
+        services.AddScoped<IContentReportRepository, ContentReportRepository>();
         services.AddScoped<IDiscussionCommentRepository, DiscussionCommentRepository>();
         services.AddScoped<IProblemRepository , ProblemRepository>();
         services.AddScoped<ITagRepository , TagRepository>();

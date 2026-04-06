@@ -28,4 +28,3 @@ public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public record RefreshTokenRequest(string RefreshToken);
 
-public record AssignRoleRequest(string RoleCode);

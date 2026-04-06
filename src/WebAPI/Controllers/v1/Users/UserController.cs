@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using WebAPI.Controllers.v1.Auth;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Users;
@@ -21,14 +20,12 @@ public class UserController : ControllerBase
 {
     private readonly TmojDbContext _db;
     private readonly IPasswordHasher _passwordHasher;
-    private readonly ILogger<AuthController> _logger;
     private readonly ICloudinaryService _cloudinary;
 
-    public UserController(TmojDbContext db, IPasswordHasher passwordHasher, ILogger<AuthController> logger, ICloudinaryService cloudinary)
+    public UserController(TmojDbContext db, IPasswordHasher passwordHasher, ICloudinaryService cloudinary)
     {
         _db = db;
         _passwordHasher = passwordHasher;
-        _logger = logger;
         _cloudinary = cloudinary;
     }
 
@@ -265,7 +262,7 @@ public class UserController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching users by role {RoleName}", roleName);
+            //_logger.LogError(ex, "Error fetching users by role {RoleName}", roleName);
 
             return StatusCode(500, new
             {
@@ -505,7 +502,7 @@ public class UserController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
+            //_logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
             return StatusCode(500, new { Message = "An error occurred while uploading the avatar." });
         }
     }
@@ -539,7 +536,7 @@ public class UserController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting avatar for user {UserId}", userId);
+            //_logger.LogError(ex, "Error deleting avatar for user {UserId}", userId);
             return StatusCode(500, new { Message = "An error occurred while deleting the avatar." });
         }
     }
@@ -591,11 +588,11 @@ public class UserController : ControllerBase
     }
 
     [Authorize(Roles = "admin")]
-    [HttpPost("{id}/assign-role")]
-    public async Task<IActionResult> AssignRole(Guid id, [FromBody] AssignRoleRequest req, CancellationToken ct)
+    [HttpPut("{id}/role")]
+    public async Task<IActionResult> UpdateRole(Guid id, [FromBody] AssignRoleRequest req, CancellationToken ct)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id, ct);
-        if (user == null) return NotFound();
+        if (user == null) return NotFound(new { Message = "User not found." });
 
         var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant(), ct);
         if (role == null) return BadRequest(new { Message = "Role not found." });
@@ -607,23 +604,6 @@ public class UserController : ControllerBase
         }
 
         return Ok(new { Message = $"Role {req.RoleCode} assigned." });
-    }
-
-    [Authorize(Roles = "admin")]
-    [HttpDelete("{id}/roles/{roleCode}")]
-    public async Task<IActionResult> RemoveRole(Guid id, string roleCode, CancellationToken ct)
-    {
-        var user = await _db.Users.Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.UserId == id, ct);
-        if (user == null) return NotFound();
-
-        if (user.Role != null && user.Role.RoleCode == roleCode.ToLowerInvariant())
-        {
-            user.RoleId = null;
-            await _db.SaveChangesAsync(ct);
-        }
-
-        return Ok(new { Message = $"Role {roleCode} removed." });
     }
 
     private Guid GetUserId()

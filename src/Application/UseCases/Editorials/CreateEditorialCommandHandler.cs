@@ -1,4 +1,4 @@
-﻿using Domain.Abstractions;
+using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 using Application.Common.Interfaces;
@@ -65,7 +65,7 @@ public class CreateEditorialCommandHandler
             ProblemId = request.ProblemId,
             StorageId = request.StorageId,
             AuthorId = userId.Value,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
         };
 
         await _writeRepo.AddAsync(editorial, ct);

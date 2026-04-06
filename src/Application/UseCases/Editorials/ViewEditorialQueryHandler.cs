@@ -1,19 +1,13 @@
-﻿using Application.Common.Interfaces;
-using Application.UseCases.Editorials;
+using Application.Common.Pagination;
 using Application.UseCases.Editorials.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
 namespace Application.UseCases.Editorials;
 
 public class ViewEditorialQueryHandler
-    : IRequestHandler<ViewEditorialQuery, IReadOnlyList<EditorialDto>>
+    : IRequestHandler<ViewEditorialQuery, CursorPaginationDto<EditorialDto>>
 {
     private readonly IReadRepository<Editorial, Guid> _repo;
 
@@ -22,15 +16,36 @@ public class ViewEditorialQueryHandler
         _repo = repo;
     }
 
-    public async Task<IReadOnlyList<EditorialDto>> Handle(ViewEditorialQuery request, CancellationToken ct)
+    public async Task<CursorPaginationDto<EditorialDto>> Handle(ViewEditorialQuery request, CancellationToken ct)
     {
+        // Fetch pageSize + 1 to determine hasMore
         var spec = new ViewEditorialSpec(
             request.ProblemId,
             request.CursorId,
             request.CursorCreatedAt,
-            request.PageSize
+            request.PageSize + 1
         );
 
-        return await _repo.ListAsync(spec, ct);
+        var items = await _repo.ListAsync(spec, ct);
+
+        var hasMore = items.Count > request.PageSize;
+        var resultItems = hasMore
+            ? items.Take(request.PageSize).ToList()
+            : items.ToList();
+
+        var result = new CursorPaginationDto<EditorialDto>
+        {
+            Items = resultItems,
+            HasMore = hasMore
+        };
+
+        if (resultItems.Count > 0)
+        {
+            var last = resultItems[^1];
+            result.NextCursorCreatedAt = last.CreatedAt;
+            result.NextCursorId = last.EditorialId;
+        }
+
+        return result;
     }
 }

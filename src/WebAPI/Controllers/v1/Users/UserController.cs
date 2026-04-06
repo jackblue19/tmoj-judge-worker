@@ -260,7 +260,7 @@ public class UserController : ControllerBase
 
             return Ok(ApiResponse<List<UserDto>>.Ok(users, "Users fetched successfully"));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             //_logger.LogError(ex, "Error fetching users by role {RoleName}", roleName);
 
@@ -500,7 +500,7 @@ public class UserController : ControllerBase
 
             return Ok(ApiResponse<object>.Ok(new { AvatarUrl = user.AvatarUrl }, "Avatar uploaded successfully."));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             //_logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
             return StatusCode(500, new { Message = "An error occurred while uploading the avatar." });
@@ -534,7 +534,7 @@ public class UserController : ControllerBase
             await _db.SaveChangesAsync(ct);
             return Ok(ApiResponse<object>.Ok(null!, "Avatar deleted successfully."));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             //_logger.LogError(ex, "Error deleting avatar for user {UserId}", userId);
             return StatusCode(500, new { Message = "An error occurred while deleting the avatar." });

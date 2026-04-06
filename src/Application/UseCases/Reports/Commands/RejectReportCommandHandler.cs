@@ -1,51 +1,36 @@
 ﻿using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using Application.Common.Interfaces;
-using Application.UseCases.DiscussionComments.Commands;
-
 
 namespace Application.UseCases.Reports.Commands;
 
-public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand, Unit>
+public class RejectReportCommandHandler : IRequestHandler<RejectReportCommand, Unit>
 {
     private readonly IReadRepository<ContentReport, Guid> _readRepo;
     private readonly IWriteRepository<ContentReport, Guid> _writeRepo;
     private readonly IUnitOfWork _uow;
-    private readonly IMediator _mediator;
 
-    public ApproveReportCommandHandler(
+    public RejectReportCommandHandler(
         IReadRepository<ContentReport, Guid> readRepo,
         IWriteRepository<ContentReport, Guid> writeRepo,
-        IUnitOfWork uow,
-        IMediator mediator)
+        IUnitOfWork uow)
     {
         _readRepo = readRepo;
         _writeRepo = writeRepo;
         _uow = uow;
-        _mediator = mediator;
     }
 
-    public async Task<Unit> Handle(ApproveReportCommand request, CancellationToken ct)
+    public async Task<Unit> Handle(RejectReportCommand request, CancellationToken ct)
     {
         var report = await _readRepo.GetByIdAsync(request.ReportId, ct)
             ?? throw new Exception("Report not found");
 
-        // 🔥 check pending (case-insensitive)
         if (!string.Equals(report.Status, "pending", StringComparison.OrdinalIgnoreCase))
             throw new Exception("Already processed");
 
-        // 🔥 approve
-        report.Status = "approved";
+        report.Status = "rejected";
+
         _writeRepo.Update(report);
-
-        // 🔥 AUTO MODERATION
-        if (string.Equals(report.TargetType, "comment", StringComparison.OrdinalIgnoreCase))
-        {
-            await _mediator.Send(
-                new HideUnhideCommentCommand(report.TargetId, true), ct);
-        }
-
         await _uow.SaveChangesAsync(ct);
 
         return Unit.Value;

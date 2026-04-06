@@ -74,4 +74,19 @@ public class ReportsController : ControllerBase
         return Ok(ApiResponse<CursorPaginationDto<ReportDto>>
             .Ok(result, "Fetched pending reports successfully"));
     }
+
+    // =========================================
+    // POST: /api/v1/reports/{id}/reject
+    // =========================================
+
+    [HttpPost("{id:guid}/reject")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> RejectReport(
+    Guid id,
+    CancellationToken ct)
+    {
+        await _mediator.Send(new RejectReportCommand(id), ct);
+
+        return Ok(ApiResponse<object>.Ok(true, "Report rejected successfully"));
+    }
 }

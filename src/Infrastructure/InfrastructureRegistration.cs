@@ -1,4 +1,5 @@
 using Application.Common.Interfaces;
+using Application.Common.Services;
 using Application.UseCases.Problems;
 using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
@@ -39,7 +40,7 @@ public static class InfrastructureRegistration
         services.AddScoped(typeof(IReadRepository<,>) , typeof(EfReadRepository<,>));
         services.AddScoped(typeof(IWriteRepository<,>) , typeof(EfWriteRepository<,>));
         services.AddScoped<IUnitOfWork , EfUnitOfWork>();
-
+        services.AddScoped<AutoModerationService>();
         services.AddScoped<ICurrentUserService , CurrentUserService>();
         services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
         services.AddScoped<IContentReportRepository, ContentReportRepository>();

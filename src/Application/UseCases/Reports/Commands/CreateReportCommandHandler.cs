@@ -10,7 +10,7 @@ public class CreateReportCommandHandler
     : IRequestHandler<CreateReportCommand, Guid>
 {
     private readonly IWriteRepository<ContentReport, Guid> _writeRepo;
-    private readonly IReadRepository<ContentReport, Guid> _reportRepo; // 🔥 thêm
+    private readonly IReadRepository<ContentReport, Guid> _reportRepo;
     private readonly IReadRepository<User, Guid> _userRepo;
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
     private readonly IUnitOfWork _uow;
@@ -18,7 +18,7 @@ public class CreateReportCommandHandler
 
     public CreateReportCommandHandler(
         IWriteRepository<ContentReport, Guid> writeRepo,
-        IReadRepository<ContentReport, Guid> reportRepo, // 🔥 thêm
+        IReadRepository<ContentReport, Guid> reportRepo,
         IReadRepository<User, Guid> userRepo,
         IReadRepository<DiscussionComment, Guid> commentRepo,
         IUnitOfWork uow,
@@ -34,51 +34,51 @@ public class CreateReportCommandHandler
 
     public async Task<Guid> Handle(CreateReportCommand request, CancellationToken ct)
     {
-        // 🔥 1. Validate input
         if (string.IsNullOrWhiteSpace(request.Reason))
             throw new ArgumentException("Reason is required");
 
         var userId = _currentUser.UserId
             ?? throw new UnauthorizedAccessException();
 
-        // 🔥 2. Check user tồn tại
         var user = await _userRepo.GetByIdAsync(userId, ct)
             ?? throw new Exception("User not found");
 
-        // 🔥 3. Check comment tồn tại
         var comment = await _commentRepo.GetByIdAsync(request.TargetId, ct)
             ?? throw new Exception("Comment not found");
 
-        // 🔥 4. Không được report chính mình
         if (comment.UserId == userId)
             throw new Exception("Cannot report your own comment");
 
-        // 🔥 5. ANTI-SPAM (quan trọng)
-        var spec = new ReportByUserAndTargetSpec(
-            userId,
-            request.TargetId,
-            "comment");
-
-        var existed = await _reportRepo.FirstOrDefaultAsync(spec, ct);
+        // 🔥 Anti duplicate
+        var existed = await _reportRepo.FirstOrDefaultAsync(
+            new ReportByUserAndTargetSpec(userId, request.TargetId, "comment"), ct);
 
         if (existed != null)
-            throw new Exception("You already reported this content");
-
-        // 🔥 6. Create report
-        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+            throw new Exception("Already reported");
 
         var report = new ContentReport
         {
             Id = Guid.NewGuid(),
             ReporterId = userId,
             TargetId = request.TargetId,
-            TargetType = "comment",   // 🔥 normalize
+            TargetType = "comment",
             Reason = request.Reason.Trim(),
-            Status = "pending",       // 🔥 normalize
-            CreatedAt = now
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow
         };
 
         await _writeRepo.AddAsync(report, ct);
+
+        // 🔥 COUNT pending reports (KHÔNG cần spec mới)
+        var count = await _reportRepo.CountAsync(
+            new ReportsByTargetAndStatusSpec(request.TargetId, "comment", "pending"), ct);
+
+        // 🔥 Auto hide nếu >=3
+        if (count + 1 >= 3)
+        {
+            comment.IsHidden = true;
+        }
+
         await _uow.SaveChangesAsync(ct);
 
         return report.Id;

@@ -486,13 +486,13 @@ public class ClassSlotController : ControllerBase
     }
 
     // ──────────────────────────────────────────
-    // PUT .../slots/{slotId}/problems  →  Update problems in slot (Teacher)
+    // PUT .../slots/{slotId}/problems/{problemId}  →  Update problem in slot (Teacher)
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
-    [HttpPut("{slotId:guid}/problems")]
-    public async Task<IActionResult> UpdateProblems(
-        Guid instanceId, Guid slotId,
-        [FromBody] List<SlotProblemItem> problems,
+    [HttpPut("{slotId:guid}/problems/{problemId:guid}")]
+    public async Task<IActionResult> UpdateProblem(
+        Guid instanceId, Guid slotId, Guid problemId,
+        [FromBody] UpdateSlotProblemRequest req,
         CancellationToken ct)
     {
         try
@@ -511,46 +511,32 @@ public class ClassSlotController : ControllerBase
                 .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            if (problems is not { Count: > 0 })
-                return BadRequest(new { Message = "Problems payload is required." });
+            var existing = slot.ClassSlotProblems?.FirstOrDefault(sp => sp.ProblemId == problemId);
+            if (existing == null)
+                return NotFound(new { Message = "Problem not found in this slot." });
 
-            var slotProblems = slot.ClassSlotProblems?.ToList() ?? new List<ClassSlotProblem>();
-            var updated = 0;
+            existing.Ordinal = req.Ordinal;
+            existing.Points = req.Points;
+            existing.IsRequired = req.IsRequired;
 
-            foreach (var p in problems)
-            {
-                var existing = slotProblems.FirstOrDefault(sp => sp.ProblemId == p.ProblemId);
-                if (existing != null)
-                {
-                    existing.Ordinal = p.Ordinal;
-                    existing.Points = p.Points;
-                    existing.IsRequired = p.IsRequired;
-                    updated++;
-                }
-            }
+            slot.UpdatedBy = userId;
+            await _db.SaveChangesAsync(ct);
 
-            if (updated > 0)
-            {
-                slot.UpdatedBy = userId;
-                await _db.SaveChangesAsync(ct);
-            }
-
-            return Ok(new { Message = $"{updated} problem(s) updated successfully.", Updated = updated });
+            return Ok(new { Message = "Problem updated successfully." });
         }
         catch (Exception)
         {
-            return StatusCode(500, new { Message = "An error occurred while updating problems." });
+            return StatusCode(500, new { Message = "An error occurred while updating the problem." });
         }
     }
 
     // ──────────────────────────────────────────
-    // DELETE .../slots/{slotId}/problems  →  Remove problems from slot (Teacher)
+    // DELETE .../slots/{slotId}/problems/{problemId}  →  Remove problem from slot (Teacher)
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
-    [HttpDelete("{slotId:guid}/problems")]
-    public async Task<IActionResult> RemoveProblems(
-        Guid instanceId, Guid slotId,
-        [FromBody] List<Guid> problemIds,
+    [HttpDelete("{slotId:guid}/problems/{problemId:guid}")]
+    public async Task<IActionResult> RemoveProblem(
+        Guid instanceId, Guid slotId, Guid problemId,
         CancellationToken ct)
     {
         try
@@ -568,25 +554,21 @@ public class ClassSlotController : ControllerBase
                 .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
             if (slot is null) return NotFound(new { Message = "Slot not found." });
 
-            if (problemIds is not { Count: > 0 })
-                return BadRequest(new { Message = "At least one problem ID is required." });
-
             var toRemove = await _db.ClassSlotProblems
-                .Where(sp => sp.SlotId == slotId && problemIds.Contains(sp.ProblemId))
-                .ToListAsync(ct);
+                .FirstOrDefaultAsync(sp => sp.SlotId == slotId && sp.ProblemId == problemId, ct);
 
-            if (toRemove.Count == 0)
-                return NotFound(new { Message = "None of the specified problems were found in this slot." });
+            if (toRemove == null)
+                return NotFound(new { Message = "Problem not found in this slot." });
 
-            _db.ClassSlotProblems.RemoveRange(toRemove);
+            _db.ClassSlotProblems.Remove(toRemove);
             slot.UpdatedBy = userId;
             await _db.SaveChangesAsync(ct);
 
-            return Ok(new { Message = $"{toRemove.Count} problem(s) removed from slot.", Removed = toRemove.Count });
+            return Ok(new { Message = "Problem removed from slot." });
         }
         catch (Exception)
         {
-            return StatusCode(500, new { Message = "An error occurred while removing problems." });
+            return StatusCode(500, new { Message = "An error occurred while removing the problem." });
         }
     }
 

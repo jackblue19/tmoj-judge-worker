@@ -914,6 +914,48 @@ public class ClassController : ControllerBase
     }
 
     // ──────────────────────────────────────────
+    // GET api/v1/class/{classSemesterId}/students  →  Get all students in a Class Instance (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("{classSemesterId:guid}/students")]
+    public async Task<IActionResult> GetStudents(Guid classSemesterId, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var instance = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (instance is null) return NotFound(new { Message = "Class instance not found." });
+
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            if (userRole == "teacher" && instance.TeacherId != userId.Value)
+                return Forbid();
+
+            var members = await _db.ClassMembers.AsNoTracking()
+                .Include(m => m.User)
+                .Where(m => m.ClassSemesterId == classSemesterId)
+                .OrderBy(m => m.User.DisplayName)
+                .Select(m => new ClassMemberResponse(
+                    m.Id,
+                    m.ClassSemesterId,
+                    m.UserId,
+                    m.User.DisplayName,
+                    m.User.Email,
+                    m.User.AvatarUrl,
+                    m.JoinedAt,
+                    m.IsActive))
+                .ToListAsync(ct);
+
+            return Ok(ApiResponse<List<ClassMemberResponse>>.Ok(members, "Students fetched successfully."));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching students." });
+        }
+    }
+
+    // ──────────────────────────────────────────
     // GET api/v1/class/{classSemesterId}/students/export  →  Export Students of Class Instance (Teacher)
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]

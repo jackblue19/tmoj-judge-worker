@@ -21,6 +21,12 @@ public record SlotProblemItem(
     int? Points,
     bool IsRequired);
 
+/// <summary>Update problem entry in a slot.</summary>
+public record UpdateSlotProblemRequest(
+    int? Ordinal,
+    int? Points,
+    bool IsRequired);
+
 /// <summary>Update slot details (Teacher).</summary>
 public record UpdateClassSlotRequest(
     string? Title,

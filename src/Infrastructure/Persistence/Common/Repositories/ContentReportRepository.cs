@@ -84,5 +84,34 @@ namespace Infrastructure.Persistence.Common.Repositories
                 })
                 .FirstOrDefaultAsync();
         }
+        public async Task<List<ReportGroupDto>> GetReportGroupsAsync(string? status)
+        {
+            var query = _db.ContentReports.AsNoTracking();
+
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(x => x.Status.ToLower() == status.ToLower());
+            }
+
+            var grouped = await query
+                .GroupBy(x => new { x.TargetId, x.TargetType })
+                .Select(g => new ReportGroupDto
+                {
+                    TargetId = g.Key.TargetId,
+                    TargetType = g.Key.TargetType,
+
+                    TotalReports = g.Count(),
+                    PendingCount = g.Count(x => x.Status == "pending"),
+                    ApprovedCount = g.Count(x => x.Status == "approved"),
+
+                    LatestCreatedAt = g.Max(x => x.CreatedAt),
+
+                    Reasons = g.Select(x => x.Reason).Distinct().ToList()
+                })
+                .OrderByDescending(x => x.LatestCreatedAt)
+                .ToListAsync();
+
+            return grouped;
+        }
     }
 }

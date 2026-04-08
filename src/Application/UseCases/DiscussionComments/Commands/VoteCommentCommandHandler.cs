@@ -10,7 +10,6 @@ public class VoteCommentCommandHandler
     : IRequestHandler<VoteCommentCommand, bool>
 {
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
-    private readonly IWriteRepository<DiscussionComment, Guid> _commentWriteRepo;
     private readonly IReadRepository<CommentVote, Guid> _voteReadRepo;
     private readonly IWriteRepository<CommentVote, Guid> _voteWriteRepo;
     private readonly ICurrentUserService _currentUser;
@@ -18,14 +17,12 @@ public class VoteCommentCommandHandler
 
     public VoteCommentCommandHandler(
         IReadRepository<DiscussionComment, Guid> commentRepo,
-        IWriteRepository<DiscussionComment, Guid> commentWriteRepo,
         IReadRepository<CommentVote, Guid> voteReadRepo,
         IWriteRepository<CommentVote, Guid> voteWriteRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
         _commentRepo = commentRepo;
-        _commentWriteRepo = commentWriteRepo;
         _voteReadRepo = voteReadRepo;
         _voteWriteRepo = voteWriteRepo;
         _currentUser = currentUser;
@@ -41,11 +38,15 @@ public class VoteCommentCommandHandler
         if (userId is null || userId == Guid.Empty)
             throw new UnauthorizedAccessException();
 
-        var comment = await _commentRepo.GetByIdAsync(request.CommentId, ct)
-                      ?? throw new Exception("Comment not found");
+        // check comment tồn tại
+        var commentExists = await _commentRepo.AnyAsync(
+            new CommentByIdSpec(request.CommentId), ct);
+
+        if (!commentExists)
+            throw new Exception("Comment not found");
 
         var existingVote = await _voteReadRepo.FirstOrDefaultAsync(
-            new CommentVoteByUserAndCommentSpec(userId.Value, request.CommentId), ct);
+      new CommentUserVoteSingleSpec(userId.Value, request.CommentId), ct);
 
         // =========================
         // CASE 1: UNVOTE
@@ -54,12 +55,10 @@ public class VoteCommentCommandHandler
         {
             if (existingVote != null)
             {
-                comment.VoteCount -= existingVote.Vote;
                 _voteWriteRepo.Remove(existingVote);
+                await _uow.SaveChangesAsync(ct);
             }
 
-            _commentWriteRepo.Update(comment);
-            await _uow.SaveChangesAsync(ct);
             return true;
         }
 
@@ -78,10 +77,8 @@ public class VoteCommentCommandHandler
             };
 
             await _voteWriteRepo.AddAsync(vote, ct);
-            comment.VoteCount += request.VoteType;
-
-            _commentWriteRepo.Update(comment);
             await _uow.SaveChangesAsync(ct);
+
             return true;
         }
 
@@ -90,21 +87,16 @@ public class VoteCommentCommandHandler
         // =========================
         if (existingVote.Vote == request.VoteType)
         {
-            // user click lại cùng loại => unvote
-            comment.VoteCount -= existingVote.Vote;
+            // click lại => unvote
             _voteWriteRepo.Remove(existingVote);
         }
         else
         {
-            // đổi từ up -> down hoặc ngược lại
-            comment.VoteCount -= existingVote.Vote;
+            // đổi vote
             existingVote.Vote = (short)request.VoteType;
-            comment.VoteCount += request.VoteType;
-
             _voteWriteRepo.Update(existingVote);
         }
 
-        _commentWriteRepo.Update(comment);
         await _uow.SaveChangesAsync(ct);
 
         return true;

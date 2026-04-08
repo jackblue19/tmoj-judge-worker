@@ -1,8 +1,8 @@
-﻿using Domain.Abstractions;
+﻿using Application.Common.Interfaces;
+using Application.UseCases.ProblemDiscussions.Specs;
+using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using Application.Common.Interfaces;
-using Application.UseCases.ProblemDiscussions.Specs;
 
 namespace Application.UseCases.ProblemDiscussions.Commands;
 
@@ -10,15 +10,17 @@ public class VoteDiscussionCommandHandler
     : IRequestHandler<VoteDiscussionCommand, bool>
 {
     private readonly IReadRepository<ProblemDiscussion, Guid> _discussionRepo;
-    private readonly IReadRepository<CommentVote, Guid> _voteReadRepo;
-    private readonly IWriteRepository<CommentVote, Guid> _voteWriteRepo;
+    private readonly IReadRepository<ContentReport, Guid> _voteReadRepo;
+    private readonly IWriteRepository<ContentReport, Guid> _voteWriteRepo;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
 
+    private const string VOTE_TYPE = "discussion_vote";
+
     public VoteDiscussionCommandHandler(
         IReadRepository<ProblemDiscussion, Guid> discussionRepo,
-        IReadRepository<CommentVote, Guid> voteReadRepo,
-        IWriteRepository<CommentVote, Guid> voteWriteRepo,
+        IReadRepository<ContentReport, Guid> voteReadRepo,
+        IWriteRepository<ContentReport, Guid> voteWriteRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
@@ -31,24 +33,32 @@ public class VoteDiscussionCommandHandler
 
     public async Task<bool> Handle(VoteDiscussionCommand request, CancellationToken ct)
     {
-        if (request.VoteType is not (1 or -1 or 0))
-            throw new ArgumentException("VoteType must be 1, -1 or 0");
-
         var userId = _currentUser.UserId;
-        if (userId == null || userId == Guid.Empty)
-            throw new UnauthorizedAccessException();
+        if (userId is null)
+            throw new UnauthorizedAccessException("User not authenticated");
 
-        var discussion = await _discussionRepo.GetByIdAsync(request.DiscussionId, ct)
-                         ?? throw new Exception("Discussion not found");
+        // ===============================
+        // GET DISCUSSION
+        // ===============================
+        var discussion = await _discussionRepo.GetByIdAsync(request.DiscussionId, ct);
+        if (discussion == null)
+            throw new Exception("Discussion not found");
 
-        // ❗ BLOCK SELF VOTE
+        // ❌ Không được vote bài của mình
         if (discussion.UserId == userId.Value)
             throw new Exception("You cannot vote your own discussion");
 
-        var existingVote = await _voteReadRepo.FirstOrDefaultAsync(
-            new DiscussionVoteSpec(userId.Value, request.DiscussionId), ct);
+        // ===============================
+        // FIND EXISTING VOTE (SPEC)
+        // ===============================
+        var spec = new DiscussionVoteByUserSpec(userId.Value, request.DiscussionId);
 
+        var existingVote = (await _voteReadRepo.ListAsync(spec, ct))
+            .FirstOrDefault();
+
+        // ===============================
         // UNVOTE
+        // ===============================
         if (request.VoteType == 0)
         {
             if (existingVote != null)
@@ -58,32 +68,40 @@ public class VoteDiscussionCommandHandler
             return true;
         }
 
-        // FIRST VOTE
+        // ===============================
+        // NEW VOTE
+        // ===============================
         if (existingVote == null)
         {
-            var vote = new CommentVote
+            var vote = new ContentReport
             {
                 Id = Guid.NewGuid(),
-                CommentId = request.DiscussionId,
-                UserId = userId.Value,
-                Vote = (short)request.VoteType,
+                ReporterId = userId.Value,
+                TargetId = request.DiscussionId,
+                TargetType = VOTE_TYPE,
+                Reason = request.VoteType.ToString(),
+                Status = "pending", 
                 CreatedAt = DateTime.UtcNow
             };
 
             await _voteWriteRepo.AddAsync(vote, ct);
-            await _uow.SaveChangesAsync(ct);
-            return true;
-        }
-
-        // TOGGLE
-        if (existingVote.Vote == request.VoteType)
-        {
-            _voteWriteRepo.Remove(existingVote);
         }
         else
         {
-            existingVote.Vote = (short)request.VoteType;
-            _voteWriteRepo.Update(existingVote);
+            // ===============================
+            // TOGGLE LOGIC
+            // ===============================
+            if (existingVote.Reason == request.VoteType.ToString())
+            {
+                _voteWriteRepo.Remove(existingVote);
+            }
+            else
+            {
+                existingVote.Reason = request.VoteType.ToString();
+                existingVote.CreatedAt = DateTime.UtcNow;
+
+                _voteWriteRepo.Update(existingVote);
+            }
         }
 
         await _uow.SaveChangesAsync(ct);

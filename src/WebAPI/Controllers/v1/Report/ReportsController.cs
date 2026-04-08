@@ -2,6 +2,7 @@
 using Application.UseCases.Reports.Commands;
 using Application.UseCases.Reports.Dtos;
 using Application.UseCases.Reports.Queries;
+using Application.UseCases.Users.Commands;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -199,6 +200,54 @@ public class ReportsController : ControllerBase
             return Ok(ApiResponse<ReportDto>.Ok(
                 result,
                 "Fetched report successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =====================================================
+    // UNBAN USER 
+    // POST: /api/v1/reports/users/{id}/unban
+    // =====================================================
+    [HttpPost("users/{id:guid}/unban")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> UnbanUser(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new UnbanUserCommand(id), ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                true,
+                "User unbanned successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    // =====================================================
+    // GET REPORT GROUPS
+    // GET: /api/v1/reports/groups
+    // =====================================================
+    [HttpGet("groups")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> GetReportGroups(
+        [FromQuery] string? status,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(
+                new GetReportGroupsQuery(status), ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched report groups successfully"
             ));
         }
         catch (Exception ex)

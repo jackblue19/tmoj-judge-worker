@@ -122,5 +122,24 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
 
             return Ok(ApiResponse<object>.Ok(null, action));
         }
+        // PUT update discussion
+        [HttpPut("/api/v{version:apiVersion}/discussions/{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> UpdateDiscussion(
+            Guid id,
+            [FromBody] DiscussionUpdateDto dto,
+            CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Title))
+                return BadRequest(new { Message = "Title is required." });
+
+            if (string.IsNullOrWhiteSpace(dto.Content))
+                return BadRequest(new { Message = "Content is required." });
+
+            await _mediator.Send(
+                new UpdateDiscussionCommand(id, dto.Title, dto.Content), ct);
+
+            return Ok(ApiResponse<object>.Ok(null, "Discussion updated successfully"));
+        }
     }
 }

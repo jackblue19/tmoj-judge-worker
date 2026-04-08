@@ -12,6 +12,8 @@
         public bool IsPinned { get; set; }
         public bool IsLocked { get; set; }
         public DateTime CreatedAt { get; set; }
+        public int VoteCount { get; set; }
+        public int UserVote { get; set; }
 
         // Tree comment
         public List<DiscussionCommentResponseDto> Comments { get; set; } = new();

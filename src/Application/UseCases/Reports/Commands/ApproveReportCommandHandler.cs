@@ -12,8 +12,11 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
     private readonly IReadRepository<ContentReport, Guid> _readRepo;
     private readonly IWriteRepository<ContentReport, Guid> _writeRepo;
     private readonly IWriteRepository<ModerationAction, Guid> _actionRepo;
+
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
+    private readonly IReadRepository<ProblemDiscussion, Guid> _discussionRepo;
     private readonly IReadRepository<User, Guid> _userRepo;
+
     private readonly IUnitOfWork _uow;
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUser;
@@ -23,6 +26,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         IWriteRepository<ContentReport, Guid> writeRepo,
         IWriteRepository<ModerationAction, Guid> actionRepo,
         IReadRepository<DiscussionComment, Guid> commentRepo,
+        IReadRepository<ProblemDiscussion, Guid> discussionRepo,
         IReadRepository<User, Guid> userRepo,
         IUnitOfWork uow,
         IMediator mediator,
@@ -32,6 +36,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         _writeRepo = writeRepo;
         _actionRepo = actionRepo;
         _commentRepo = commentRepo;
+        _discussionRepo = discussionRepo;
         _userRepo = userRepo;
         _uow = uow;
         _mediator = mediator;
@@ -40,23 +45,32 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
 
     public async Task<Unit> Handle(ApproveReportCommand request, CancellationToken ct)
     {
+        // 🔥 1. Get report
         var report = await _readRepo.GetByIdAsync(request.ReportId, ct)
             ?? throw new Exception("Report not found");
 
         if (!string.Equals(report.Status, "pending", StringComparison.OrdinalIgnoreCase))
             throw new Exception("Already processed");
 
-        report.Status = "approved";
-        _writeRepo.Update(report);
-
         var adminId = _currentUser.UserId
             ?? throw new UnauthorizedAccessException();
 
-        var comment = await _commentRepo.GetByIdAsync(report.TargetId, ct);
+        // 🔥 FIX DateTime (QUAN TRỌNG cho PostgreSQL)
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
-        if (comment != null)
+        // 🔥 2. Update status
+        report.Status = "approved";
+        _writeRepo.Update(report);
+
+        // =====================================================
+        // 🔥 HANDLE COMMENT
+        // =====================================================
+        if (string.Equals(report.TargetType, "comment", StringComparison.OrdinalIgnoreCase))
         {
-            // 🔥 COUNT approved reports
+            var comment = await _commentRepo.GetByIdAsync(report.TargetId, ct)
+                ?? throw new Exception("Comment not found");
+
+            // COUNT approved reports
             var count = await _readRepo.CountAsync(
                 new ReportsByTargetAndStatusSpec(report.TargetId, "comment", "approved"), ct);
 
@@ -75,8 +89,8 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                         ReportId = report.Id,
                         AdminId = adminId,
                         ActionType = "ban_user",
-                        Note = $"Auto banned (reports: {count})",
-                        CreatedAt = DateTime.UtcNow
+                        Note = $"Auto banned (comment reports: {count})",
+                        CreatedAt = now
                     }, ct);
                 }
             }
@@ -86,15 +100,59 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                 new HideUnhideCommentCommand(report.TargetId, true), ct);
         }
 
+        // =====================================================
+        // 🔥 HANDLE DISCUSSION
+        // =====================================================
+        else if (string.Equals(report.TargetType, "discussion", StringComparison.OrdinalIgnoreCase))
+        {
+            var discussion = await _discussionRepo.GetByIdAsync(report.TargetId, ct)
+                ?? throw new Exception("Discussion not found");
+
+            // COUNT approved reports
+            var count = await _readRepo.CountAsync(
+                new ReportsByTargetAndStatusSpec(report.TargetId, "discussion", "approved"), ct);
+
+            // 🔥 BAN user nếu >=5
+            if (count >= 5)
+            {
+                var user = await _userRepo.GetByIdAsync(discussion.UserId, ct);
+
+                if (user != null && user.Status == true)
+                {
+                    user.Status = false;
+
+                    await _actionRepo.AddAsync(new ModerationAction
+                    {
+                        Id = Guid.NewGuid(),
+                        ReportId = report.Id,
+                        AdminId = adminId,
+                        ActionType = "ban_user",
+                        Note = $"Auto banned (discussion reports: {count})",
+                        CreatedAt = now
+                    }, ct);
+                }
+            }
+
+            // 🔥 AUTO LOCK DISCUSSION (hoặc soft hide tuỳ bạn)
+            discussion.IsLocked = true;
+        }
+
+        else
+        {
+            throw new Exception($"Unsupported target type: {report.TargetType}");
+        }
+
+        // =====================================================
         // 🔥 LOG APPROVE
+        // =====================================================
         await _actionRepo.AddAsync(new ModerationAction
         {
             Id = Guid.NewGuid(),
             ReportId = report.Id,
             AdminId = adminId,
             ActionType = "approve",
-            Note = "Approved report",
-            CreatedAt = DateTime.UtcNow
+            Note = $"Approved {report.TargetType} report",
+            CreatedAt = now
         }, ct);
 
         await _uow.SaveChangesAsync(ct);

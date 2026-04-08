@@ -13,6 +13,7 @@ public class CreateReportCommandHandler
     private readonly IReadRepository<ContentReport, Guid> _reportRepo;
     private readonly IReadRepository<User, Guid> _userRepo;
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
+    private readonly IReadRepository<ProblemDiscussion, Guid> _discussionRepo;
     private readonly IUnitOfWork _uow;
     private readonly ICurrentUserService _currentUser;
 
@@ -21,6 +22,7 @@ public class CreateReportCommandHandler
         IReadRepository<ContentReport, Guid> reportRepo,
         IReadRepository<User, Guid> userRepo,
         IReadRepository<DiscussionComment, Guid> commentRepo,
+        IReadRepository<ProblemDiscussion, Guid> discussionRepo,
         IUnitOfWork uow,
         ICurrentUserService currentUser)
     {
@@ -28,58 +30,111 @@ public class CreateReportCommandHandler
         _reportRepo = reportRepo;
         _userRepo = userRepo;
         _commentRepo = commentRepo;
+        _discussionRepo = discussionRepo;
         _uow = uow;
         _currentUser = currentUser;
     }
 
     public async Task<Guid> Handle(CreateReportCommand request, CancellationToken ct)
     {
+        // 🔥 1. Validate
         if (string.IsNullOrWhiteSpace(request.Reason))
             throw new ArgumentException("Reason is required");
 
         var userId = _currentUser.UserId
-            ?? throw new UnauthorizedAccessException();
+            ?? throw new UnauthorizedAccessException("User not authenticated");
 
-        var user = await _userRepo.GetByIdAsync(userId, ct)
-            ?? throw new Exception("User not found");
+        // 🔥 2. Check user tồn tại
+        var user = await _userRepo.GetByIdAsync(userId, ct);
+        if (user == null)
+            throw new Exception("User not found");
 
-        var comment = await _commentRepo.GetByIdAsync(request.TargetId, ct)
-            ?? throw new Exception("Comment not found");
+        var targetType = request.TargetType?.ToLower();
+        if (string.IsNullOrEmpty(targetType))
+            throw new Exception("TargetType is required");
 
-        if (comment.UserId == userId)
-            throw new Exception("Cannot report your own comment");
+        Guid ownerId;
 
-        // 🔥 Anti duplicate
+        // 🔥 3. HANDLE MULTI TARGET
+        switch (targetType)
+        {
+            case "comment":
+                var comment = await _commentRepo.GetByIdAsync(request.TargetId, ct);
+                if (comment == null)
+                    throw new Exception("Comment not found");
+
+                ownerId = comment.UserId;
+
+                if (ownerId == userId)
+                    throw new Exception("Cannot report your own comment");
+
+                break;
+
+            case "discussion":
+                var discussion = await _discussionRepo.GetByIdAsync(request.TargetId, ct);
+                if (discussion == null)
+                    throw new Exception("Discussion not found");
+
+                ownerId = discussion.UserId;
+
+                if (ownerId == userId)
+                    throw new Exception("Cannot report your own discussion");
+
+                break;
+
+            default:
+                throw new Exception($"Unsupported target type: {targetType}");
+        }
+
+        // 🔥 4. Anti duplicate
         var existed = await _reportRepo.FirstOrDefaultAsync(
-            new ReportByUserAndTargetSpec(userId, request.TargetId, "comment"), ct);
+            new ReportByUserAndTargetSpec(userId, request.TargetId, targetType), ct);
 
         if (existed != null)
-            throw new Exception("Already reported");
+            throw new Exception("You already reported this content");
 
+        // 🔥 5. FIX DateTime (KHÔNG ĐỤNG DB)
+        var createdAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+        // 🔥 6. Create report
         var report = new ContentReport
         {
             Id = Guid.NewGuid(),
             ReporterId = userId,
             TargetId = request.TargetId,
-            TargetType = "comment",
+            TargetType = targetType,
             Reason = request.Reason.Trim(),
             Status = "pending",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = createdAt
         };
 
         await _writeRepo.AddAsync(report, ct);
 
-        // 🔥 COUNT pending reports (KHÔNG cần spec mới)
-        var count = await _reportRepo.CountAsync(
-            new ReportsByTargetAndStatusSpec(request.TargetId, "comment", "pending"), ct);
-
-        // 🔥 Auto hide nếu >=3
-        if (count + 1 >= 3)
+        // 🔥 7. AUTO MODERATION (chỉ áp dụng cho comment)
+        if (targetType == "comment")
         {
-            comment.IsHidden = true;
+            var count = await _reportRepo.CountAsync(
+                new ReportsByTargetAndStatusSpec(request.TargetId, "comment", "pending"), ct);
+
+            if (count >= 2)
+            {
+                var comment = await _commentRepo.GetByIdAsync(request.TargetId, ct);
+                if (comment != null)
+                {
+                    comment.IsHidden = true;
+                }
+            }
         }
 
-        await _uow.SaveChangesAsync(ct);
+        // 🔥 8. Save + debug lỗi thật
+        try
+        {
+            await _uow.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception(ex.InnerException?.Message ?? ex.Message);
+        }
 
         return report.Id;
     }

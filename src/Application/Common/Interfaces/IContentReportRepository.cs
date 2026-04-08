@@ -12,5 +12,6 @@ namespace Application.Common.Interfaces
             int pageSize);
 
         Task<ReportDto?> GetByIdAsync(Guid id);
+        Task<List<ReportGroupDto>> GetReportGroupsAsync(string? status);
     }
 }

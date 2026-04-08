@@ -8,18 +8,24 @@ namespace Infrastructure.Persistence.Common.Repositories
     public class DiscussionCommentRepository : IDiscussionCommentRepository
     {
         private readonly TmojDbContext _db;
+        private readonly ICurrentUserService _currentUser;
 
-        public DiscussionCommentRepository(TmojDbContext db)
+        public DiscussionCommentRepository(
+            TmojDbContext db,
+            ICurrentUserService currentUser)
         {
             _db = db;
+            _currentUser = currentUser;
         }
 
         // ===============================
-        // GET BY ID (WITH USER)
+        // GET BY ID (WITH USER + VOTE)
         // ===============================
         public async Task<CommentResponseDto?> GetByIdWithUserAsync(Guid id)
         {
-            return await _db.DiscussionComments
+            var userId = _currentUser.UserId;
+
+            var comment = await _db.DiscussionComments
                 .AsNoTracking()
                 .Include(x => x.User)
                 .Where(x => x.Id == id)
@@ -28,8 +34,7 @@ namespace Infrastructure.Persistence.Common.Repositories
                     CommentId = x.Id,
                     DiscussionId = x.DiscussionId,
                     UserId = x.UserId,
-
-                    ParentId = x.ParentId, // 🔥 FIX
+                    ParentId = x.ParentId,
 
                     UserDisplayName =
                         x.User != null
@@ -43,17 +48,39 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Content = x.Content,
                     CreatedAt = x.CreatedAt ?? DateTime.MinValue,
 
+                    VoteCount = x.VoteCount, // 🔥 từ DB
+
                     Replies = new List<CommentResponseDto>()
                 })
                 .FirstOrDefaultAsync();
+
+            if (comment == null) return null;
+
+            // 🔥 vote aggregate
+            var votes = await _db.CommentVotes
+                .Where(v => v.CommentId == comment.CommentId)
+                .ToListAsync();
+
+            comment.TotalVotes = votes.Count;
+
+            comment.UserVote = votes
+                .Where(v => v.UserId == userId)
+                .Select(v => (int?)v.Vote)
+                .FirstOrDefault();
+
+            return comment;
         }
 
         // ===============================
-        // GET LIST BY DISCUSSION
+        // GET LIST BY DISCUSSION (WITH VOTE)
         // ===============================
         public async Task<List<CommentResponseDto>> GetByDiscussionIdAsync(Guid discussionId)
         {
-            // 🔥 1 QUERY DUY NHẤT
+            var userId = _currentUser.UserId;
+
+            // ===============================
+            // 1. GET COMMENTS (FLAT)
+            // ===============================
             var flatList = await (
                 from c in _db.DiscussionComments.AsNoTracking()
                 join u in _db.Users on c.UserId equals u.UserId into gj
@@ -66,8 +93,7 @@ namespace Infrastructure.Persistence.Common.Repositories
                     CommentId = c.Id,
                     DiscussionId = c.DiscussionId,
                     UserId = c.UserId,
-
-                    ParentId = c.ParentId, // 🔥 QUAN TRỌNG
+                    ParentId = c.ParentId,
 
                     Content = c.Content,
                     CreatedAt = c.CreatedAt ?? DateTime.MinValue,
@@ -79,12 +105,48 @@ namespace Infrastructure.Persistence.Common.Repositories
 
                     UserAvatarUrl = u != null ? u.AvatarUrl : null,
 
+                    VoteCount = c.VoteCount, // 🔥 từ DB
+
                     Replies = new List<CommentResponseDto>()
                 }
             ).ToListAsync();
 
+            var commentIds = flatList.Select(x => x.CommentId).ToList();
+
             // ===============================
-            // BUILD TREE
+            // 2. GET ALL VOTES (1 query)
+            // ===============================
+            var votes = await _db.CommentVotes
+                .Where(v => commentIds.Contains(v.CommentId))
+                .ToListAsync();
+
+            // ===============================
+            // 3. BUILD LOOKUP
+            // ===============================
+            var voteLookup = votes
+                .GroupBy(v => v.CommentId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var userVoteLookup = votes
+                .Where(v => v.UserId == userId)
+                .ToDictionary(v => v.CommentId, v => v.Vote);
+
+            // ===============================
+            // 4. MAP VOTE DATA
+            // ===============================
+            foreach (var c in flatList)
+            {
+                voteLookup.TryGetValue(c.CommentId, out var cVotes);
+
+                c.TotalVotes = cVotes?.Count ?? 0;
+
+                c.UserVote = userVoteLookup.TryGetValue(c.CommentId, out var uv)
+                    ? uv
+                    : null;
+            }
+
+            // ===============================
+            // 5. BUILD TREE
             // ===============================
             var lookup = flatList.ToDictionary(x => x.CommentId);
             var roots = new List<CommentResponseDto>();
@@ -93,12 +155,10 @@ namespace Infrastructure.Persistence.Common.Repositories
             {
                 if (comment.ParentId == null)
                 {
-                    // root
                     roots.Add(comment);
                 }
                 else if (lookup.ContainsKey(comment.ParentId.Value))
                 {
-                    // nested reply (multi-level support)
                     lookup[comment.ParentId.Value].Replies.Add(comment);
                 }
             }

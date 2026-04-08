@@ -32,6 +32,12 @@ namespace Application.UseCases.DiscussionComments.Dtos
         public string? UserAvatarUrl { get; set; }
         public string Content { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
+
+       
+        public int VoteCount { get; set; }
+        public int TotalVotes { get; set; }
+        public int? UserVote { get; set; }
+
         public List<CommentResponseDto> Replies { get; set; } = new();
     }
 }

@@ -18,6 +18,7 @@ namespace Application.Common.Interfaces
         Task<DiscussionResponseDto?> GetDiscussionWithCommentsTreeAsync(Guid discussionId);
 
         Task<DiscussionResponseDto?> GetByIdWithVoteAndCommentsAsync(Guid discussionId, Guid? userId);
+
         Task DeleteDiscussionWithCommentsAsync(Guid discussionId);
 
         Task LockAsync(Guid discussionId);

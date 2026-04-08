@@ -76,4 +76,34 @@ public class ContestsController : ControllerBase
             });
         }
     }
+    // =============================================
+    // GET CONTEST DETAIL
+    // GET: /api/v1/contests/{id}
+    // =============================================
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetContestDetail(
+        Guid id,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(
+                new GetContestDetailQuery(id),
+                ct
+            );
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched contest detail successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message,
+                inner = ex.InnerException?.Message
+            });
+        }
+    }
 }

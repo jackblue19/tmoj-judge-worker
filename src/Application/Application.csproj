@@ -23,4 +23,11 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="UseCases\Contests\Dtos\" />
+    <Folder Include="UseCases\Contests\Validators\" />
+    <Folder Include="UseCases\Contests\Specs\" />
+    <Folder Include="UseCases\Contests\Queries\" />
+  </ItemGroup>
+
 </Project>

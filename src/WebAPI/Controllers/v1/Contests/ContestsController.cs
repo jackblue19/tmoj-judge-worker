@@ -1,4 +1,5 @@
 ﻿using Application.UseCases.Contests.Commands;
+using Application.UseCases.Contests.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -35,6 +36,34 @@ public class ContestsController : ControllerBase
             return Ok(ApiResponse<object>.Ok(
                 result,
                 "Contest created successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message,
+                inner = ex.InnerException?.Message,
+                detail = ex.InnerException?.InnerException?.Message
+            });
+        }
+    }
+    // =============================================
+    // GET CONTEST LIST
+    // GET: /api/v1/contests
+    // =============================================
+    [HttpGet]
+    public async Task<IActionResult> GetContests(
+        [FromQuery] GetContestsQuery query,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(query, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched contests successfully"
             ));
         }
         catch (Exception ex)

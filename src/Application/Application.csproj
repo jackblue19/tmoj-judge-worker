@@ -24,10 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="UseCases\Contests\Dtos\" />
     <Folder Include="UseCases\Contests\Validators\" />
-    <Folder Include="UseCases\Contests\Specs\" />
-    <Folder Include="UseCases\Contests\Queries\" />
   </ItemGroup>
 
 </Project>

@@ -277,7 +277,7 @@ public class AuthController : ControllerBase
 
             if ( user == null || string.IsNullOrEmpty(user.Password) || !_passwordHasher.Verify(req.Password , user.Password) )
             {
-                return Unauthorized(new { Message = "Invalid email or password" });
+                return BadRequest(new { Message = "Invalid email or password" });
             }
 
             if ( !user.EmailVerified )

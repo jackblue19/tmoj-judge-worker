@@ -38,6 +38,13 @@ public record AddClassSemesterRequest(
     Guid SubjectId,
     Guid? TeacherId);
 
+/// <summary>Update a class-semester instance (Manager).</summary>
+public record UpdateClassSemesterRequest(
+    Guid? ClassId,
+    Guid? SemesterId,
+    Guid? SubjectId,
+    Guid? TeacherId);
+
 /// <summary>Generate an invite code (Teacher).</summary>
 public record GenerateInviteCodeRequest(int MinutesValid = 15);
 

@@ -238,6 +238,33 @@ public class ClassController : ControllerBase
     }
 
     // ──────────────────────────────────────────
+    // DELETE api/v1/class/{id}  →  Soft-Delete Class (Manager)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager")]
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteClass(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var cls = await _db.Classes
+                .Include(c => c.ClassSemesters)
+                .FirstOrDefaultAsync(c => c.ClassId == id, ct);
+            if (cls is null) return NotFound(new { Message = "Class not found." });
+
+            // Soft-delete: deactivate the class
+            cls.IsActive = false;
+            cls.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(ApiResponse<object>.Ok(new { cls.ClassId }, "Class deleted (deactivated) successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while deleting the class." });
+        }
+    }
+
+    // ──────────────────────────────────────────
     // POST api/v1/class/assign-teacher-role  →  Assign Teacher Role (Manager)
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager")]
@@ -492,27 +519,101 @@ public class ClassController : ControllerBase
     }
 
     // ──────────────────────────────────────────
-    // DELETE api/v1/class/{id}/semesters/{semesterId}  →  Unlink Class from Semester (Manager)
+    // DELETE api/v1/class/{id}/semesters/{classSemesterId}  →  Delete Class-Semester instance (Manager)
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager")]
-    [HttpDelete("{id:guid}/semesters/{semesterId:guid}")]
+    [HttpDelete("{id:guid}/semesters/{classSemesterId:guid}")]
     public async Task<IActionResult> RemoveSemester(
-        Guid id, Guid semesterId, CancellationToken ct)
+        Guid id, Guid classSemesterId, CancellationToken ct)
     {
         try
         {
             var link = await _db.ClassSemesters
-                .FirstOrDefaultAsync(cs => cs.ClassId == id && cs.SemesterId == semesterId, ct);
-            if (link is null) return NotFound(new { Message = "Class-Semester link not found." });
+                .Include(cs => cs.ClassMembers)
+                .Include(cs => cs.ClassSlots)
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId && cs.ClassId == id, ct);
+            if (link is null) return NotFound(new { Message = "Class-Semester instance not found." });
 
+            // Remove related members and slots first
+            _db.ClassMembers.RemoveRange(link.ClassMembers);
+            _db.ClassSlots.RemoveRange(link.ClassSlots);
             _db.ClassSemesters.Remove(link);
             await _db.SaveChangesAsync(ct);
 
-            return Ok(new { Message = "Class unlinked from semester successfully." });
+            return Ok(new { Message = "Class-Semester instance deleted successfully." });
         }
         catch (Exception)
         {
-            return StatusCode(500, new { Message = "An error occurred while unlinking class from semester." });
+            return StatusCode(500, new { Message = "An error occurred while deleting class semester instance." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // PUT api/v1/class/{id}/semesters/{classSemesterId}  →  Update Class-Semester instance (Manager)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager")]
+    [HttpPut("{id:guid}/semesters/{classSemesterId:guid}")]
+    public async Task<IActionResult> UpdateSemester(
+        Guid id, Guid classSemesterId,
+        [FromBody] UpdateClassSemesterRequest req,
+        CancellationToken ct)
+    {
+        try
+        {
+            var link = await _db.ClassSemesters
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId && cs.ClassId == id, ct);
+            if (link is null) return NotFound(new { Message = "Class-Semester instance not found." });
+
+            // Validate & apply ClassId
+            if (req.ClassId.HasValue)
+            {
+                if (!await _db.Classes.AnyAsync(c => c.ClassId == req.ClassId.Value, ct))
+                    return BadRequest(new { Message = "Class not found." });
+                link.ClassId = req.ClassId.Value;
+            }
+
+            // Validate & apply SemesterId
+            if (req.SemesterId.HasValue)
+            {
+                if (!await _db.Semesters.AnyAsync(s => s.SemesterId == req.SemesterId.Value, ct))
+                    return BadRequest(new { Message = "Semester not found." });
+                link.SemesterId = req.SemesterId.Value;
+            }
+
+            // Validate & apply SubjectId
+            if (req.SubjectId.HasValue)
+            {
+                if (!await _db.Subjects.AnyAsync(s => s.SubjectId == req.SubjectId.Value, ct))
+                    return BadRequest(new { Message = "Subject not found." });
+                link.SubjectId = req.SubjectId.Value;
+            }
+
+            // Validate & apply TeacherId
+            if (req.TeacherId.HasValue)
+            {
+                if (!await _db.Users.AnyAsync(u => u.UserId == req.TeacherId.Value, ct))
+                    return BadRequest(new { Message = "Teacher user not found." });
+                link.TeacherId = req.TeacherId.Value;
+            }
+
+            // Check duplicate combination (same class + semester + subject must be unique)
+            var duplicate = await _db.ClassSemesters
+                .AnyAsync(cs => cs.Id != classSemesterId
+                    && cs.ClassId == link.ClassId
+                    && cs.SemesterId == link.SemesterId
+                    && cs.SubjectId == link.SubjectId, ct);
+            if (duplicate)
+                return Conflict(new { Message = "A class-semester instance with this combination already exists." });
+
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                new { link.Id, link.ClassId, link.SemesterId, link.SubjectId, link.TeacherId },
+                "Class-Semester instance updated successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating class semester instance." });
         }
     }
 
@@ -1021,6 +1122,61 @@ public class ClassController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { Message = "An error occurred while exporting students: " + ex.Message });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/class/{classSemesterId}/invite-code  →  Get current Invite Code (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("{classSemesterId:guid}/invite-code")]
+    public async Task<IActionResult> GetInviteCode(Guid classSemesterId, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var instance = await _db.ClassSemesters.AsNoTracking()
+                .Include(cs => cs.Class)
+                .Include(cs => cs.Semester)
+                .Include(cs => cs.Subject)
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (instance is null) return NotFound(new { Message = "Class instance not found." });
+
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            if (userRole == "teacher" && instance.TeacherId != userId.Value)
+                return Forbid();
+
+            // Check if invite code exists and is still valid
+            if (string.IsNullOrEmpty(instance.InviteCode))
+                return Ok(ApiResponse<object>.Ok(new
+                {
+                    instance.Id,
+                    ClassCode = instance.Class?.ClassCode,
+                    SemesterCode = instance.Semester?.Code,
+                    SubjectCode = instance.Subject?.Code,
+                    InviteCode = (string?)null,
+                    ExpiresAt = (DateTime?)null,
+                    IsActive = false
+                }, "No active invite code."));
+
+            var isExpired = instance.InviteCodeExpiresAt.HasValue && instance.InviteCodeExpiresAt.Value < DateTime.UtcNow;
+
+            return Ok(ApiResponse<object>.Ok(new
+            {
+                instance.Id,
+                ClassCode = instance.Class?.ClassCode,
+                SemesterCode = instance.Semester?.Code,
+                SubjectCode = instance.Subject?.Code,
+                instance.InviteCode,
+                ExpiresAt = instance.InviteCodeExpiresAt,
+                IsActive = !isExpired
+            }, isExpired ? "Invite code has expired." : "Invite code is active."));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching invite code." });
         }
     }
 

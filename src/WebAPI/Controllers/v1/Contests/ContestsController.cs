@@ -156,9 +156,63 @@ public class ContestsController : ControllerBase
             });
         }
     }
+
+    // =============================================
+    // GET PING (HEALTH CHECK)
+    // =============================================
+
     [HttpGet("ping")]
 public IActionResult Ping()
 {
     return Ok("OK");
 }
+
+    // =============================================
+    // GET LEADERBOARD 
+    // =============================================
+
+    [HttpGet("{contestId}/leaderboard")]
+    public async Task<IActionResult> GetLeaderboard(Guid contestId)
+    {
+        var result = await _mediator.Send(new GetContestLeaderboardQuery
+        {
+            ContestId = contestId
+        });
+
+        return Ok(result);
+    }
+    // =============================================
+    // POST ADD PROBLEM TO CONTEST
+    // =============================================
+
+    [HttpPost("{contestId}/problems")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> AddProblemToContest(
+    Guid contestId,
+    [FromBody] AddContestProblemCommand command,
+    CancellationToken ct)
+    {
+        command = command with { ContestId = contestId };
+
+        var result = await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<Guid>.Ok(result, "Added problem to contest"));
+    }
+
+    // =============================================
+    // GET CONTEST PROBLEMS
+    // =============================================
+
+    [HttpGet("{contestId}/problems")]
+    public async Task<IActionResult> GetProblems(Guid contestId)
+    {
+        var result = await _mediator.Send(
+            new GetContestProblemsQuery(contestId));
+
+        return Ok(new
+        {
+            data = result,
+            message = "Fetched contest problems successfully"
+        });
+    }
 }

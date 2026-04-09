@@ -109,7 +109,7 @@ public class ContestRepository : IContestRepository
                         ProblemId = p.ProblemId,
                         Title = p.Problem!.Title,
                         Alias = p.Alias,
-                        Points = p.Points
+                        Points = p.Points ?? 0
                     }).ToList()
             })
             .FirstOrDefaultAsync();

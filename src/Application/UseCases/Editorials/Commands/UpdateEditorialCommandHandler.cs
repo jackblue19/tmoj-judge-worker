@@ -8,7 +8,7 @@ using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Editorials
+namespace Application.UseCases.Editorials.Commands
 {
     public class UpdateEditorialCommandHandler
       : IRequestHandler<UpdateEditorialCommand, Unit>

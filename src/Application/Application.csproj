@@ -23,4 +23,9 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="UseCases\Contests\Validators\" />
+    <Folder Include="UseCases\Editorials\Validators\" />
+  </ItemGroup>
+
 </Project>

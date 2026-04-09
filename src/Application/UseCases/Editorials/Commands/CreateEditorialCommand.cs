@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using MediatR;
 
-namespace Application.UseCases.Editorials
+namespace Application.UseCases.Editorials.Commands
 {
     public record CreateEditorialCommand(
     Guid ProblemId,

@@ -4,7 +4,7 @@ using MediatR;
 using Application.Common.Interfaces;
 using Application.UseCases.Editorials.Specs;
 
-namespace Application.UseCases.Editorials;
+namespace Application.UseCases.Editorials.Commands;
 
 public class CreateEditorialCommandHandler
     : IRequestHandler<CreateEditorialCommand, Guid>

@@ -1,7 +1,8 @@
 using MediatR;
 using Application.Common.Pagination;
+using Application.UseCases.Editorials.Dtos;
 
-namespace Application.UseCases.Editorials;
+namespace Application.UseCases.Editorials.Queries;
 
 public record ViewEditorialQuery(
     Guid ProblemId,

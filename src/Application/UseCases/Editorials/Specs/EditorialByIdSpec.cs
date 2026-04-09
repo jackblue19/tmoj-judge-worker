@@ -1,3 +1,4 @@
+using Application.UseCases.Editorials.Dtos;
 using Ardalis.Specification;
 using Domain.Entities;
 

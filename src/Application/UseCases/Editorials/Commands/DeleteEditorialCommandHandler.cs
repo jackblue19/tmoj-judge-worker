@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
 using Application.Common.Interfaces;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Editorials;
+namespace Application.UseCases.Editorials.Commands;
 
 public class DeleteEditorialCommandHandler
     : IRequestHandler<DeleteEditorialCommand, Unit>

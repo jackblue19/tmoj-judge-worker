@@ -2,8 +2,9 @@ using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 using Application.UseCases.Editorials.Specs;
+using Application.UseCases.Editorials.Dtos;
 
-namespace Application.UseCases.Editorials;
+namespace Application.UseCases.Editorials.Queries;
 
 public class GetEditorialByIdQueryHandler
     : IRequestHandler<GetEditorialByIdQuery, EditorialDto?>

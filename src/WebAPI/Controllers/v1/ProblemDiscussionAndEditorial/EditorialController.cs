@@ -1,4 +1,6 @@
 using Application.UseCases.Editorials;
+using Application.UseCases.Editorials.Commands;
+using Application.UseCases.Editorials.Queries;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;

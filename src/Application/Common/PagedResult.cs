@@ -1,6 +1,12 @@
-﻿namespace Application.Common
+﻿namespace Application.Common.Models;
+
+public class PagedResult<T>
 {
-    internal class PagedResult
-    {
-    }
+    public List<T> Items { get; set; } = new();
+
+    public int Total { get; set; }
+
+    public int Page { get; set; }
+
+    public int PageSize { get; set; }
 }

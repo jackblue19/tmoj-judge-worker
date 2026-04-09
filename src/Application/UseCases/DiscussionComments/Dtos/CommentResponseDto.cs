@@ -28,12 +28,15 @@ namespace Application.UseCases.DiscussionComments.Dtos
         public Guid DiscussionId { get; set; }
         public Guid? ParentId { get; set; }
         public Guid UserId { get; set; }
+
         public string UserDisplayName { get; set; } = string.Empty;
         public string? UserAvatarUrl { get; set; }
+
         public string Content { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
 
-       
+        public bool IsHidden { get; set; } 
+
         public int VoteCount { get; set; }
         public int TotalVotes { get; set; }
         public int? UserVote { get; set; }

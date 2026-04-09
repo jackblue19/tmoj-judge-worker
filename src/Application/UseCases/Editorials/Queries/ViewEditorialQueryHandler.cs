@@ -1,10 +1,11 @@
 using Application.Common.Pagination;
+using Application.UseCases.Editorials.Dtos;
 using Application.UseCases.Editorials.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Editorials;
+namespace Application.UseCases.Editorials.Queries;
 
 public class ViewEditorialQueryHandler
     : IRequestHandler<ViewEditorialQuery, CursorPaginationDto<EditorialDto>>

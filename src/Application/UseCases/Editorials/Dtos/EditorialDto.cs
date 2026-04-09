@@ -1,4 +1,4 @@
-namespace Application.UseCases.Editorials;
+namespace Application.UseCases.Editorials.Dtos;
 
 public record EditorialDto(
     Guid EditorialId,

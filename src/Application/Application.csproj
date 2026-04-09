@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Folder Include="UseCases\Contests\Validators\" />
+    <Folder Include="UseCases\Editorials\Validators\" />
   </ItemGroup>
 
 </Project>

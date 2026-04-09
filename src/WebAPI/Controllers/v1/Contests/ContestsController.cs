@@ -215,4 +215,42 @@ public IActionResult Ping()
             message = "Fetched contest problems successfully"
         });
     }
+    // =============================================
+    // POST SUBMIT CONTEST (DEBUG FULL)
+    // =============================================
+    [HttpPost("{contestId}/submit")]
+    [Authorize]
+    public async Task<IActionResult> Submit(
+        Guid contestId,
+        [FromBody] SubmitContestCommand command,
+        CancellationToken ct)
+    {
+        try
+        {
+            Console.WriteLine("=== HIT SUBMIT CONTEST ===");
+            Console.WriteLine($"ContestId: {contestId}");
+            Console.WriteLine($"ContestProblemId: {command.ContestProblemId}");
+            Console.WriteLine($"Code length: {command.Code?.Length}");
+
+            command.ContestId = contestId;
+
+            var result = await _mediator.Send(command, ct);
+
+            Console.WriteLine("=== SUBMIT SUCCESS ===");
+
+            return Ok(ApiResponse<object>.Ok(result, "Submitted successfully"));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("=== SUBMIT ERROR ===");
+            Console.WriteLine(ex.ToString());
+
+            return BadRequest(new
+            {
+                message = ex.Message,
+                inner = ex.InnerException?.Message,
+                stack = ex.StackTrace
+            });
+        }
+    }
 }

@@ -40,7 +40,6 @@ public class CreateEditorialCommandHandler
         if (request.StorageId == Guid.Empty)
             throw new Exception("StorageId is required");
 
-        // 🔥 CLEAN: lấy user từ service
         var userId = _currentUser.UserId;
         if (userId == null)
             throw new UnauthorizedAccessException();
@@ -65,7 +64,9 @@ public class CreateEditorialCommandHandler
             ProblemId = request.ProblemId,
             StorageId = request.StorageId,
             AuthorId = userId.Value,
-            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+
+            // 🔥 FIX TIME (không dùng Unspecified nữa)
+            CreatedAt = DateTime.UtcNow
         };
 
         await _writeRepo.AddAsync(editorial, ct);

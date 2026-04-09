@@ -1,16 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Application.UseCases.Editorials.Dtos;
+﻿using Application.UseCases.Editorials.Dtos;
 using Ardalis.Specification;
 using Domain.Entities;
 
 namespace Application.UseCases.Editorials.Specs
 {
     public class ViewEditorialSpec
-     : Specification<Editorial, EditorialDto>
+        : Specification<Editorial, EditorialDto>
     {
         public ViewEditorialSpec(
             Guid problemId,
@@ -18,12 +13,10 @@ namespace Application.UseCases.Editorials.Specs
             DateTime? cursorCreatedAt,
             int pageSize)
         {
-            Query.Include(e => e.Storage);
+            Query
+                .Where(e => e.ProblemId == problemId)
+                .Include(e => e.Storage); // 🔥 đảm bảo join
 
-            // Filter theo Problem
-            Query.Where(e => e.ProblemId == problemId);
-
-            // Cursor pagination
             if (cursorId.HasValue && cursorCreatedAt.HasValue)
             {
                 Query.Where(e =>
@@ -40,8 +33,11 @@ namespace Application.UseCases.Editorials.Specs
                 e.EditorialId,
                 e.ProblemId,
                 e.AuthorId,
-                e.Storage.FilePath,
-                e.Storage.FileType,
+
+                // 🔥 FIX NULL
+                e.Storage != null ? e.Storage.FilePath : "",
+                e.Storage != null ? e.Storage.FileType : "",
+
                 e.CreatedAt,
                 e.UpdatedAt
             ));

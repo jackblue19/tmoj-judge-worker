@@ -4,6 +4,7 @@ using Infrastructure;
 using Infrastructure.Configurations.Auth;
 using Infrastructure.Persistence.Common.Repositories;
 using Infrastructure.Persistence.Scaffolded.Context;
+using Application.UseCases.Contests.Queries;
 using Microsoft.AspNetCore.OData;
 using System.Net.WebSockets;
 using System.Text;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Features;
 using Infrastructure.ExternalServices;
 using WebAPI.Services.Judging;
+
 
 var builder = WebApplication.CreateBuilder(args);
 

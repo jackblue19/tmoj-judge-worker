@@ -18,7 +18,9 @@ public class GetEditorialByIdQueryHandler
 
     public async Task<EditorialDto?> Handle(GetEditorialByIdQuery request, CancellationToken ct)
     {
-        return await _repo.FirstOrDefaultAsync(
+        var result = await _repo.FirstOrDefaultAsync(
             new EditorialByIdSpec(request.EditorialId), ct);
+
+        return result;
     }
 }

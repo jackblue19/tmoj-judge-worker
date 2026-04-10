@@ -1,3 +1,4 @@
+using Infrastructure.Configurations.Auth;
 using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -21,10 +22,12 @@ namespace WebAPI.Controllers.v1.ClassManagement;
 public class ClassController : ControllerBase
 {
     private readonly TmojDbContext _db;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public ClassController(TmojDbContext db)
+    public ClassController(TmojDbContext db, IPasswordHasher passwordHasher)
     {
         _db = db;
+        _passwordHasher = passwordHasher;
     }
 
     // ──────────────────────────────────────────
@@ -1115,10 +1118,16 @@ public class ClassController : ControllerBase
 
                     if (user == null)
                     {
+                        // Default password = MemberCode, fallback to RollNumber, then email prefix
+                        var defaultPassword = !string.IsNullOrWhiteSpace(memberCodeRaw) ? memberCodeRaw.Trim()
+                            : !string.IsNullOrWhiteSpace(rollNumberRaw) ? rollNumberRaw.Trim()
+                            : email.Split('@')[0];
+
                         // Create user account
                         user = new User
                         {
                             Email = email,
+                            Password = _passwordHasher.Hash(defaultPassword),
                             Username = email.Split('@')[0],
                             FirstName = firstNameRaw?.Trim() ?? "",
                             LastName = lastNameRaw?.Trim() ?? "",
@@ -1126,7 +1135,7 @@ public class ClassController : ControllerBase
                             RollNumber = rollNumberRaw?.Trim(),
                             MemberCode = memberCodeRaw?.Trim(),
                             RoleId = studentRole?.RoleId,
-                            EmailVerified = false,
+                            EmailVerified = true,
                             Status = true,
                             LanguagePreference = "vi",
                             CreatedAt = DateTime.UtcNow,
@@ -1333,10 +1342,14 @@ public class ClassController : ControllerBase
                     SubjectCode = instance.Subject?.Code,
                     InviteCode = (string?)null,
                     ExpiresAt = (DateTime?)null,
-                    IsActive = false
+                    IsActive = false,
+                    RemainingSeconds = (double?)null
                 }, "No active invite code."));
 
             var isExpired = instance.InviteCodeExpiresAt.HasValue && instance.InviteCodeExpiresAt.Value < DateTime.UtcNow;
+            var remainingSeconds = instance.InviteCodeExpiresAt.HasValue
+                ? Math.Max(0, (instance.InviteCodeExpiresAt.Value - DateTime.UtcNow).TotalSeconds)
+                : (double?)null;
 
             return Ok(ApiResponse<object>.Ok(new
             {
@@ -1346,7 +1359,8 @@ public class ClassController : ControllerBase
                 SubjectCode = instance.Subject?.Code,
                 instance.InviteCode,
                 ExpiresAt = instance.InviteCodeExpiresAt,
-                IsActive = !isExpired
+                IsActive = !isExpired,
+                RemainingSeconds = remainingSeconds
             }, isExpired ? "Invite code has expired." : "Invite code is active."));
         }
         catch (Exception)

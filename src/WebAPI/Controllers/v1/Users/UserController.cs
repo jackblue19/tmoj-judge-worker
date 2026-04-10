@@ -380,11 +380,17 @@ public class UserController : ControllerBase
                         if (studentRole != null)
                             studentRoleId = studentRole.RoleId;
 
+                        // Default password = MemberCode, fallback to RollNumber, then email prefix
+                        var defaultPassword = !string.IsNullOrWhiteSpace(memberCode) ? memberCode.Trim()
+                            : !string.IsNullOrWhiteSpace(rollNumber) ? rollNumber.Trim()
+                            : email.Split('@')[0];
+
                         user = new User
                         {
                             FirstName = names.FirstName,
                             LastName = names.LastName,
                             Email = email,
+                            Password = _passwordHasher.Hash(defaultPassword),
                             Username = email.Split('@')[0] + "_" + Guid.NewGuid().ToString("N").Substring(0, 4),
                             DisplayName = fullName,
                             RollNumber = rollNumber,

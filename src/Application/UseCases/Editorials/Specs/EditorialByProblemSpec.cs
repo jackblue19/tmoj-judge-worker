@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿
 using Ardalis.Specification;
 using Domain.Entities;
 
@@ -15,3 +11,28 @@ public class EditorialByProblemSpec : Specification<Editorial>
         Query.Where(e => e.ProblemId == problemId);
     }
 }
+
+public class EditorialByStorageSpec : Specification<Editorial>
+{
+    public EditorialByStorageSpec(Guid storageId)
+    {
+        Query.Where(e => e.StorageId == storageId);
+    }
+}
+
+public class ProblemByIdSpec : Specification<Problem>
+{
+    public ProblemByIdSpec(Guid id)
+    {
+        Query.Where(p => p.Id == id);
+    }
+}
+
+public class StorageByIdSpec : Specification<StorageFile>
+{
+    public StorageByIdSpec(Guid id)
+    {
+        Query.Where(s => s.StorageId == id);
+    }
+}
+

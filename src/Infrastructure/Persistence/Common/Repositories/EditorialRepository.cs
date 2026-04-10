@@ -1,11 +1,6 @@
 ﻿using Application.Common.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence.Common.Repositories
@@ -19,21 +14,26 @@ namespace Infrastructure.Persistence.Common.Repositories
             _db = db;
         }
 
+        public async Task<Editorial?> GetByIdAsync(Guid id)
+        {
+            return await _db.Editorials
+                .FirstOrDefaultAsync(x => x.EditorialId == id);
+        }
+
         public async Task<List<Editorial>> GetByProblemIdAsync(Guid problemId)
         {
             return await _db.Editorials
                 .Where(x => x.ProblemId == problemId)
+                .OrderByDescending(x => x.CreatedAt) // 🔥 luôn sort
                 .ToListAsync();
         }
 
-        public async Task<Editorial?> GetByIdAsync(Guid id)
-        {
-            return await _db.Editorials.FindAsync(id);
-        }
-
-        public async Task AddAsync(Editorial editorial)
+        public async Task<Guid> CreateAsync(Editorial editorial)
         {
             await _db.Editorials.AddAsync(editorial);
+            await _db.SaveChangesAsync();
+
+            return editorial.EditorialId;
         }
 
         public void Update(Editorial editorial)
@@ -41,9 +41,14 @@ namespace Infrastructure.Persistence.Common.Repositories
             _db.Editorials.Update(editorial);
         }
 
-        public void Remove(Editorial editorial)
+        public void Delete(Editorial editorial)
         {
             _db.Editorials.Remove(editorial);
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            await _db.SaveChangesAsync();
         }
     }
 }

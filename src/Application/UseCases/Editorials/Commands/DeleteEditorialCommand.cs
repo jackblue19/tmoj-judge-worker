@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using MediatR;
+﻿using MediatR;
 
-namespace Application.UseCases.Editorials.Commands;
-
-public record DeleteEditorialCommand(Guid EditorialId) : IRequest<Unit>;
+namespace Application.UseCases.Editorials.Commands
+{
+    public class DeleteEditorialCommand : IRequest
+    {
+        public Guid EditorialId { get; set; }
+    }
+}

@@ -1,52 +1,38 @@
-using Application.Common.Pagination;
+﻿using Application.Common.Interfaces;
 using Application.UseCases.Editorials.Dtos;
-using Application.UseCases.Editorials.Specs;
-using Domain.Abstractions;
-using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Editorials.Queries;
-
-public class ViewEditorialQueryHandler
-    : IRequestHandler<ViewEditorialQuery, CursorPaginationDto<EditorialDto>>
+namespace Application.UseCases.Editorials.Queries
 {
-    private readonly IReadRepository<Editorial, Guid> _repo;
-
-    public ViewEditorialQueryHandler(IReadRepository<Editorial, Guid> repo)
+    public class ViewEditorialQueryHandler
+        : IRequestHandler<ViewEditorialQuery, List<EditorialDto>>
     {
-        _repo = repo;
-    }
+        private readonly IEditorialRepository _repo;
 
-    public async Task<CursorPaginationDto<EditorialDto>> Handle(ViewEditorialQuery request, CancellationToken ct)
-    {
-        // Fetch pageSize + 1 to determine hasMore
-        var spec = new ViewEditorialSpec(
-            request.ProblemId,
-            request.CursorId,
-            request.CursorCreatedAt,
-            request.PageSize + 1
-        );
-
-        var items = await _repo.ListAsync(spec, ct);
-
-        var hasMore = items.Count > request.PageSize;
-        var resultItems = hasMore
-            ? items.Take(request.PageSize).ToList()
-            : items.ToList();
-
-        var result = new CursorPaginationDto<EditorialDto>
+        public ViewEditorialQueryHandler(IEditorialRepository repo)
         {
-            Items = resultItems,
-            HasMore = hasMore
-        };
-
-        if (resultItems.Count > 0)
-        {
-            var last = resultItems[^1];
-            result.NextCursorCreatedAt = last.CreatedAt;
-            result.NextCursorId = last.EditorialId;
+            _repo = repo;
         }
 
-        return result;
+        public async Task<List<EditorialDto>> Handle(ViewEditorialQuery request, CancellationToken cancellationToken)
+        {
+            var list = await _repo.GetByProblemIdAsync(request.ProblemId);
+
+            var result = list
+                .OrderByDescending(x => x.CreatedAt)
+                .Take(request.PageSize)
+                .Select(x => new EditorialDto
+                {
+                    EditorialId = x.EditorialId,
+                    ProblemId = x.ProblemId,
+                    AuthorId = x.AuthorId,
+                    StorageId = x.StorageId,
+                    CreatedAt = x.CreatedAt,
+                    UpdatedAt = x.UpdatedAt ?? DateTime.UtcNow
+                })
+                .ToList(); // 🔥 QUAN TRỌNG
+
+            return result;
+        }
     }
 }

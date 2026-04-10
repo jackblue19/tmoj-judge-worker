@@ -13,3 +13,13 @@ public record UserProfileResponse(
     bool EmailVerified,
     bool Status,
     DateTime CreatedAt);
+public record UserDto(
+    Guid UserId,
+    string Email,
+    string FirstName,
+    string LastName,
+    string? DisplayName,
+    string? Username,
+    string? AvatarUrl,
+    bool emailVerified,
+    string? Role);

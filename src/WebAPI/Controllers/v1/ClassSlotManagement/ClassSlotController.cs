@@ -486,6 +486,66 @@ public class ClassSlotController : ControllerBase
     }
 
     // ──────────────────────────────────────────
+    // PUT .../slots/{slotId}/problems  →  Update problems in slot (Teacher)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPut("{slotId:guid}/problems")]
+    public async Task<IActionResult> UpdateProblems(
+        Guid instanceId, Guid slotId,
+        [FromBody] List<SlotProblemItem> problems,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == instanceId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var slot = await _db.ClassSlots
+                .Include(s => s.ClassSlotProblems)
+                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == instanceId, ct);
+            if (slot is null) return NotFound(new { Message = "Slot not found." });
+
+            if (problems is not { Count: > 0 })
+                return BadRequest(new { Message = "Problems payload is required." });
+
+
+            var slotProblems = slot.ClassSlotProblems?.ToList() ?? new List<ClassSlotProblem>();
+            var updated = 0;
+
+
+            foreach (var p in problems)
+            {
+                var existing = slotProblems.FirstOrDefault(sp => sp.ProblemId == p.ProblemId);
+                if (existing != null)
+                {
+                    existing.Ordinal = p.Ordinal;
+                    existing.Points = p.Points;
+                    existing.IsRequired = p.IsRequired;
+                    updated++;
+                }
+            }
+
+            if (updated > 0)
+            {
+                slot.UpdatedBy = userId;
+                await _db.SaveChangesAsync(ct);
+            }
+
+            return Ok(new { Message = $"{updated} problem(s) updated successfully.", Updated = updated });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating problems." });
+        }
+    }
+
+    // ──────────────────────────────────────────
     // DELETE .../slots/{slotId}/problems  →  Remove problems from slot (Teacher)
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]

@@ -65,7 +65,7 @@ public class SubjectController : ControllerBase
     // ──────────────────────────────────────────
     // GET api/v1/subject  →  View All Subject (Manager)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager")]
+    [Authorize(Roles = "admin,manager,teacher")]
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? search,

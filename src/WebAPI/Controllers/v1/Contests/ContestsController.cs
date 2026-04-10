@@ -253,4 +253,17 @@ public IActionResult Ping()
             });
         }
     }
+    // =============================================
+    // POST PUBLISH CONTEST
+    // =============================================
+
+    [HttpPost("{id:guid}/publish")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> Publish(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new PublishContestCommand(id), ct);
+
+        return Ok(ApiResponse<Guid>.Ok(result, "Contest published"));
+    }
 }

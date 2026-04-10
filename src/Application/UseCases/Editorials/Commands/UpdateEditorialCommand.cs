@@ -1,14 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using MediatR;
+﻿using MediatR;
+using Application.UseCases.Editorials.Dtos;
 
 namespace Application.UseCases.Editorials.Commands
 {
-    public record UpdateEditorialCommand(
-    Guid EditorialId,
-    Guid StorageId
-) : IRequest<Unit>;
+    public class UpdateEditorialCommand : IRequest<EditorialDto>
+    {
+        public Guid EditorialId { get; set; }
+        public Guid StorageId { get; set; }
+    }
 }

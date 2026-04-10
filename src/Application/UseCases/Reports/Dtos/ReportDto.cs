@@ -8,4 +8,6 @@ public class ReportDto
     public string Reason { get; set; }
     public string Status { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public Guid? AuthorId { get; set; }
+    public string? AuthorName { get; set; }
 }

@@ -7,4 +7,7 @@ using MediatR;
 
 namespace Application.UseCases.Reports.Commands;
 
-public record RejectReportCommand(Guid ReportId) : IRequest<Unit>;
+public record RejectReportCommand(
+    Guid ReportId,
+    string? Reason
+) : IRequest<Unit>;

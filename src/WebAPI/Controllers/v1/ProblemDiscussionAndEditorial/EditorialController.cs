@@ -73,7 +73,11 @@ public class EditorialController : ControllerBase
 
         var result = await _mediator.Send(command);
 
+<<<<<<< feat15
         return Ok(ApiResponse<object>.Ok(result, "Editorial updated"));
+=======
+        return Ok(ApiResponse<object>.Ok(new {}, "Editorial updated"));
+>>>>>>> main
     }
 
     /// DELETE
@@ -88,7 +92,7 @@ public class EditorialController : ControllerBase
 
         await _mediator.Send(cmd, ct);
 
-        return Ok(ApiResponse<object>.Ok(null, "Editorial deleted"));
+        return Ok(ApiResponse<object>.Ok(new {}, "Editorial deleted"));
     }
 
     /// GET BY ID

@@ -1,25 +1,13 @@
-using Application.UseCases.Editorials.Dtos;
-using Ardalis.Specification;
+﻿using Ardalis.Specification;
 using Domain.Entities;
 
-namespace Application.UseCases.Editorials.Specs;
-
-public class EditorialByIdSpec : Specification<Editorial, EditorialDto>
+namespace Application.UseCases.Editorials.Specs
 {
-    public EditorialByIdSpec(Guid editorialId)
+    public class EditorialByIdSpec : Specification<Editorial>
     {
-        Query.Include(e => e.Storage);
-
-        Query.Where(e => e.EditorialId == editorialId);
-
-        Query.Select(e => new EditorialDto(
-            e.EditorialId,
-            e.ProblemId,
-            e.AuthorId,
-            e.Storage.FilePath,
-            e.Storage.FileType,
-            e.CreatedAt,
-            e.UpdatedAt
-        ));
+        public EditorialByIdSpec(Guid id)
+        {
+            Query.Where(x => x.EditorialId == id);
+        }
     }
 }

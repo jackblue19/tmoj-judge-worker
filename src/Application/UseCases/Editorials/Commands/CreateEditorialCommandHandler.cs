@@ -1,76 +1,39 @@
-using Domain.Abstractions;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
-using Application.Common.Interfaces;
-using Application.UseCases.Editorials.Specs;
 
-namespace Application.UseCases.Editorials.Commands;
-
-public class CreateEditorialCommandHandler
-    : IRequestHandler<CreateEditorialCommand, Guid>
+namespace Application.UseCases.Editorials.Commands
 {
-    private readonly IWriteRepository<Editorial, Guid> _writeRepo;
-    private readonly IReadRepository<Editorial, Guid> _readRepo;
-    private readonly IReadRepository<Problem, Guid> _problemRepo;
-    private readonly IReadRepository<StorageFile, Guid> _storageRepo;
-    private readonly IUnitOfWork _uow;
-    private readonly ICurrentUserService _currentUser;
-
-    public CreateEditorialCommandHandler(
-        IWriteRepository<Editorial, Guid> writeRepo,
-        IReadRepository<Editorial, Guid> readRepo,
-        IReadRepository<Problem, Guid> problemRepo,
-        IReadRepository<StorageFile, Guid> storageRepo,
-        IUnitOfWork uow,
-        ICurrentUserService currentUser)
+    public class CreateEditorialCommandHandler
+        : IRequestHandler<CreateEditorialCommand, Guid>
     {
-        _writeRepo = writeRepo;
-        _readRepo = readRepo;
-        _problemRepo = problemRepo;
-        _storageRepo = storageRepo;
-        _uow = uow;
-        _currentUser = currentUser;
-    }
+        private readonly IEditorialRepository _repo;
+        private readonly ICurrentUserService _currentUser;
 
-    public async Task<Guid> Handle(CreateEditorialCommand request, CancellationToken ct)
-    {
-        if (request.ProblemId == Guid.Empty)
-            throw new Exception("ProblemId is required");
-
-        if (request.StorageId == Guid.Empty)
-            throw new Exception("StorageId is required");
-
-        // 🔥 CLEAN: lấy user từ service
-        var userId = _currentUser.UserId;
-        if (userId == null)
-            throw new UnauthorizedAccessException();
-
-        var problem = await _problemRepo.GetByIdAsync(request.ProblemId, ct);
-        if (problem == null)
-            throw new Exception("Problem not found");
-
-        var storage = await _storageRepo.GetByIdAsync(request.StorageId, ct);
-        if (storage == null)
-            throw new Exception("Storage not found");
-
-        var exists = await _readRepo.AnyAsync(
-            new EditorialByProblemSpec(request.ProblemId), ct);
-
-        if (exists)
-            throw new Exception("Editorial already exists");
-
-        var editorial = new Editorial
+        public CreateEditorialCommandHandler(
+            IEditorialRepository repo,
+            ICurrentUserService currentUser)
         {
-            EditorialId = Guid.NewGuid(),
-            ProblemId = request.ProblemId,
-            StorageId = request.StorageId,
-            AuthorId = userId.Value,
-            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-        };
+            _repo = repo;
+            _currentUser = currentUser;
+        }
 
-        await _writeRepo.AddAsync(editorial, ct);
-        await _uow.SaveChangesAsync(ct);
+        public async Task<Guid> Handle(CreateEditorialCommand request, CancellationToken cancellationToken)
+        {
+            var userId = _currentUser.UserId;
 
-        return editorial.EditorialId;
+            var editorial = new Editorial
+            {
+                EditorialId = Guid.NewGuid(),
+                ProblemId = request.ProblemId,
+                AuthorId = userId,
+                StorageId = request.StorageId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var id = await _repo.CreateAsync(editorial);
+
+            return id;
+        }
     }
 }

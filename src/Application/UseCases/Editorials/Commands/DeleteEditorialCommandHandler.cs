@@ -1,52 +1,28 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Application.Common.Interfaces;
-using Domain.Abstractions;
-using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Editorials.Commands;
-
-public class DeleteEditorialCommandHandler
-    : IRequestHandler<DeleteEditorialCommand, Unit>
+namespace Application.UseCases.Editorials.Commands
 {
-    private readonly IWriteRepository<Editorial, Guid> _writeRepo;
-    private readonly IReadRepository<Editorial, Guid> _readRepo;
-    private readonly IUnitOfWork _uow;
-    private readonly ICurrentUserService _currentUser;
-
-    public DeleteEditorialCommandHandler(
-        IWriteRepository<Editorial, Guid> writeRepo,
-        IReadRepository<Editorial, Guid> readRepo,
-        IUnitOfWork uow,
-        ICurrentUserService currentUser)
+    public class DeleteEditorialCommandHandler
+        : IRequestHandler<DeleteEditorialCommand>
     {
-        _writeRepo = writeRepo;
-        _readRepo = readRepo;
-        _uow = uow;
-        _currentUser = currentUser;
-    }
+        private readonly IEditorialRepository _repo;
 
-    public async Task<Unit> Handle(DeleteEditorialCommand request, CancellationToken ct)
-    {
-        var userId = _currentUser.UserId;
-        if (userId == null)
-            throw new UnauthorizedAccessException();
+        public DeleteEditorialCommandHandler(IEditorialRepository repo)
+        {
+            _repo = repo;
+        }
 
-        var editorial = await _readRepo.GetByIdAsync(request.EditorialId, ct);
-        if (editorial == null)
-            throw new Exception("Editorial not found");
+        public async Task Handle(DeleteEditorialCommand request, CancellationToken cancellationToken)
+        {
+            var editorial = await _repo.GetByIdAsync(request.EditorialId);
 
-        // 🔥 Permission
-        if (editorial.AuthorId != userId && !_currentUser.IsInRole("admin") && !_currentUser.IsInRole("manager"))
-            throw new UnauthorizedAccessException("You cannot delete this editorial");
+            if (editorial == null)
+                throw new Exception("Editorial not found");
 
-        _writeRepo.Remove(editorial);
-        await _uow.SaveChangesAsync(ct);
+            _repo.Delete(editorial);
 
-        return Unit.Value;
+            await _repo.SaveChangesAsync();
+        }
     }
 }

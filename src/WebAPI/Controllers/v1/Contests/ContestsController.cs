@@ -80,7 +80,7 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
-    // GET CONTEST DETAIL
+    // GET CONTEST DETAIL 
     // =============================================
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetContestDetail(
@@ -92,7 +92,7 @@ public class ContestsController : ControllerBase
             Console.WriteLine($"=== HIT GET DETAIL: {id} ===");
 
             var result = await _mediator.Send(
-                new GetContestDetailQuery(id),
+                new GetContestProblemsQuery(id), 
                 ct
             );
 
@@ -252,5 +252,18 @@ public IActionResult Ping()
                 stack = ex.StackTrace
             });
         }
+    }
+    // =============================================
+    // POST PUBLISH CONTEST
+    // =============================================
+
+    [HttpPost("{id:guid}/publish")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> Publish(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new PublishContestCommand(id), ct);
+
+        return Ok(ApiResponse<Guid>.Ok(result, "Contest published"));
     }
 }

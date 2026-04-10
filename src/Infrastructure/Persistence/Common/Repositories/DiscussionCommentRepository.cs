@@ -48,7 +48,9 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Content = x.Content,
                     CreatedAt = x.CreatedAt ?? DateTime.MinValue,
 
-                    VoteCount = x.VoteCount, // 🔥 từ DB
+                    IsHidden = x.IsHidden ?? false, // 🔥 ADD
+
+                    VoteCount = x.VoteCount,
 
                     Replies = new List<CommentResponseDto>()
                 })
@@ -56,7 +58,6 @@ namespace Infrastructure.Persistence.Common.Repositories
 
             if (comment == null) return null;
 
-            // 🔥 vote aggregate
             var votes = await _db.CommentVotes
                 .Where(v => v.CommentId == comment.CommentId)
                 .ToListAsync();
@@ -67,6 +68,15 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .Where(v => v.UserId == userId)
                 .Select(v => (int?)v.Vote)
                 .FirstOrDefault();
+
+            // 🔥 APPLY HIDE LOGIC
+            if (comment.IsHidden)
+            {
+                if (userId == null || comment.UserId != userId)
+                {
+                    comment.Content = "[Comment hidden]";
+                }
+            }
 
             return comment;
         }
@@ -79,14 +89,13 @@ namespace Infrastructure.Persistence.Common.Repositories
             var userId = _currentUser.UserId;
 
             // ===============================
-            // 1. GET COMMENTS (FLAT)
+            // 1. GET COMMENTS (KHÔNG FILTER HIDDEN)
             // ===============================
             var flatList = await (
                 from c in _db.DiscussionComments.AsNoTracking()
                 join u in _db.Users on c.UserId equals u.UserId into gj
                 from u in gj.DefaultIfEmpty()
                 where c.DiscussionId == discussionId
-                      && (c.IsHidden == null || c.IsHidden == false)
                 orderby c.CreatedAt
                 select new CommentResponseDto
                 {
@@ -98,6 +107,8 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Content = c.Content,
                     CreatedAt = c.CreatedAt ?? DateTime.MinValue,
 
+                    IsHidden = c.IsHidden ?? false, // 🔥 ADD
+
                     UserDisplayName =
                         u != null
                             ? (u.DisplayName ?? u.Username ?? "Anonymous")
@@ -105,7 +116,7 @@ namespace Infrastructure.Persistence.Common.Repositories
 
                     UserAvatarUrl = u != null ? u.AvatarUrl : null,
 
-                    VoteCount = c.VoteCount, // 🔥 từ DB
+                    VoteCount = c.VoteCount,
 
                     Replies = new List<CommentResponseDto>()
                 }
@@ -114,15 +125,12 @@ namespace Infrastructure.Persistence.Common.Repositories
             var commentIds = flatList.Select(x => x.CommentId).ToList();
 
             // ===============================
-            // 2. GET ALL VOTES (1 query)
+            // 2. GET ALL VOTES
             // ===============================
             var votes = await _db.CommentVotes
                 .Where(v => commentIds.Contains(v.CommentId))
                 .ToListAsync();
 
-            // ===============================
-            // 3. BUILD LOOKUP
-            // ===============================
             var voteLookup = votes
                 .GroupBy(v => v.CommentId)
                 .ToDictionary(g => g.Key, g => g.ToList());
@@ -131,9 +139,6 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .Where(v => v.UserId == userId)
                 .ToDictionary(v => v.CommentId, v => v.Vote);
 
-            // ===============================
-            // 4. MAP VOTE DATA
-            // ===============================
             foreach (var c in flatList)
             {
                 voteLookup.TryGetValue(c.CommentId, out var cVotes);
@@ -146,7 +151,21 @@ namespace Infrastructure.Persistence.Common.Repositories
             }
 
             // ===============================
-            // 5. BUILD TREE
+            // 3. APPLY HIDE LOGIC
+            // ===============================
+            foreach (var c in flatList)
+            {
+                if (c.IsHidden)
+                {
+                    if (userId == null || c.UserId != userId)
+                    {
+                        c.Content = "[Comment hidden]";
+                    }
+                }
+            }
+
+            // ===============================
+            // 4. BUILD TREE
             // ===============================
             var lookup = flatList.ToDictionary(x => x.CommentId);
             var roots = new List<CommentResponseDto>();

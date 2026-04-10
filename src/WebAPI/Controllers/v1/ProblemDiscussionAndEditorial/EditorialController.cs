@@ -1,5 +1,5 @@
-using Application.UseCases.Editorials;
 using Application.UseCases.Editorials.Commands;
+using Application.UseCases.Editorials.Dtos;
 using Application.UseCases.Editorials.Queries;
 using Asp.Versioning;
 using MediatR;
@@ -21,9 +21,7 @@ public class EditorialController : ControllerBase
         _mediator = mediator;
     }
 
-    /// <summary>
-    /// Get editorials by problemId (cursor pagination)
-    /// </summary>
+    /// GET LIST
     [HttpGet]
     public async Task<IActionResult> Get(
         [FromQuery] Guid problemId,
@@ -32,29 +30,24 @@ public class EditorialController : ControllerBase
         [FromQuery] int pageSize = 10,
         CancellationToken ct = default)
     {
-        // 🔥 Validate
         if (problemId == Guid.Empty)
             return BadRequest(new { Message = "problemId is required" });
 
         if (pageSize <= 0 || pageSize > 50)
             return BadRequest(new { Message = "pageSize must be between 1 and 50" });
 
-        var result = await _mediator.Send(
-            new ViewEditorialQuery(
-                problemId,
-                cursorId,
-                cursorCreatedAt,
-                pageSize
-            ),
-            ct
-        );
+        var result = await _mediator.Send(new ViewEditorialQuery
+        {
+            ProblemId = problemId,
+            CursorId = cursorId,
+            CursorCreatedAt = cursorCreatedAt,
+            PageSize = pageSize
+        }, ct);
 
         return Ok(ApiResponse<object>.Ok(result, "Fetched editorials successfully"));
     }
 
-    /// <summary>
-    /// Create editorial (Admin / Manager only)
-    /// </summary>
+    /// CREATE
     [Authorize(Roles = "admin,manager")]
     [HttpPost]
     public async Task<IActionResult> Create(
@@ -73,18 +66,13 @@ public class EditorialController : ControllerBase
     }
 
     /// UPDATE
-    [Authorize(Roles = "admin,manager")]
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(
-        Guid id,
-        [FromBody] UpdateEditorialCommand body,
-        CancellationToken ct)
+    public async Task<IActionResult> UpdateEditorial(Guid id, UpdateEditorialCommand command)
     {
-        var cmd = body with { EditorialId = id };
+        command.EditorialId = id;
 
-        await _mediator.Send(cmd, ct);
-
-        return Ok(ApiResponse<object>.Ok(new {}, "Editorial updated"));
+        var result = await _mediator.Send(command);
+        return Ok(ApiResponse<object>.Ok(result, "Editorial updated"));
     }
 
     /// DELETE
@@ -92,7 +80,12 @@ public class EditorialController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await _mediator.Send(new DeleteEditorialCommand(id), ct);
+        var cmd = new DeleteEditorialCommand
+        {
+            EditorialId = id
+        };
+
+        await _mediator.Send(cmd, ct);
 
         return Ok(ApiResponse<object>.Ok(new {}, "Editorial deleted"));
     }
@@ -101,11 +94,14 @@ public class EditorialController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var result = await _mediator.Send(new GetEditorialByIdQuery(id), ct);
+        var result = await _mediator.Send(new GetEditorialByIdQuery
+        {
+            EditorialId = id
+        }, ct);
 
         if (result == null)
             return NotFound(new { Message = "Editorial not found" });
-       
+
         return Ok(ApiResponse<object>.Ok(result, "Fetched editorial successfully"));
     }
 }

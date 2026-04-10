@@ -1,14 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿
 using MediatR;
 
-namespace Application.UseCases.Editorials.Commands
+namespace Application.UseCases.Editorials.Commands;
+
+public class CreateEditorialCommand : IRequest<Guid>
 {
-    public record CreateEditorialCommand(
-    Guid ProblemId,
-    Guid StorageId
-) : IRequest<Guid>;
+    public Guid ProblemId { get; set; }
+    public Guid StorageId { get; set; }
 }
+

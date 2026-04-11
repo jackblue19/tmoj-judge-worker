@@ -21,11 +21,6 @@ namespace WebAPI.Controllers
         // ──────────────────────────────────────────
         // POST api/ScoreDebug/calculate/acm  →  Calculate ACM/ICPC score for a submission
         // ──────────────────────────────────────────
-        /// <summary>
-        /// ACM/ICPC scoring: Binary verdict.
-        /// All testcases must pass (StatusCode == "ac") → FinalScore = 100, VerdictCode = "ac".
-        /// Any failure → FinalScore = 0, VerdictCode = worst status found.
-        /// </summary>
         [HttpPost("calculate/acm")]
         public async Task<IActionResult> CalculateAcmScore(
             [FromBody] CalculateScoreRequest req,
@@ -86,11 +81,6 @@ namespace WebAPI.Controllers
         // ──────────────────────────────────────────
         // POST api/ScoreDebug/calculate/ioi  →  Calculate IOI score for a submission
         // ──────────────────────────────────────────
-        /// <summary>
-        /// IOI scoring: Partial score based on testcase weights.
-        /// Score = (sum of weights of passed testcases / sum of all weights) × 100.
-        /// Each result is matched with its testcase's Weight; if no testcase is linked, weight defaults to 1.
-        /// </summary>
         [HttpPost("calculate/ioi")]
         public async Task<IActionResult> CalculateIoiScore(
             [FromBody] CalculateScoreRequest req,
@@ -173,11 +163,6 @@ namespace WebAPI.Controllers
         // ──────────────────────────────────────────
         // POST api/ScoreDebug/contest/acm  →  Recalculate ACM scoreboard for a contest
         // ──────────────────────────────────────────
-        /// <summary>
-        /// ACM/ICPC contest scoring:
-        /// For each team × problem: solved = all testcases AC, penalty = minutes to first AC + 20 × wrong attempts.
-        /// Updates ContestScoreboard, ContestScoreboardEntry, and ContestTeam.
-        /// </summary>
         [HttpPost("contest/acm")]
         public async Task<IActionResult> CalculateContestAcmScore(
             [FromBody] ContestScoreRequest req,
@@ -358,12 +343,6 @@ namespace WebAPI.Controllers
         // ──────────────────────────────────────────
         // POST api/ScoreDebug/contest/ioi  →  Recalculate IOI scoreboard for a contest
         // ──────────────────────────────────────────
-        /// <summary>
-        /// IOI contest scoring:
-        /// For each team × problem: best score across all submissions (partial scoring with testcase weights).
-        /// Points = (passedWeight / totalWeight) × maxPoints of the contest problem.
-        /// Updates ContestScoreboard, ContestScoreboardEntry, and ContestTeam.
-        /// </summary>
         [HttpPost("contest/ioi")]
         public async Task<IActionResult> CalculateContestIoiScore(
             [FromBody] ContestScoreRequest req,
@@ -544,11 +523,6 @@ namespace WebAPI.Controllers
         }
 
         // ── Helpers ───────────────────────────────
-
-        /// <summary>
-        /// Determines the "worst" verdict from a list of status codes.
-        /// Priority: ce > re > mle > tle > wa > other
-        /// </summary>
         private static string DetermineWorstVerdict(List<string?> statusCodes)
         {
             var priorities = new[] { "ce", "re", "mle", "tle", "wa" };

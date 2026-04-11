@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.UseCases.Auth;
+using Application.UseCases.Problems.Dtos;
 using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -87,6 +88,24 @@ public class ProblemsController : ControllerBase
             CreatedAt = problem.CreatedAt ,
             PublishedAt = problem.PublishedAt
         });
+    }
+
+    // GET api/v1/problems/tags
+    [HttpGet("tags")]
+    public async Task<ActionResult<List<ProblemTagDto>>> GetAllTags(CancellationToken ct)
+    {
+        var tags = await _db.Tags
+            .AsNoTracking()
+            .Where(t => t.IsActive)
+            .Select(t => new ProblemTagDto
+            {
+                Id = t.Id ,
+                Name = t.Name ,
+                Slug = t.Slug
+            })
+            .ToListAsync(ct);
+
+        return Ok(tags);
     }
 
     private Guid? GetUserId()

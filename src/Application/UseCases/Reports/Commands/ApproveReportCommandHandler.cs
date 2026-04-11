@@ -1,5 +1,6 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.DiscussionComments.Commands;
+using Application.UseCases.DiscussionComments.Specs;
 using Application.UseCases.Reports.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
@@ -18,6 +19,9 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
     private readonly IProblemDiscussionRepository _discussionRepo;
 
+    private readonly IReadRepository<User, Guid> _userRepo;
+    private readonly IWriteRepository<User, Guid> _userWriteRepo;
+
     private readonly IUnitOfWork _uow;
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUser;
@@ -29,6 +33,8 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         IWriteRepository<ModerationAction, Guid> actionRepo,
         IReadRepository<DiscussionComment, Guid> commentRepo,
         IProblemDiscussionRepository discussionRepo,
+        IReadRepository<User, Guid> userRepo,
+        IWriteRepository<User, Guid> userWriteRepo,
         IUnitOfWork uow,
         IMediator mediator,
         ICurrentUserService currentUser)
@@ -39,6 +45,8 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         _actionRepo = actionRepo;
         _commentRepo = commentRepo;
         _discussionRepo = discussionRepo;
+        _userRepo = userRepo;
+        _userWriteRepo = userWriteRepo;
         _uow = uow;
         _mediator = mediator;
         _currentUser = currentUser;
@@ -46,31 +54,28 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
 
     public async Task<Unit> Handle(ApproveReportCommand request, CancellationToken ct)
     {
-        Console.WriteLine($"[APPROVE] ReportId = {request.ReportId}");
-
         var report = await _readRepo.GetByIdAsync(request.ReportId, ct);
 
         if (report == null)
             throw new Exception("Report not found");
 
         if (!string.Equals(report.Status, "pending", StringComparison.OrdinalIgnoreCase))
-        {
-            Console.WriteLine($"[APPROVE] Already processed: {report.Status}");
             return Unit.Value;
-        }
 
-        // ✅ tránh duplicate
-        var spec = new ModerationActionByReportAndTypeSpec(report.Id, "approve");
-
-        var existed = await _actionReadRepo.FirstOrDefaultAsync(spec, ct);
+        var existed = await _actionReadRepo.FirstOrDefaultAsync(
+            new ModerationActionByReportAndTypeSpec(report.Id, "approve"), ct);
 
         if (existed != null)
             return Unit.Value;
 
         var adminId = _currentUser.UserId ?? throw new UnauthorizedAccessException();
-        var now = DateTime.UtcNow;
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
-        // COMMENT
+        Guid? authorId = null;
+
+        // =========================
+        // HANDLE TARGET
+        // =========================
         if (report.TargetType == "comment")
         {
             var comment = await _commentRepo.GetByIdAsync(report.TargetId, ct);
@@ -83,12 +88,13 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                 return Unit.Value;
             }
 
+            authorId = comment.UserId;
+
             await _mediator.Send(new HideUnhideCommentCommand(report.TargetId, true), ct);
         }
-        // DISCUSSION
         else if (report.TargetType == "discussion")
         {
-            var discussion = await _discussionRepo.GetByIdAsync(report.TargetId);
+            var discussion = await _discussionRepo.GetEntityByIdAsync(report.TargetId);
 
             if (discussion == null)
             {
@@ -98,12 +104,20 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                 return Unit.Value;
             }
 
+            authorId = discussion.UserId;
+
             await _discussionRepo.LockAsync(report.TargetId);
         }
 
+        // =========================
+        // UPDATE REPORT
+        // =========================
         report.Status = "approved";
         _writeRepo.Update(report);
 
+        // =========================
+        // CREATE MODERATION ACTION
+        // =========================
         await _actionRepo.AddAsync(new ModerationAction
         {
             Id = Guid.NewGuid(),
@@ -113,6 +127,67 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
             Note = request.Reason ?? "Approved",
             CreatedAt = now
         }, ct);
+
+        // =========================
+        // 🔥 AUTO BAN USER
+        // =========================
+        if (authorId.HasValue)
+        {
+            var approvedReports = await _readRepo.ListAsync(
+                new AllReportsSpec("approved"), ct);
+
+            var commentIds = approvedReports
+                .Where(x => x.TargetType == "comment")
+                .Select(x => x.TargetId)
+                .ToList();
+
+            var discussionIds = approvedReports
+                .Where(x => x.TargetType == "discussion")
+                .Select(x => x.TargetId)
+                .ToList();
+
+            int commentCount = 0;
+            int discussionCount = 0;
+
+            if (commentIds.Any())
+            {
+                var comments = await _commentRepo.ListAsync(
+                    new CommentsByIdsSpec(commentIds), ct);
+
+                commentCount = comments.Count(x => x.UserId == authorId);
+            }
+
+            if (discussionIds.Any())
+            {
+                var discussions = await _discussionRepo
+                    .GetDiscussionEntitiesByIdsAsync(discussionIds);
+
+                discussionCount = discussions.Count(x => x.UserId == authorId);
+            }
+
+            var total = commentCount + discussionCount;
+
+            if (total >= 5)
+            {
+                var user = await _userRepo.GetByIdAsync(authorId.Value, ct);
+
+                if (user != null && user.Status == true)
+                {
+                    user.Status = false;
+                    _userWriteRepo.Update(user);
+
+                    await _actionRepo.AddAsync(new ModerationAction
+                    {
+                        Id = Guid.NewGuid(),
+                        ReportId = report.Id,
+                        AdminId = adminId,
+                        ActionType = "auto_ban_user",
+                        Note = $"Auto banned (total approved reports = {total})",
+                        CreatedAt = now
+                    }, ct);
+                }
+            }
+        }
 
         await _uow.SaveChangesAsync(ct);
 

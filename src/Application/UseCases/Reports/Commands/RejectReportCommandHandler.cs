@@ -68,7 +68,7 @@ public class RejectReportCommandHandler : IRequestHandler<RejectReportCommand, U
             return Unit.Value;
 
         var adminId = _currentUser.UserId ?? throw new UnauthorizedAccessException();
-        var now = DateTime.UtcNow;
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
 
         // COMMENT
         if (report.TargetType == "comment")

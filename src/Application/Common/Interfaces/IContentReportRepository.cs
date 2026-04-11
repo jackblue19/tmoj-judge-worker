@@ -12,6 +12,10 @@ namespace Application.Common.Interfaces
             int pageSize);
 
         Task<ReportDto?> GetByIdAsync(Guid id);
+
         Task<List<ReportGroupDto>> GetReportGroupsAsync(string? status);
+
+        // 🔥 NEW
+        Task<(Guid? AuthorId, string? AuthorName)> GetAuthorInfoAsync(Guid targetId, string targetType);
     }
 }

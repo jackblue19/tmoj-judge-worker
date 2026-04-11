@@ -1,5 +1,8 @@
-﻿using Asp.Versioning;
+﻿using Application.Common.Pagination;
+using Application.UseCases.Submissions.Queries.GetSubmissionsByProblem;
+using Asp.Versioning;
 using Infrastructure.Persistence.Scaffolded.Context;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,15 +20,19 @@ public sealed class SubmissionQueriesController : ControllerBase
 {
     private readonly SubmissionQueryService _queryService;
     private readonly TmojDbContext _db;
+    private readonly IMediator _mediator;
 
     public SubmissionQueriesController(
         SubmissionQueryService queryService ,
+        IMediator mediator ,
         TmojDbContext db)
     {
         _queryService = queryService;
         _db = db;
+        _mediator = mediator;
     }
 
+    //  GET DETAIL SUBMISSION BY ID
     [HttpGet("{submissionId:guid}")]
     public async Task<IActionResult> GetDetail(
         Guid submissionId ,
@@ -42,6 +49,33 @@ public sealed class SubmissionQueriesController : ControllerBase
             return Forbid();
 
         return Ok(detail);
+    }
+
+    //  GET ALL SUBMISSIONS BY PROBLEMID (JUST SUBMITTED)
+    [HttpGet("{problemId:guid}/submissionslist")]
+    public async Task<ActionResult<ApiPagedResponse<Application.UseCases.Submissions.Queries.GetSubmissionsByProblem.SubmissionListItemDto>>> GetSubmissionsByProblem(
+        Guid problemId ,
+        [FromQuery] int page = 1 ,
+        [FromQuery] int pageSize = 20 ,
+        CancellationToken ct = default)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var isElevated =
+            User.IsInRole("admin") ||
+            User.IsInRole("manager") ||
+            User.IsInRole("teacher");
+
+        var result = await _mediator.Send(
+            new GetSubmissionsByProblemQuery(
+                ProblemId: problemId ,
+                CurrentUserId: userId ,
+                IsElevated: isElevated ,
+                Page: page ,
+                PageSize: pageSize) ,
+            ct);
+
+        return Ok(result);
     }
 
     [HttpGet]

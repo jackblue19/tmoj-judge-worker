@@ -27,7 +27,7 @@ namespace Application.Common.Interfaces
 
         Task<DiscussionResponseDto?> GetByIdWithVoteAndCommentsAsync(Guid discussionId, Guid? userId);
 
-        // 🔥 ENTITY dùng cho business logic
+       
         Task<ProblemDiscussion?> GetEntityByIdAsync(Guid id);
 
         Task DeleteDiscussionWithCommentsAsync(Guid discussionId);

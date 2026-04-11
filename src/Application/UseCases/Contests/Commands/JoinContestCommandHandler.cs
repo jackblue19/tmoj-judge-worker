@@ -2,7 +2,7 @@
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-
+using Application.Common.Helpers;
 namespace Application.UseCases.Contests.Commands;
 
 public class JoinContestCommandHandler
@@ -49,6 +49,10 @@ public class JoinContestCommandHandler
         if (contest == null)
             throw new Exception("Contest not found");
 
+        // 🔥 ADD THIS (QUAN TRỌNG)
+        if (contest.VisibilityCode != "public")
+            throw new Exception("Contest is not available");
+
         var now = DateTime.UtcNow;
 
         if (contest.EndAt < now)
@@ -69,7 +73,6 @@ public class JoinContestCommandHandler
             if (team == null)
                 throw new Exception("Team not found");
 
-            // 🔥 CHECK USER BELONG TO TEAM (FIX QUAN TRỌNG)
             var isMember = await _contestCustomRepo
                 .IsUserInTeamAsync(userId.Value, team.Id);
 
@@ -80,7 +83,6 @@ public class JoinContestCommandHandler
         }
         else
         {
-            // create personal team
             var team = new Team
             {
                 Id = Guid.NewGuid(),

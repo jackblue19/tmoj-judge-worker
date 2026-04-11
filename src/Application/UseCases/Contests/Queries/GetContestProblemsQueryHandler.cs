@@ -1,11 +1,12 @@
-﻿using Application.Common.Interfaces;
-using Application.UseCases.Contests.Dtos;
+﻿using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Queries;
 using Application.UseCases.Contests.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
+using Application.Common.Helpers;
+
+namespace Application.UseCases.Contests.Queries;
 
 public class GetContestProblemsQueryHandler
     : IRequestHandler<GetContestProblemsQuery, List<ContestProblemDto>>
@@ -23,27 +24,29 @@ public class GetContestProblemsQueryHandler
         CancellationToken ct)
     {
         var data = await _repo.ListAsync(
-     new ContestProblemByContestSpec(request.ContestId),
-     ct);
+            new ContestProblemByContestSpec(request.ContestId),
+            ct);
 
-        var result = data
-            .Where(x => x.ContestId == request.ContestId && x.IsActive)
+        return data
+            .Where(x => x.IsActive)
             .OrderBy(x => x.DisplayIndex ?? x.Ordinal ?? 999)
             .ThenBy(x => x.Alias)
             .Select(x => new ContestProblemDto
             {
                 Id = x.Id,
                 ProblemId = x.ProblemId,
-                Alias = x.Alias!,
+                Title = x.Problem != null ? x.Problem.Title : "Unknown",
+
+                Alias = x.Alias ?? "",
                 Ordinal = x.Ordinal,
                 DisplayIndex = x.DisplayIndex,
+
                 Points = x.Points ?? 0,
                 TimeLimitMs = x.TimeLimitMs,
                 MemoryLimitKb = x.MemoryLimitKb,
-                Title = x.Problem.Title
+
+                Status = "not_started"
             })
             .ToList();
-
-        return result;
     }
 }

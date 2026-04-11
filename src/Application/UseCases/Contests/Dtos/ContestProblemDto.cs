@@ -14,4 +14,5 @@ public class ContestProblemDto
     public int? MemoryLimitKb { get; set; }
 
     public string Title { get; set; } = default!;
+    public string Status { get; set; } = "not_started";
 }

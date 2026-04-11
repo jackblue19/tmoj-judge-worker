@@ -1,10 +1,12 @@
-﻿using Application.UseCases.Problems.Commands.CreateProblem;
+﻿using Application.Common.Pagination;
+using Application.UseCases.Problems.Commands.CreateProblem;
 using Application.UseCases.Problems.Commands.CreateTag;
 using Application.UseCases.Problems.Commands.UpdateProblem;
 using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Mappings;
 using Application.UseCases.Problems.Queries.GetAllProblems;
 using Application.UseCases.Problems.Queries.GetProblemById;
+using Application.UseCases.Problems.Queries.GetPublicProblems;
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +30,7 @@ public class ProblemsController : ControllerBase
         _mediator = mediator;
     }
 
+    //  CREATE PROBLEM
     [Authorize]
     [HttpPost("drafts")]
     [Consumes("multipart/form-data")]
@@ -52,6 +55,7 @@ public class ProblemsController : ControllerBase
         return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
     }
 
+    //  GET PROBLEM BY ID
     [HttpGet("{problemId:guid}")]
     public async Task<ActionResult<ProblemDetailDto>> GetDetail(Guid problemId , CancellationToken ct)
     {
@@ -59,6 +63,8 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
+
+    //  GET PROBLEM DESCRIPTION
     [Authorize]
     [HttpGet("{problemId:guid}/statement")]
     public async Task<IActionResult> GetStatement(Guid problemId , CancellationToken ct)
@@ -81,6 +87,8 @@ public class ProblemsController : ControllerBase
             enableRangeProcessing: true);
     }
 
+
+    //  UPDATE PROBLEM      (EDIT PROBLEM)
     [Authorize]
     [HttpPut("{problemId:guid}/content")]
     [Consumes("multipart/form-data")]
@@ -107,6 +115,8 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
+
+    //  UPDATE PROBLEM DIFFICULTY
     [HttpPut("{problemId:guid}/difficulty")]
     public async Task<ActionResult<ProblemDetailDto>> SetDifficulty(
         Guid problemId ,
@@ -120,6 +130,8 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
+
+    //  CREATE TAGS
     [HttpPost("tags")]
     public async Task<ActionResult<ProblemTagDto>> CreateTag(
         [FromBody] CreateTagRequestDto request ,
@@ -132,6 +144,7 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
+    //  ATTACH TAGS TO PROBLEM
     [HttpPost("{problemId:guid}/tags/attach")]
     public async Task<ActionResult<ProblemDetailDto>> AttachTags(
         Guid problemId ,
@@ -145,6 +158,8 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
+
+    //  REPLACE PROBLEMS TAGS
     [HttpPut("{problemId:guid}/tags")]
     public async Task<ActionResult<ProblemDetailDto>> ReplaceTags(
         Guid problemId ,
@@ -153,6 +168,29 @@ public class ProblemsController : ControllerBase
     {
         var result = await _mediator.Send(
             new ReplaceProblemTagsCommand(problemId , request.TagIds) ,
+            ct);
+
+        return Ok(result);
+    }
+
+    //  GET ALL PUBLIC PROBLEMS
+    [HttpGet("public")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ApiPagedResponse<PublicProblemListItemDto>) , StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ApiPagedResponse<PublicProblemListItemDto>>> GetPublicProblems(
+        [FromQuery] int page = 1 ,
+        [FromQuery] int pageSize = 20 ,
+        [FromQuery] string? search = null ,
+        [FromQuery] string? difficulty = null ,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GetPublicProblemsQuery(
+                Page: page ,
+                PageSize: pageSize ,
+                Search: search ,
+                Difficulty: difficulty) ,
             ct);
 
         return Ok(result);

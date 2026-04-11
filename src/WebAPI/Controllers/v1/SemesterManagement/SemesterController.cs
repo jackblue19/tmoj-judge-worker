@@ -90,6 +90,14 @@ public class SemesterController : ControllerBase
             if (await _db.Semesters.AnyAsync(s => s.Code == req.Code, ct))
                 return Conflict(new { Message = $"Semester code '{req.Code}' already exists." });
 
+            if (req.StartAt >= req.EndAt)
+                return BadRequest(new { Message = "StartAt must be before EndAt." });
+
+            var hasOverlap = await _db.Semesters.AnyAsync(s =>
+                s.IsActive && s.StartAt <= req.EndAt && s.EndAt >= req.StartAt, ct);
+            if (hasOverlap)
+                return Conflict(new { Message = "The semester time range overlaps with an existing active semester." });
+
             var semester = new Semester
             {
                 Code = req.Code.Trim().ToUpperInvariant(),
@@ -123,6 +131,14 @@ public class SemesterController : ControllerBase
 
             if (await _db.Semesters.AnyAsync(x => x.Code == req.Code && x.SemesterId != id, ct))
                 return Conflict(new { Message = $"Semester code '{req.Code}' already exists." });
+
+            if (req.StartAt >= req.EndAt)
+                return BadRequest(new { Message = "StartAt must be before EndAt." });
+
+            var hasOverlap = await _db.Semesters.AnyAsync(x =>
+                x.IsActive && x.SemesterId != id && x.StartAt <= req.EndAt && x.EndAt >= req.StartAt, ct);
+            if (hasOverlap)
+                return Conflict(new { Message = "The semester time range overlaps with an existing active semester." });
 
             s.Code = req.Code.Trim().ToUpperInvariant();
             s.Name = req.Name.Trim();
@@ -307,12 +323,24 @@ public class SemesterController : ControllerBase
                     }
                     else
                     {
+                        var newStart = startAt ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                        var newEnd = endAt ?? DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(4));
+
+                        var hasOverlap = await _db.Semesters.AnyAsync(s =>
+                            s.IsActive && s.StartAt <= newEnd && s.EndAt >= newStart, ct);
+                        if (hasOverlap)
+                        {
+                            errors.Add($"Row {row.RowNumber()}: Semester time range overlaps with an existing active semester.");
+                            failedCount++;
+                            continue;
+                        }
+
                         semester = new Semester
                         {
                             Code = code,
                             Name = name,
-                            StartAt = startAt ?? DateOnly.FromDateTime(DateTime.UtcNow),
-                            EndAt = endAt ?? DateOnly.FromDateTime(DateTime.UtcNow.AddMonths(4))
+                            StartAt = newStart,
+                            EndAt = newEnd
                         };
                         _db.Semesters.Add(semester);
                     }

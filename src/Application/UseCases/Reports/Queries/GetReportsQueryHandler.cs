@@ -11,19 +11,24 @@ public class GetReportsQueryHandler
     : IRequestHandler<GetReportsQuery, List<ReportDto>>
 {
     private readonly IReadRepository<ContentReport, Guid> _repo;
-    private readonly IContentReportRepository _contentRepo;
+    private readonly IDiscussionCommentRepository _commentRepo;
+    private readonly IProblemDiscussionRepository _discussionRepo;
+    private readonly IReadRepository<User, Guid> _userRepo;
 
     public GetReportsQueryHandler(
         IReadRepository<ContentReport, Guid> repo,
-        IContentReportRepository contentRepo)
+        IDiscussionCommentRepository commentRepo,
+        IProblemDiscussionRepository discussionRepo,
+        IReadRepository<User, Guid> userRepo)
     {
         _repo = repo;
-        _contentRepo = contentRepo;
+        _commentRepo = commentRepo;
+        _discussionRepo = discussionRepo;
+        _userRepo = userRepo;
     }
 
     public async Task<List<ReportDto>> Handle(GetReportsQuery request, CancellationToken ct)
     {
-        // 🔥 lấy list report
         var reports = await _repo.ListAsync(
             new AllReportsSpec(request.Status), ct);
 
@@ -31,9 +36,62 @@ public class GetReportsQueryHandler
 
         foreach (var r in reports)
         {
-            // 🔥 lấy author từ repo (đúng kiến trúc)
-            var (authorId, authorName) =
-                await _contentRepo.GetAuthorInfoAsync(r.TargetId, r.TargetType);
+            Guid? authorId = null;
+            string? authorName = null;
+            string? contentPreview = null;
+            Guid? problemId = null;
+            string? redirectUrl = null;
+
+            // =========================
+            // COMMENT
+            // =========================
+            if (r.TargetType == "comment")
+            {
+                var comment = await _commentRepo.GetByIdWithDiscussionAsync(r.TargetId);
+
+                if (comment != null)
+                {
+                    authorId = comment.UserId;
+                    contentPreview = comment.Content;
+                    problemId = comment.Discussion?.ProblemId;
+
+                    if (problemId != null)
+                    {
+                        redirectUrl = $"/problems/{problemId}/discussion?commentId={comment.Id}";
+                    }
+                }
+            }
+            // =========================
+            // DISCUSSION
+            // =========================
+            else if (r.TargetType == "discussion")
+            {
+                var discussion = await _discussionRepo.GetEntityByIdAsync(r.TargetId);
+
+                if (discussion != null)
+                {
+                    authorId = discussion.UserId;
+                    contentPreview = discussion.Content;
+                    problemId = discussion.ProblemId;
+
+                    redirectUrl = $"/problems/{problemId}/discussion/{discussion.Id}";
+                }
+            }
+
+            // =========================
+            // USER
+            // =========================
+            if (authorId.HasValue)
+            {
+                var user = await _userRepo.GetByIdAsync(authorId.Value, ct);
+                authorName = user?.DisplayName ?? user?.Username;
+            }
+
+            // truncate
+            if (!string.IsNullOrEmpty(contentPreview) && contentPreview.Length > 100)
+            {
+                contentPreview = contentPreview.Substring(0, 100) + "...";
+            }
 
             result.Add(new ReportDto
             {
@@ -44,9 +102,12 @@ public class GetReportsQueryHandler
                 Status = r.Status,
                 CreatedAt = r.CreatedAt,
 
-                // 🔥 NEW FIELD
                 AuthorId = authorId,
-                AuthorName = authorName
+                AuthorName = authorName,
+
+                ContentPreview = contentPreview,
+                ProblemId = problemId,
+                RedirectUrl = redirectUrl
             });
         }
 

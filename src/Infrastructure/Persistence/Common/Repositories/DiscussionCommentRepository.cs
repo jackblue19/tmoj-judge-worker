@@ -1,5 +1,6 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.DiscussionComments.Dtos;
+using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -183,6 +184,12 @@ namespace Infrastructure.Persistence.Common.Repositories
             }
 
             return roots;
+        }
+        public async Task<DiscussionComment?> GetByIdWithDiscussionAsync(Guid id)
+        {
+            return await _db.DiscussionComments
+                .Include(x => x.Discussion)
+                .FirstOrDefaultAsync(x => x.Id == id);
         }
     }
 }

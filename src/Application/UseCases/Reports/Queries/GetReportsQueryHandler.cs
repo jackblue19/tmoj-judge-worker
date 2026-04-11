@@ -1,9 +1,9 @@
-﻿using Application.UseCases.Reports.Dtos;
+﻿using Application.Common.Interfaces;
+using Application.UseCases.Reports.Dtos;
 using Application.UseCases.Reports.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using Application.Common.Interfaces;
 
 namespace Application.UseCases.Reports.Queries;
 
@@ -11,24 +11,19 @@ public class GetReportsQueryHandler
     : IRequestHandler<GetReportsQuery, List<ReportDto>>
 {
     private readonly IReadRepository<ContentReport, Guid> _repo;
-    private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
-    private readonly IReadRepository<ProblemDiscussion, Guid> _discussionRepo;
-    private readonly IReadRepository<User, Guid> _userRepo;
+    private readonly IContentReportRepository _contentRepo;
 
     public GetReportsQueryHandler(
         IReadRepository<ContentReport, Guid> repo,
-        IReadRepository<DiscussionComment, Guid> commentRepo,
-        IReadRepository<ProblemDiscussion, Guid> discussionRepo,
-        IReadRepository<User, Guid> userRepo)
+        IContentReportRepository contentRepo)
     {
         _repo = repo;
-        _commentRepo = commentRepo;
-        _discussionRepo = discussionRepo;
-        _userRepo = userRepo;
+        _contentRepo = contentRepo;
     }
 
     public async Task<List<ReportDto>> Handle(GetReportsQuery request, CancellationToken ct)
     {
+        // 🔥 lấy list report
         var reports = await _repo.ListAsync(
             new AllReportsSpec(request.Status), ct);
 
@@ -36,28 +31,9 @@ public class GetReportsQueryHandler
 
         foreach (var r in reports)
         {
-            Guid? authorId = null;
-
-            // ===== COMMENT =====
-            if (r.TargetType == "comment")
-            {
-                var comment = await _commentRepo.GetByIdAsync(r.TargetId, ct);
-                authorId = comment?.UserId;
-            }
-            // ===== DISCUSSION =====
-            else if (r.TargetType == "discussion")
-            {
-                var discussion = await _discussionRepo.GetByIdAsync(r.TargetId, ct);
-                authorId = discussion?.UserId;
-            }
-
-            string? authorName = null;
-
-            if (authorId.HasValue)
-            {
-                var user = await _userRepo.GetByIdAsync(authorId.Value, ct);
-                authorName = user?.DisplayName ?? user?.Username;
-            }
+            // 🔥 lấy author từ repo (đúng kiến trúc)
+            var (authorId, authorName) =
+                await _contentRepo.GetAuthorInfoAsync(r.TargetId, r.TargetType);
 
             result.Add(new ReportDto
             {
@@ -68,7 +44,7 @@ public class GetReportsQueryHandler
                 Status = r.Status,
                 CreatedAt = r.CreatedAt,
 
-                // NEW
+                // 🔥 NEW FIELD
                 AuthorId = authorId,
                 AuthorName = authorName
             });

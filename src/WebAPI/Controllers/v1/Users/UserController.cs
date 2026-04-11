@@ -253,6 +253,8 @@ public class UserController : ControllerBase
                     u.DisplayName,
                     u.Username,
                     u.AvatarUrl,
+                    u.RollNumber,
+                    u.MemberCode,
                     u.EmailVerified,
                     u.Role != null ? u.Role.RoleCode : null
                 ))

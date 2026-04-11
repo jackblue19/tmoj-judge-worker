@@ -20,6 +20,8 @@ public record UserDto(
     string LastName,
     string? DisplayName,
     string? Username,
+    string? RollNumber,
+    string? MemberCode,
     string? AvatarUrl,
     bool emailVerified,
     string? Role);

@@ -573,7 +573,7 @@ public class AuthController : ControllerBase
             await _db.SaveChangesAsync(ct);
 
             // localhost:3000 là bên front end
-            var resetLink = $"http://localhost:3000/reset-password?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verification.Token)}";
+            var resetLink = $"http://api.tmoj.id.vn/reset-password?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verification.Token)}";
 
             var emailSettings = _config.GetSection("EmailSettings");
             var template = emailSettings["ForgotPasswordEmailTemplate"] ?? "<a href='{LINK}'>Khôi phục mật khẩu</a>";

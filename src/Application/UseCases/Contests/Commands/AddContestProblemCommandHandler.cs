@@ -3,6 +3,7 @@ using Application.UseCases.Contests.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
+using Application.Common.Helpers;
 
 namespace Application.UseCases.Contests.Commands;
 

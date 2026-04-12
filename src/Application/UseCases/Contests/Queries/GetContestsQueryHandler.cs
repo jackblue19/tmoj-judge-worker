@@ -2,6 +2,7 @@
 using Application.Common.Models;
 using Application.UseCases.Contests.Dtos;
 using MediatR;
+using Application.Common.Helpers;
 
 namespace Application.UseCases.Contests.Queries;
 

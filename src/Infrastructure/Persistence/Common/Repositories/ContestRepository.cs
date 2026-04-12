@@ -25,9 +25,10 @@ public class ContestRepository : IContestRepository
     {
         var now = DateTime.UtcNow;
 
-        var query = _db.Contests.AsNoTracking();
+        var query = _db.Contests
+            .AsNoTracking()
+            .Where(x => x.VisibilityCode == "public");
 
-        // FILTER
         if (!string.IsNullOrEmpty(status))
         {
             status = status.ToLower();
@@ -40,7 +41,6 @@ public class ContestRepository : IContestRepository
                 query = query.Where(x => x.EndAt < now);
         }
 
-        // LOAD ALL → SMART SORT
         var all = await query.ToListAsync();
 
         var sorted = all
@@ -89,7 +89,7 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // GET DETAIL
+    // GET DETAIL (FIX CHUẨN DTO MỚI)
     // =============================================
     public async Task<ContestDetailDto?> GetContestDetailAsync(Guid contestId)
     {
@@ -97,42 +97,57 @@ public class ContestRepository : IContestRepository
 
         var contest = await _db.Contests
             .AsNoTracking()
-            .Where(x => x.Id == contestId)
-            .Select(x => new
-            {
-                x,
-                Problems = x.ContestProblems!
-                    .OrderBy(p => p.Ordinal)
-                    .Select(p => new ContestProblemDto
-                    {
-                        Id = p.Id,
-                        ProblemId = p.ProblemId,
-                        Title = p.Problem!.Title,
-                        Alias = p.Alias,
-                        Points = p.Points ?? 0
-                    }).ToList()
-            })
-            .FirstOrDefaultAsync();
+            .Include(c => c.ContestProblems!)
+                .ThenInclude(cp => cp.Problem)
+            .FirstOrDefaultAsync(c => c.Id == contestId);
 
         if (contest == null) return null;
 
-        var c = contest.x;
+        var problems = contest.ContestProblems!
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.DisplayIndex ?? p.Ordinal ?? 999)
+            .ThenBy(p => p.Alias)
+            .ToList();
 
         return new ContestDetailDto
         {
-            Id = c.Id,
-            Title = c.Title,
-            Description = c.DescriptionMd,
-            StartAt = c.StartAt,
-            EndAt = c.EndAt,
-            VisibilityCode = c.VisibilityCode,
-            ContestType = c.ContestType,
-            AllowTeams = c.AllowTeams,
+            Id = contest.Id,
+            Title = contest.Title,
+            Description = contest.DescriptionMd ?? "",
+            Slug = contest.Slug ?? "",
+
+            // ✅ FIX CHÍNH
+            Visibility = contest.VisibilityCode,
+
+            ContestType = contest.ContestType ?? "icpc",
+            AllowTeams = contest.AllowTeams,
+
             Status =
-                c.StartAt > now ? "upcoming" :
-                c.EndAt < now ? "ended" :
+                contest.StartAt > now ? "upcoming" :
+                contest.EndAt < now ? "ended" :
                 "running",
-            Problems = contest.Problems
+
+            IsPublished = contest.VisibilityCode == "public",
+
+            StartAt = contest.StartAt,
+            EndAt = contest.EndAt,
+            DurationMinutes = (int)(contest.EndAt - contest.StartAt).TotalMinutes,
+
+            ProblemCount = problems.Count,
+            TotalPoints = problems.Sum(p => p.Points ?? 0),
+
+            Problems = problems.Select(p => new ContestProblemDto
+            {
+                Id = p.Id,
+                ProblemId = p.ProblemId,
+                Title = p.Problem.Title,
+                Alias = p.Alias,
+                Ordinal = p.Ordinal,
+                DisplayIndex = p.DisplayIndex,
+                Points = p.Points ?? 0,
+                TimeLimitMs = p.TimeLimitMs,
+                MemoryLimitKb = p.MemoryLimitKb
+            }).ToList()
         };
     }
 
@@ -144,6 +159,7 @@ public class ContestRepository : IContestRepository
         return await _db.ContestTeams
             .AnyAsync(x => x.ContestId == contestId && x.TeamId == teamId);
     }
+
     public async Task<bool> IsUserInTeamAsync(Guid userId, Guid teamId)
     {
         return await _db.TeamMembers

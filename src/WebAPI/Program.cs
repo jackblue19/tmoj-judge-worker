@@ -1,10 +1,14 @@
 using Application;
 using Application.Common.Interfaces;
+using Application.Common.Services;
+using Application.UseCases.Contests.Queries;
 using Infrastructure;
 using Infrastructure.Configurations.Auth;
+using Infrastructure.ExternalServices;
 using Infrastructure.Persistence.Common.Repositories;
 using Infrastructure.Persistence.Scaffolded.Context;
-using Application.UseCases.Contests.Queries;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.OData;
 using System.Net.WebSockets;
 using System.Text;
@@ -12,9 +16,6 @@ using WebAPI.Extensions;
 //using WebAPI.Judging;
 using WebAPI.Middlewares;
 using WebAPI.OData;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Http.Features;
-using Infrastructure.ExternalServices;
 using WebAPI.Services.Judging;
 
 
@@ -84,6 +85,7 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
+builder.Services.AddScoped<IContestStatusService, ContestStatusService>();
 
 //  v2  -   Judge Worker    -   DI
 builder.Services.AddScoped<WebAPI.Services.Judging.JudgeJobDispatchService>();

@@ -1020,7 +1020,7 @@ public class ClassController : ControllerBase
             using var workbook = new ClosedXML.Excel.XLWorkbook();
             var worksheet = workbook.Worksheets.Add("Template");
 
-            var headers = new List<string> { "Email", "RollNumber", "MemberCode", "FirstName", "LastName" };
+            var headers = new List<string> { "Email", "RollNumber", "MemberCode", "FullName" };
             for (int i = 0; i < headers.Count; i++)
             {
                 var cell = worksheet.Cell(1, i + 1);
@@ -1033,8 +1033,7 @@ public class ClassController : ControllerBase
             worksheet.Cell(2, 1).Value = "student@domain.com";
             worksheet.Cell(2, 2).Value = "SE170001";
             worksheet.Cell(2, 3).Value = "HE170001";
-            worksheet.Cell(2, 4).Value = "Nguyen";
-            worksheet.Cell(2, 5).Value = "Van A";
+            worksheet.Cell(2, 4).Value = "Nguyen Van A";
 
             worksheet.Columns().AdjustToContents();
 
@@ -1103,8 +1102,12 @@ public class ClassController : ControllerBase
                     string emailRaw = GetCellString(row, headers, "Email");
                     string rollNumberRaw = GetCellString(row, headers, "RollNumber");
                     string memberCodeRaw = GetCellString(row, headers, "MemberCode");
-                    string firstNameRaw = GetCellString(row, headers, "FirstName");
-                    string lastNameRaw = GetCellString(row, headers, "LastName");
+                    string fullNameRaw = GetCellString(row, headers, "FullName");
+
+                    // Split FullName: first word → FirstName, remaining → LastName
+                    var nameParts = (fullNameRaw ?? "").Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    var firstName = nameParts.Length > 0 ? nameParts[0] : "";
+                    var lastName = nameParts.Length > 1 ? string.Join(" ", nameParts.Skip(1)) : "";
 
                     if (string.IsNullOrWhiteSpace(emailRaw))
                     {
@@ -1114,7 +1117,20 @@ public class ClassController : ControllerBase
                     }
 
                     var email = emailRaw.Trim().ToLowerInvariant();
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+                    var memberCode = memberCodeRaw?.Trim();
+                    var rollNumber = rollNumberRaw?.Trim();
+
+                    // Lookup: email → memberCode → rollNumber
+                    var user = await _db.Users.FirstOrDefaultAsync(
+                        u => u.Email.ToLower() == email, ct);
+
+                    if (user == null && !string.IsNullOrWhiteSpace(memberCode))
+                        user = await _db.Users.FirstOrDefaultAsync(
+                            u => u.MemberCode == memberCode, ct);
+
+                    if (user == null && !string.IsNullOrWhiteSpace(rollNumber))
+                        user = await _db.Users.FirstOrDefaultAsync(
+                            u => u.RollNumber == rollNumber, ct);
 
                     if (user == null)
                     {
@@ -1123,17 +1139,26 @@ public class ClassController : ControllerBase
                             : !string.IsNullOrWhiteSpace(rollNumberRaw) ? rollNumberRaw.Trim()
                             : email.Split('@')[0];
 
+                        // Resolve unique username (email prefix + optional suffix)
+                        var baseUsername = email.Split('@')[0];
+                        var username = baseUsername;
+                        int suffix = 1;
+                        while (await _db.Users.AnyAsync(u => u.Username == username, ct))
+                        {
+                            username = $"{baseUsername}{suffix++}";
+                        }
+
                         // Create user account
                         user = new User
                         {
                             Email = email,
                             Password = _passwordHasher.Hash(defaultPassword),
-                            Username = email.Split('@')[0],
-                            FirstName = firstNameRaw?.Trim() ?? "",
-                            LastName = lastNameRaw?.Trim() ?? "",
-                            DisplayName = $"{firstNameRaw?.Trim()} {lastNameRaw?.Trim()}".Trim(),
-                            RollNumber = rollNumberRaw?.Trim(),
-                            MemberCode = memberCodeRaw?.Trim(),
+                            Username = username,
+                            FirstName = firstName,
+                            LastName = lastName,
+                            DisplayName = fullNameRaw?.Trim() ?? "",
+                            RollNumber = rollNumber,
+                            MemberCode = memberCode,
                             RoleId = studentRole?.RoleId,
                             EmailVerified = true,
                             Status = true,
@@ -1146,12 +1171,12 @@ public class ClassController : ControllerBase
                     }
                     else
                     {
-                        // Update RollNumber/MemberCode if provided and not set
+                        // Update missing fields if provided
                         bool updated = false;
-                        if (!string.IsNullOrWhiteSpace(rollNumberRaw) && string.IsNullOrWhiteSpace(user.RollNumber))
-                        { user.RollNumber = rollNumberRaw.Trim(); updated = true; }
-                        if (!string.IsNullOrWhiteSpace(memberCodeRaw) && string.IsNullOrWhiteSpace(user.MemberCode))
-                        { user.MemberCode = memberCodeRaw.Trim(); updated = true; }
+                        if (!string.IsNullOrWhiteSpace(rollNumber) && string.IsNullOrWhiteSpace(user.RollNumber))
+                        { user.RollNumber = rollNumber; updated = true; }
+                        if (!string.IsNullOrWhiteSpace(memberCode) && string.IsNullOrWhiteSpace(user.MemberCode))
+                        { user.MemberCode = memberCode; updated = true; }
                         if (updated) await _db.SaveChangesAsync(ct);
                     }
 
@@ -1183,8 +1208,15 @@ public class ClassController : ControllerBase
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"Row {row.RowNumber()}: {ex.Message}");
+                    errors.Add($"Row {row.RowNumber()}: {ex.InnerException?.Message ?? ex.Message}");
                     failedCount++;
+
+                    // Detach failed entities to prevent cascading EF errors
+                    foreach (var entry in _db.ChangeTracker.Entries()
+                        .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified))
+                    {
+                        entry.State = EntityState.Detached;
+                    }
                 }
             }
 
@@ -1194,7 +1226,11 @@ public class ClassController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Message = "An error occurred while importing students: " + ex.Message });
+            var innerMsg = ex.InnerException?.Message;
+            var fullMsg = innerMsg != null
+                ? $"An error occurred while importing students: {ex.Message} → {innerMsg}"
+                : $"An error occurred while importing students: {ex.Message}";
+            return StatusCode(500, new { Message = fullMsg });
         }
     }
 

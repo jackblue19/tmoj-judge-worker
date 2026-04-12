@@ -1,7 +1,9 @@
-﻿using Asp.Versioning;
+﻿using Application.UseCases.Score.Queries;
+using Asp.Versioning;
 using Contracts.Submissions.Judging;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -20,10 +22,12 @@ namespace WebAPI.Controllers.v2.SubmissionManagement;
 public sealed class SubmissionsController : ControllerBase
 {
     private readonly TmojDbContext _db;
+    private readonly IMediator _mediator;
 
-    public SubmissionsController(TmojDbContext db)
+    public SubmissionsController(TmojDbContext db, IMediator mediator)
     {
         _db = db;
+        _mediator = mediator;
     }
 
     [HttpPost]
@@ -176,6 +180,50 @@ public sealed class SubmissionsController : ControllerBase
             JudgeJobId = judgeJobId ,
             Status = "queued"
         });
+    }
+
+    // =============================================
+    // GET SCORE — IOI scoring cho submission của public problem
+    // Mỗi test case AC = 1 điểm. Standalone problem luôn dùng IOI.
+    // =============================================
+    [HttpGet("{submissionId:guid}/score")]
+    public async Task<IActionResult> GetScore(
+        Guid problemId,
+        Guid submissionId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ScoreStandaloneProblemQuery(submissionId), ct);
+
+        if (result.NotFound)
+            return Problem(statusCode: 404, title: "Submission not found.");
+
+        if (result.BelongsToContest)
+            return Problem(statusCode: 400, title: "Submission belongs to a contest, not a public problem.");
+
+        if (result.Data!.ProblemId != problemId)
+            return Problem(statusCode: 400, title: "Submission does not belong to this problem.");
+
+        return Ok(result.Data);
+    }
+
+    // =============================================
+    // INSPECT — debug raw data của submission
+    // =============================================
+    [HttpGet("{submissionId:guid}/inspect")]
+    public async Task<IActionResult> Inspect(
+        Guid problemId,
+        Guid submissionId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(new InspectSubmissionQuery(submissionId), ct);
+
+        if (result is null)
+            return Problem(statusCode: 404, title: "Submission not found.");
+
+        if (result.Submission.ProblemId != problemId)
+            return Problem(statusCode: 400, title: "Submission does not belong to this problem.");
+
+        return Ok(result);
     }
 
     private Guid GetUserId()

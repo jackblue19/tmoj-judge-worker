@@ -18,7 +18,8 @@ public sealed class PublicProblemsPagedSpec : Specification<Problem , PublicProb
 
         Query.Where(x =>
             x.IsActive &&
-            x.StatusCode == "published" &&
+            (x.StatusCode == "published" ||
+            x.StatusCode == "draft") &&
             x.VisibilityCode == "public");
 
         if ( !string.IsNullOrWhiteSpace(search) )

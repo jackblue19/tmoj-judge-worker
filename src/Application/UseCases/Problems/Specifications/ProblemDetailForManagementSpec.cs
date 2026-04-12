@@ -1,4 +1,4 @@
-﻿using Application.UseCases.Problems.Dtos;
+using Application.UseCases.Problems.Dtos;
 using Ardalis.Specification;
 using Domain.Entities;
 
@@ -47,7 +47,8 @@ public sealed class ProblemDetailForManagementSpec : Specification<Problem , Pro
                 {
                     Id = t.Id ,
                     Name = t.Name ,
-                    Slug = t.Slug
+                    Slug = t.Slug ,
+                    IsActive = t.IsActive
                 })
                 .ToList()
         });

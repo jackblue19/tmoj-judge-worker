@@ -1,625 +1,589 @@
 using Infrastructure.Persistence.Scaffolded.Context;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using WebAPI.Models.Common;
 
-namespace WebAPI.Controllers
+namespace WebAPI.Controllers;
+
+[ApiController]
+[Route("api/debug/score")]
+[Tags("ScoreDebug")]
+public class ScoreDebugController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    [Authorize(Roles = "admin,manager,teacher")]
-    public class ScoreDebugController : ControllerBase
+    private readonly TmojDbContext _db;
+
+    public ScoreDebugController(TmojDbContext db)
     {
-        private readonly TmojDbContext _db;
+        _db = db;
+    }
 
-        public ScoreDebugController(TmojDbContext db)
+    // =============================================
+    // IOI SCORING — per submission
+    // Mỗi test case pass = 1 điểm. Score = số test case AC.
+    // =============================================
+
+    /// <summary>
+    /// Tính điểm IOI cho một submission. Mỗi test case pass = 1 điểm.
+    /// </summary>
+    [HttpGet("ioi/submission/{submissionId:guid}")]
+    public async Task<IActionResult> ScoreIoiSubmission(Guid submissionId, CancellationToken ct)
+    {
+        var submission = await _db.Submissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == submissionId, ct);
+
+        if (submission is null)
+            return NotFound(new { message = "Submission not found." });
+
+        var score = await CalcIoiScoreAsync(submissionId, ct);
+
+        return Ok(new
         {
-            _db = db;
-        }
+            submissionId,
+            scoringMode = "ioi",
+            verdict = submission.VerdictCode,
+            note = submission.VerdictCode == "ce"
+                ? "Submission bị Compile Error, không có test case nào được chạy."
+                : null,
+            score.TotalScore,
+            score.PassedCases,
+            score.TotalCases,
+            score.Cases
+        });
+    }
 
-        // ──────────────────────────────────────────
-        // POST api/ScoreDebug/calculate/acm  →  Calculate ACM/ICPC score for a submission
-        // ──────────────────────────────────────────
-        [HttpPost("calculate/acm")]
-        public async Task<IActionResult> CalculateAcmScore(
-            [FromBody] CalculateScoreRequest req,
-            CancellationToken ct)
+    // =============================================
+    // IOI SCORING — per problem (nhiều lần nộp, lấy điểm cao nhất)
+    // =============================================
+
+    /// <summary>
+    /// Tính điểm IOI tốt nhất cho một team/problem trong contest.
+    /// Lấy submission có điểm cao nhất trong tất cả các lần nộp.
+    /// </summary>
+    [HttpGet("ioi/problem/{contestProblemId:guid}/{teamId:guid}")]
+    public async Task<IActionResult> ScoreIoiProblem(Guid contestProblemId, Guid teamId, CancellationToken ct)
+    {
+        var cp = await _db.ContestProblems
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == contestProblemId, ct);
+
+        if (cp is null)
+            return NotFound(new { message = "ContestProblem not found." });
+
+        var submissionIds = await _db.Submissions
+            .AsNoTracking()
+            .Where(s => s.ContestProblemId == contestProblemId
+                        && s.TeamId == teamId
+                        && s.StatusCode == "done")
+            .OrderBy(s => s.CreatedAt)
+            .Select(s => new { s.Id, s.CreatedAt })
+            .ToListAsync(ct);
+
+        if (submissionIds.Count == 0)
+            return Ok(new
+            {
+                contestProblemId,
+                teamId,
+                scoringMode = "ioi",
+                bestScore = 0,
+                totalSubmissions = 0,
+                bestSubmissionId = (Guid?)null,
+                submissions = Array.Empty<object>()
+            });
+
+        // Tính điểm cho từng submission, lấy điểm cao nhất
+        IoiScoreResult? best = null;
+        Guid bestSubmissionId = Guid.Empty;
+        var allResults = new List<object>();
+
+        foreach (var s in submissionIds)
         {
-            try
+            var result = await CalcIoiScoreAsync(s.Id, ct);
+            allResults.Add(new
             {
-                var submission = await _db.Submissions
-                    .Include(s => s.Results)
-                    .FirstOrDefaultAsync(s => s.Id == req.SubmissionId, ct);
+                submissionId = s.Id,
+                submittedAt = s.CreatedAt,
+                result.TotalScore,
+                result.PassedCases,
+                result.TotalCases
+            });
 
-                if (submission is null)
-                    return NotFound(new { Message = "Submission not found." });
-
-                var results = submission.Results.ToList();
-                if (results.Count == 0)
-                    return BadRequest(new { Message = "Submission has no results to score." });
-
-                var allAccepted = results.All(r => r.StatusCode == "ac");
-
-                var verdictCode = allAccepted
-                    ? "ac"
-                    : DetermineWorstVerdict(results.Select(r => r.StatusCode).ToList());
-
-                var finalScore = allAccepted ? 100m : 0m;
-
-                var maxTimeMs = results.Where(r => r.RuntimeMs.HasValue).Select(r => r.RuntimeMs!.Value).DefaultIfEmpty(0).Max();
-                var maxMemoryKb = results.Where(r => r.MemoryKb.HasValue).Select(r => r.MemoryKb!.Value).DefaultIfEmpty(0).Max();
-
-                if (req.ApplyToSubmission)
-                {
-                    submission.FinalScore = finalScore;
-                    submission.VerdictCode = verdictCode;
-                    submission.TimeMs = maxTimeMs;
-                    submission.MemoryKb = maxMemoryKb;
-                    submission.JudgedAt = DateTime.UtcNow;
-                    await _db.SaveChangesAsync(ct);
-                }
-
-                return Ok(ApiResponse<AcmScoreResult>.Ok(new AcmScoreResult(
-                    submission.Id,
-                    "acm",
-                    verdictCode,
-                    finalScore,
-                    results.Count,
-                    results.Count(r => r.StatusCode == "ac"),
-                    maxTimeMs,
-                    maxMemoryKb,
-                    req.ApplyToSubmission
-                ), "ACM score calculated successfully."));
-            }
-            catch (Exception ex)
+            if (best is null || result.TotalScore > best.TotalScore)
             {
-                return StatusCode(500, new { Message = "An error occurred while calculating ACM score.", Detail = ex.Message });
-            }
-        }
-
-        // ──────────────────────────────────────────
-        // POST api/ScoreDebug/calculate/ioi  →  Calculate IOI score for a submission
-        // ──────────────────────────────────────────
-        [HttpPost("calculate/ioi")]
-        public async Task<IActionResult> CalculateIoiScore(
-            [FromBody] CalculateScoreRequest req,
-            CancellationToken ct)
-        {
-            try
-            {
-                var submission = await _db.Submissions
-                    .Include(s => s.Results).ThenInclude(r => r.Testcase)
-                    .FirstOrDefaultAsync(s => s.Id == req.SubmissionId, ct);
-
-                if (submission is null)
-                    return NotFound(new { Message = "Submission not found." });
-
-                var results = submission.Results.ToList();
-                if (results.Count == 0)
-                    return BadRequest(new { Message = "Submission has no results to score." });
-
-                int totalWeight = 0;
-                int passedWeight = 0;
-                var testcaseDetails = new List<IoiTestcaseScore>();
-
-                foreach (var r in results.OrderBy(r => r.Testcase?.Ordinal ?? 0))
-                {
-                    int weight = r.Testcase?.Weight ?? 1;
-                    bool passed = r.StatusCode == "ac";
-                    totalWeight += weight;
-                    if (passed) passedWeight += weight;
-
-                    testcaseDetails.Add(new IoiTestcaseScore(
-                        r.TestcaseId,
-                        r.Testcase?.Ordinal ?? 0,
-                        r.StatusCode,
-                        weight,
-                        passed));
-                }
-
-                decimal finalScore = totalWeight > 0
-                    ? Math.Round((decimal)passedWeight / totalWeight * 100, 2)
-                    : 0m;
-
-                var verdictCode = finalScore == 100m
-                    ? "ac"
-                    : (finalScore > 0 ? "partial" : DetermineWorstVerdict(results.Select(r => r.StatusCode).ToList()));
-
-                var maxTimeMs = results.Where(r => r.RuntimeMs.HasValue).Select(r => r.RuntimeMs!.Value).DefaultIfEmpty(0).Max();
-                var maxMemoryKb = results.Where(r => r.MemoryKb.HasValue).Select(r => r.MemoryKb!.Value).DefaultIfEmpty(0).Max();
-
-                if (req.ApplyToSubmission)
-                {
-                    submission.FinalScore = finalScore;
-                    submission.VerdictCode = verdictCode;
-                    submission.TimeMs = maxTimeMs;
-                    submission.MemoryKb = maxMemoryKb;
-                    submission.JudgedAt = DateTime.UtcNow;
-                    await _db.SaveChangesAsync(ct);
-                }
-
-                return Ok(ApiResponse<IoiScoreResult>.Ok(new IoiScoreResult(
-                    submission.Id,
-                    "ioi",
-                    verdictCode,
-                    finalScore,
-                    results.Count,
-                    results.Count(r => r.StatusCode == "ac"),
-                    totalWeight,
-                    passedWeight,
-                    maxTimeMs,
-                    maxMemoryKb,
-                    req.ApplyToSubmission,
-                    testcaseDetails
-                ), "IOI score calculated successfully."));
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { Message = "An error occurred while calculating IOI score.", Detail = ex.Message });
+                best = result;
+                bestSubmissionId = s.Id;
             }
         }
 
-        // ──────────────────────────────────────────
-        // POST api/ScoreDebug/contest/acm  →  Recalculate ACM scoreboard for a contest
-        // ──────────────────────────────────────────
-        [HttpPost("contest/acm")]
-        public async Task<IActionResult> CalculateContestAcmScore(
-            [FromBody] ContestScoreRequest req,
-            CancellationToken ct)
+        return Ok(new
         {
-            try
+            contestProblemId,
+            teamId,
+            scoringMode = "ioi",
+            bestScore = best!.TotalScore,
+            totalSubmissions = submissionIds.Count,
+            bestSubmissionId,
+            bestSubmissionDetail = new
             {
-                var contest = await _db.Contests
-                    .Include(c => c.ContestProblems)
-                    .Include(c => c.ContestTeams)
-                    .FirstOrDefaultAsync(c => c.Id == req.ContestId, ct);
+                best.PassedCases,
+                best.TotalCases,
+                best.Cases
+            },
+            submissions = allResults
+        });
+    }
 
-                if (contest is null)
-                    return NotFound(new { Message = "Contest not found." });
+    // =============================================
+    // CONTEST SCORING — auto-detect IOI / ACM từ Contest.ContestType
+    // IOI: lấy điểm cao nhất mỗi problem, cộng tổng
+    // ACM: đếm solved + cộng dồn penalty
+    // =============================================
 
-                var contestProblems = contest.ContestProblems.ToList();
-                var contestTeams = contest.ContestTeams.ToList();
+    /// <summary>
+    /// Tính điểm tổng hợp toàn contest cho một team.
+    /// Tự động chọn IOI hoặc ACM dựa theo Contest.ContestType.
+    /// Problem ngoài contest luôn dùng IOI.
+    /// </summary>
+    [HttpGet("contest/{contestId:guid}/{teamId:guid}")]
+    public async Task<IActionResult> ScoreContest(Guid contestId, Guid teamId, CancellationToken ct)
+    {
+        var contest = await _db.Contests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == contestId, ct);
 
-                if (contestProblems.Count == 0)
-                    return BadRequest(new { Message = "Contest has no problems." });
-                if (contestTeams.Count == 0)
-                    return BadRequest(new { Message = "Contest has no participants." });
+        if (contest is null)
+            return NotFound(new { message = "Contest not found." });
 
-                // Load all submissions for this contest's problems
-                var contestProblemIds = contestProblems.Select(cp => cp.Id).ToList();
-                var allSubmissions = await _db.Submissions.AsNoTracking()
-                    .Include(s => s.Results)
-                    .Where(s => s.ContestProblemId != null && contestProblemIds.Contains(s.ContestProblemId.Value))
+        var scoringMode = contest.ContestType?.ToLower() == "acm" ? "acm" : "ioi";
+
+        var contestProblems = await _db.ContestProblems
+            .AsNoTracking()
+            .Where(cp => cp.ContestId == contestId && cp.IsActive)
+            .OrderBy(cp => cp.Ordinal)
+            .ToListAsync(ct);
+
+        if (scoringMode == "acm")
+        {
+            int totalScore = 0;
+            int totalPenalty = 0;
+            var problemResults = new List<object>();
+
+            foreach (var cp in contestProblems)
+            {
+                var r = await CalcAcmProblemAsync(cp, contest.StartAt, teamId, ct);
+
+                if (r.Solved)
+                {
+                    totalScore += 1;
+                    totalPenalty += r.PenaltyMinutes;
+                }
+
+                problemResults.Add(new
+                {
+                    contestProblemId = cp.Id,
+                    alias = cp.Alias,
+                    ordinal = cp.Ordinal,
+                    r.Solved,
+                    score = r.Solved ? 1 : 0,
+                    r.WrongAttempts,
+                    r.PenaltyMinutes,
+                    r.FirstAcAt,
+                    r.TotalSubmissions
+                });
+            }
+
+            return Ok(new
+            {
+                contestId,
+                teamId,
+                scoringMode,
+                totalScore,
+                totalPenalty,
+                penaltyFormula = "timeOfAc + wrongAttempts * 20",
+                solvedCount = totalScore,
+                totalProblems = contestProblems.Count,
+                problems = problemResults
+            });
+        }
+        else // ioi
+        {
+            int totalScore = 0;
+            var problemResults = new List<object>();
+
+            foreach (var cp in contestProblems)
+            {
+                var submissionIds = await _db.Submissions
+                    .AsNoTracking()
+                    .Where(s => s.ContestProblemId == cp.Id
+                                && s.TeamId == teamId
+                                && s.StatusCode == "done")
                     .OrderBy(s => s.CreatedAt)
+                    .Select(s => new { s.Id, s.CreatedAt })
                     .ToListAsync(ct);
 
-                var teamResults = new List<ContestTeamAcmResult>();
+                IoiScoreResult? best = null;
+                Guid? bestSubId = null;
 
-                foreach (var team in contestTeams)
+                foreach (var s in submissionIds)
                 {
-                    // Get team member user IDs
-                    var teamMemberIds = await _db.TeamMembers.AsNoTracking()
-                        .Where(tm => tm.TeamId == team.TeamId)
-                        .Select(tm => tm.UserId)
-                        .ToListAsync(ct);
-
-                    int totalSolved = 0;
-                    int totalPenalty = 0;
-                    var problemResults = new List<ContestProblemAcmResult>();
-
-                    foreach (var cp in contestProblems)
+                    var r = await CalcIoiScoreAsync(s.Id, ct);
+                    if (best is null || r.TotalScore > best.TotalScore)
                     {
-                        var problemSubs = allSubmissions
-                            .Where(s => s.ContestProblemId == cp.Id && teamMemberIds.Contains(s.UserId))
-                            .OrderBy(s => s.CreatedAt)
-                            .ToList();
-
-                        bool solved = false;
-                        int attempts = 0;
-                        int penaltyMinutes = 0;
-                        DateTime? firstAcAt = null;
-
-                        foreach (var sub in problemSubs)
-                        {
-                            var subResults = sub.Results.ToList();
-                            var allAc = subResults.Count > 0 && subResults.All(r => r.StatusCode == "ac");
-
-                            if (allAc && !solved)
-                            {
-                                solved = true;
-                                firstAcAt = sub.CreatedAt;
-                                int minutesToSolve = (int)(sub.CreatedAt - contest.StartAt).TotalMinutes;
-                                penaltyMinutes = minutesToSolve + (attempts * 20);
-                                break;
-                            }
-                            attempts++;
-                        }
-
-                        if (solved) totalSolved++;
-                        totalPenalty += penaltyMinutes;
-
-                        // Find best & last submission
-                        var bestSub = problemSubs.FirstOrDefault(s => s.Results.All(r => r.StatusCode == "ac") && s.Results.Count > 0);
-                        var lastSub = problemSubs.LastOrDefault();
-
-                        problemResults.Add(new ContestProblemAcmResult(
-                            cp.ProblemId, solved, attempts + (solved ? 1 : 0), penaltyMinutes, firstAcAt));
-
-                        if (req.Apply)
-                        {
-                            // Upsert ContestScoreboard
-                            var sb = await _db.ContestScoreboards
-                                .FirstOrDefaultAsync(s => s.ContestId == contest.Id && s.EntryId == team.Id && s.ProblemId == cp.ProblemId, ct);
-
-                            if (sb is null)
-                            {
-                                sb = new Domain.Entities.ContestScoreboard
-                                {
-                                    ContestId = contest.Id,
-                                    EntryId = team.Id,
-                                    ProblemId = cp.ProblemId
-                                };
-                                _db.ContestScoreboards.Add(sb);
-                            }
-                            sb.AcmSolved = solved;
-                            sb.AcmAttempts = attempts + (solved ? 1 : 0);
-                            sb.AcmPenaltyTime = penaltyMinutes;
-                            sb.FirstAcAt = firstAcAt;
-                            sb.BestScore = solved ? 100m : 0m;
-                            sb.LastScore = lastSub?.FinalScore ?? 0m;
-                            sb.BestSubmissionId = bestSub?.Id;
-                            sb.LastSubmissionId = lastSub?.Id;
-                            sb.LastSubmitAt = lastSub?.CreatedAt;
-                        }
-                    }
-
-                    teamResults.Add(new ContestTeamAcmResult(
-                        team.TeamId, totalSolved, totalPenalty, problemResults));
-
-                    if (req.Apply)
-                    {
-                        // Upsert ContestScoreboardEntry
-                        var entry = await _db.ContestScoreboardEntries
-                            .FirstOrDefaultAsync(e => e.ContestId == contest.Id && e.EntryId == team.Id, ct);
-
-                        if (entry is null)
-                        {
-                            entry = new Domain.Entities.ContestScoreboardEntry
-                            {
-                                ContestId = contest.Id,
-                                EntryId = team.Id
-                            };
-                            _db.ContestScoreboardEntries.Add(entry);
-                        }
-                        entry.TotalScore = totalSolved;
-                        entry.SolvedCount = totalSolved;
-                        entry.PenaltyTime = totalPenalty;
-                        entry.LastSolveAt = problemResults
-                            .Where(p => p.FirstAcAt.HasValue)
-                            .Select(p => p.FirstAcAt!.Value)
-                            .DefaultIfEmpty(DateTime.MinValue).Max();
-                        entry.UpdatedAt = DateTime.UtcNow;
+                        best = r;
+                        bestSubId = s.Id;
                     }
                 }
 
-                // Rank teams: more solved first, then less penalty
-                var ranked = teamResults
-                    .OrderByDescending(t => t.SolvedCount)
-                    .ThenBy(t => t.TotalPenalty)
-                    .ToList();
+                int problemBestScore = best?.TotalScore ?? 0;
+                totalScore += problemBestScore;
 
-                if (req.Apply)
+                problemResults.Add(new
                 {
-                    int rank = 1;
-                    foreach (var t in ranked)
-                    {
-                        var team = contestTeams.First(ct2 => ct2.TeamId == t.TeamId);
-                        team.Score = t.SolvedCount;
-                        team.SolvedProblem = t.SolvedCount;
-                        team.Penalty = t.TotalPenalty;
-                        team.Rank = rank;
-
-                        var entry = await _db.ContestScoreboardEntries
-                            .FirstOrDefaultAsync(e => e.ContestId == contest.Id && e.EntryId == team.Id, ct);
-                        if (entry != null) entry.Rank = rank;
-
-                        rank++;
-                    }
-                    await _db.SaveChangesAsync(ct);
-                }
-
-                return Ok(ApiResponse<ContestAcmScoreResult>.Ok(new ContestAcmScoreResult(
-                    contest.Id, "acm", contestProblems.Count, contestTeams.Count,
-                    req.Apply, ranked
-                ), "Contest ACM scoreboard calculated successfully."));
+                    contestProblemId = cp.Id,
+                    alias = cp.Alias,
+                    ordinal = cp.Ordinal,
+                    bestScore = problemBestScore,
+                    bestSubmissionId = bestSubId,
+                    totalSubmissions = submissionIds.Count,
+                    passedCases = best?.PassedCases ?? 0,
+                    totalCases = best?.TotalCases ?? 0
+                });
             }
-            catch (Exception ex)
+
+            return Ok(new
             {
-                return StatusCode(500, new { Message = "An error occurred while calculating contest ACM score.", Detail = ex.Message });
-            }
-        }
-
-        // ──────────────────────────────────────────
-        // POST api/ScoreDebug/contest/ioi  →  Recalculate IOI scoreboard for a contest
-        // ──────────────────────────────────────────
-        [HttpPost("contest/ioi")]
-        public async Task<IActionResult> CalculateContestIoiScore(
-            [FromBody] ContestScoreRequest req,
-            CancellationToken ct)
-        {
-            try
-            {
-                var contest = await _db.Contests
-                    .Include(c => c.ContestProblems)
-                    .Include(c => c.ContestTeams)
-                    .FirstOrDefaultAsync(c => c.Id == req.ContestId, ct);
-
-                if (contest is null)
-                    return NotFound(new { Message = "Contest not found." });
-
-                var contestProblems = contest.ContestProblems.ToList();
-                var contestTeams = contest.ContestTeams.ToList();
-
-                if (contestProblems.Count == 0)
-                    return BadRequest(new { Message = "Contest has no problems." });
-                if (contestTeams.Count == 0)
-                    return BadRequest(new { Message = "Contest has no participants." });
-
-                // Load all submissions with results + testcases
-                var contestProblemIds = contestProblems.Select(cp => cp.Id).ToList();
-                var allSubmissions = await _db.Submissions.AsNoTracking()
-                    .Include(s => s.Results).ThenInclude(r => r.Testcase)
-                    .Where(s => s.ContestProblemId != null && contestProblemIds.Contains(s.ContestProblemId.Value))
-                    .OrderBy(s => s.CreatedAt)
-                    .ToListAsync(ct);
-
-                var teamResults = new List<ContestTeamIoiResult>();
-
-                foreach (var team in contestTeams)
-                {
-                    var teamMemberIds = await _db.TeamMembers.AsNoTracking()
-                        .Where(tm => tm.TeamId == team.TeamId)
-                        .Select(tm => tm.UserId)
-                        .ToListAsync(ct);
-
-                    decimal totalScore = 0;
-                    int solvedCount = 0;
-                    var problemResults = new List<ContestProblemIoiResult>();
-
-                    foreach (var cp in contestProblems)
-                    {
-                        int maxPoints = cp.Points ?? cp.MaxScore ?? 100;
-
-                        var problemSubs = allSubmissions
-                            .Where(s => s.ContestProblemId == cp.Id && teamMemberIds.Contains(s.UserId))
-                            .ToList();
-
-                        decimal bestScore = 0m;
-                        Guid? bestSubId = null;
-                        Guid? lastSubId = null;
-                        DateTime? lastSubmitAt = null;
-
-                        foreach (var sub in problemSubs)
-                        {
-                            var subResults = sub.Results.ToList();
-                            if (subResults.Count == 0) continue;
-
-                            int tw = 0, pw = 0;
-                            foreach (var r in subResults)
-                            {
-                                int w = r.Testcase?.Weight ?? 1;
-                                tw += w;
-                                if (r.StatusCode == "ac") pw += w;
-                            }
-
-                            decimal subScore = tw > 0
-                                ? Math.Round((decimal)pw / tw * maxPoints, 2)
-                                : 0m;
-
-                            if (subScore > bestScore)
-                            {
-                                bestScore = subScore;
-                                bestSubId = sub.Id;
-                            }
-
-                            lastSubId = sub.Id;
-                            lastSubmitAt = sub.CreatedAt;
-                        }
-
-                        bool fullySolved = bestScore >= maxPoints;
-                        if (fullySolved) solvedCount++;
-                        totalScore += bestScore;
-
-                        problemResults.Add(new ContestProblemIoiResult(
-                            cp.ProblemId, bestScore, maxPoints, problemSubs.Count, fullySolved));
-
-                        if (req.Apply)
-                        {
-                            var sb = await _db.ContestScoreboards
-                                .FirstOrDefaultAsync(s => s.ContestId == contest.Id && s.EntryId == team.Id && s.ProblemId == cp.ProblemId, ct);
-
-                            if (sb is null)
-                            {
-                                sb = new Domain.Entities.ContestScoreboard
-                                {
-                                    ContestId = contest.Id,
-                                    EntryId = team.Id,
-                                    ProblemId = cp.ProblemId
-                                };
-                                _db.ContestScoreboards.Add(sb);
-                            }
-                            sb.AcmSolved = fullySolved;
-                            sb.AcmAttempts = problemSubs.Count;
-                            sb.AcmPenaltyTime = 0;
-                            sb.BestScore = bestScore;
-                            sb.LastScore = problemSubs.LastOrDefault()?.FinalScore ?? 0m;
-                            sb.BestSubmissionId = bestSubId;
-                            sb.LastSubmissionId = lastSubId;
-                            sb.LastSubmitAt = lastSubmitAt;
-                        }
-                    }
-
-                    totalScore = Math.Round(totalScore, 2);
-                    teamResults.Add(new ContestTeamIoiResult(
-                        team.TeamId, totalScore, solvedCount, problemResults));
-
-                    if (req.Apply)
-                    {
-                        var entry = await _db.ContestScoreboardEntries
-                            .FirstOrDefaultAsync(e => e.ContestId == contest.Id && e.EntryId == team.Id, ct);
-
-                        if (entry is null)
-                        {
-                            entry = new Domain.Entities.ContestScoreboardEntry
-                            {
-                                ContestId = contest.Id,
-                                EntryId = team.Id
-                            };
-                            _db.ContestScoreboardEntries.Add(entry);
-                        }
-                        entry.TotalScore = totalScore;
-                        entry.SolvedCount = solvedCount;
-                        entry.PenaltyTime = 0;
-                        entry.UpdatedAt = DateTime.UtcNow;
-                    }
-                }
-
-                // Rank teams: highest total score first, then more problems solved
-                var ranked = teamResults
-                    .OrderByDescending(t => t.TotalScore)
-                    .ThenByDescending(t => t.SolvedCount)
-                    .ToList();
-
-                if (req.Apply)
-                {
-                    int rank = 1;
-                    foreach (var t in ranked)
-                    {
-                        var team = contestTeams.First(ct2 => ct2.TeamId == t.TeamId);
-                        team.Score = t.TotalScore;
-                        team.SolvedProblem = t.SolvedCount;
-                        team.Penalty = 0;
-                        team.Rank = rank;
-
-                        var entry = await _db.ContestScoreboardEntries
-                            .FirstOrDefaultAsync(e => e.ContestId == contest.Id && e.EntryId == team.Id, ct);
-                        if (entry != null) entry.Rank = rank;
-
-                        rank++;
-                    }
-                    await _db.SaveChangesAsync(ct);
-                }
-
-                return Ok(ApiResponse<ContestIoiScoreResult>.Ok(new ContestIoiScoreResult(
-                    contest.Id, "ioi", contestProblems.Count, contestTeams.Count,
-                    req.Apply, ranked
-                ), "Contest IOI scoreboard calculated successfully."));
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { Message = "An error occurred while calculating contest IOI score.", Detail = ex.Message });
-            }
-        }
-
-        // ── Helpers ───────────────────────────────
-        private static string DetermineWorstVerdict(List<string?> statusCodes)
-        {
-            var priorities = new[] { "ce", "re", "mle", "tle", "wa" };
-            foreach (var p in priorities)
-            {
-                if (statusCodes.Any(s => s == p))
-                    return p;
-            }
-            return statusCodes.FirstOrDefault(s => s != "ac") ?? "wa";
+                contestId,
+                teamId,
+                scoringMode,
+                totalScore,
+                totalProblems = contestProblems.Count,
+                problems = problemResults
+            });
         }
     }
 
-    // ── Request / Response DTOs ───────────────────
+    // =============================================
+    // STANDALONE PROBLEM SCORING — luôn dùng IOI
+    // Problem không nằm trong contest
+    // =============================================
 
-    // Submission-level
-    public record CalculateScoreRequest(
-        Guid SubmissionId,
-        bool ApplyToSubmission = false);
+    /// <summary>
+    /// Tính điểm IOI cho một submission của problem độc lập (không trong contest).
+    /// Mỗi test case pass = 1 điểm.
+    /// </summary>
+    [HttpGet("problem/{submissionId:guid}")]
+    public async Task<IActionResult> ScoreStandaloneProblem(Guid submissionId, CancellationToken ct)
+    {
+        var submission = await _db.Submissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == submissionId, ct);
 
-    public record AcmScoreResult(
-        Guid SubmissionId,
-        string ScoringType,
-        string VerdictCode,
-        decimal FinalScore,
-        int TotalTestcases,
-        int PassedTestcases,
-        int MaxTimeMs,
-        int MaxMemoryKb,
-        bool Applied);
+        if (submission is null)
+            return NotFound(new { message = "Submission not found." });
 
-    public record IoiScoreResult(
-        Guid SubmissionId,
-        string ScoringType,
-        string VerdictCode,
-        decimal FinalScore,
-        int TotalTestcases,
-        int PassedTestcases,
-        int TotalWeight,
-        int PassedWeight,
-        int MaxTimeMs,
-        int MaxMemoryKb,
-        bool Applied,
-        List<IoiTestcaseScore> TestcaseDetails);
+        if (submission.ContestProblemId.HasValue)
+            return BadRequest(new { message = "Submission belongs to a contest. Use /contest/{contestId}/{teamId} instead." });
 
-    public record IoiTestcaseScore(
-        Guid? TestcaseId,
-        int Ordinal,
-        string? StatusCode,
-        int Weight,
-        bool Passed);
+        var score = await CalcIoiScoreAsync(submissionId, ct);
 
-    // Contest-level
-    public record ContestScoreRequest(
-        Guid ContestId,
-        bool Apply = false);
+        return Ok(new
+        {
+            submissionId,
+            problemId = submission.ProblemId,
+            scoringMode = "ioi",
+            score.TotalScore,
+            score.PassedCases,
+            score.TotalCases,
+            score.Cases
+        });
+    }
 
-    // ACM contest
-    public record ContestAcmScoreResult(
-        Guid ContestId,
-        string ScoringType,
-        int ProblemCount,
-        int TeamCount,
-        bool Applied,
-        List<ContestTeamAcmResult> Rankings);
+    // =============================================
+    // ACM SCORING — per problem
+    // 1 AC = 1 điểm, penalty cộng dồn qua các problem
+    // Penalty = time_of_first_ac_in_minutes + wrongAttemptsBeforeAc * penaltyPerWrong
+    // =============================================
 
-    public record ContestTeamAcmResult(
-        Guid TeamId,
-        int SolvedCount,
-        int TotalPenalty,
-        List<ContestProblemAcmResult> Problems);
+    /// <summary>
+    /// Tính điểm ACM cho một problem cụ thể của team.
+    /// - Solved = 1 điểm, chưa AC = 0 điểm.
+    /// - Penalty của problem = phút từ lúc contest bắt đầu đến AC đầu tiên
+    ///   + số lần WA/TLE/MLE/RE trước AC * PenaltyPerWrong.
+    /// </summary>
+    [HttpGet("acm/problem/{contestProblemId:guid}/{teamId:guid}")]
+    public async Task<IActionResult> ScoreAcmProblem(Guid contestProblemId, Guid teamId, CancellationToken ct)
+    {
+        var cp = await _db.ContestProblems
+            .AsNoTracking()
+            .Include(x => x.Contest)
+            .FirstOrDefaultAsync(x => x.Id == contestProblemId, ct);
 
-    public record ContestProblemAcmResult(
-        Guid ProblemId,
+        if (cp is null)
+            return NotFound(new { message = "ContestProblem not found." });
+
+        var result = await CalcAcmProblemAsync(cp, cp.Contest.StartAt, teamId, ct);
+
+        return Ok(new
+        {
+            contestProblemId,
+            teamId,
+            scoringMode = "acm",
+            penaltyFormula = "timeOfAc + wrongAttempts * 20",
+            result.Solved,
+            score = result.Solved ? 1 : 0,
+            result.WrongAttempts,
+            result.PenaltyMinutes,
+            result.FirstAcAt,
+            result.TotalSubmissions,
+            result.SubmissionHistory
+        });
+    }
+
+    // =============================================
+    // ACM SCORING — toàn contest
+    // TotalScore = số problem đã AC
+    // TotalPenalty = tổng penalty của từng problem đã AC
+    // =============================================
+
+    /// <summary>
+    /// Tính điểm ACM tổng hợp toàn contest cho một team.
+    /// - TotalScore = số problem đã AC.
+    /// - TotalPenalty = tổng penalty cộng dồn qua tất cả problem đã AC.
+    /// </summary>
+    [HttpGet("acm/contest/{contestId:guid}/{teamId:guid}")]
+    public async Task<IActionResult> ScoreAcmContest(Guid contestId, Guid teamId, CancellationToken ct)
+    {
+        var contest = await _db.Contests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == contestId, ct);
+
+        if (contest is null)
+            return NotFound(new { message = "Contest not found." });
+
+        var contestProblems = await _db.ContestProblems
+            .AsNoTracking()
+            .Where(cp => cp.ContestId == contestId && cp.IsActive)
+            .OrderBy(cp => cp.Ordinal)
+            .ToListAsync(ct);
+
+        int totalScore = 0;
+        int totalPenalty = 0;
+        var problemResults = new List<object>();
+
+        foreach (var cp in contestProblems)
+        {
+            var r = await CalcAcmProblemAsync(cp, contest.StartAt, teamId, ct);
+
+            if (r.Solved)
+            {
+                totalScore += 1;
+                totalPenalty += r.PenaltyMinutes;
+            }
+
+            problemResults.Add(new
+            {
+                contestProblemId = cp.Id,
+                alias = cp.Alias,
+                ordinal = cp.Ordinal,
+                r.Solved,
+                score = r.Solved ? 1 : 0,
+                r.WrongAttempts,
+                r.PenaltyMinutes,
+                r.FirstAcAt,
+                r.TotalSubmissions
+            });
+        }
+
+        return Ok(new
+        {
+            contestId,
+            teamId,
+            scoringMode = "acm",
+            totalScore,
+            totalPenalty,
+            solvedCount = totalScore,
+            totalProblems = contestProblems.Count,
+            problems = problemResults
+        });
+    }
+
+    // =============================================
+    // DEBUG — xem raw data của submission để biết tại sao điểm = 0
+    // =============================================
+
+    /// <summary>
+    /// Trả về toàn bộ Result + JudgeRun của submission để debug.
+    /// </summary>
+    [HttpGet("inspect/{submissionId:guid}")]
+    public async Task<IActionResult> InspectSubmission(Guid submissionId, CancellationToken ct)
+    {
+        var submission = await _db.Submissions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == submissionId, ct);
+
+        if (submission is null)
+            return NotFound(new { message = "Submission not found." });
+
+        var rawResults = await _db.Results
+            .AsNoTracking()
+            .Where(r => r.SubmissionId == submissionId)
+            .Select(r => new
+            {
+                r.Id,
+                r.TestcaseId,
+                r.StatusCode,
+                r.Type,
+                r.RuntimeMs,
+                r.MemoryKb,
+                r.Message,
+                r.JudgeRunId
+            })
+            .ToListAsync(ct);
+
+        var judgeRuns = await _db.JudgeRuns
+            .AsNoTracking()
+            .Where(jr => jr.SubmissionId == submissionId)
+            .ToListAsync(ct);
+
+        var judgeJobs = await _db.JudgeJobs
+            .AsNoTracking()
+            .Where(jj => jj.SubmissionId == submissionId)
+            .Select(jj => new { jj.Id, jj.Status, jj.LastError, jj.EnqueueAt })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            submission = new
+            {
+                submission.Id,
+                submission.StatusCode,
+                submission.VerdictCode,
+                submission.FinalScore,
+                submission.JudgedAt,
+                submission.TestsetId,
+                submission.ProblemId,
+                submission.ContestProblemId
+            },
+            resultCount = rawResults.Count,
+            results = rawResults,
+            judgeRunCount = judgeRuns.Count,
+            judgeRuns,
+            judgeJobs
+        });
+    }
+
+    // =============================================
+    // Helpers
+    // =============================================
+
+    private static readonly HashSet<string> WrongVerdicts = ["wa", "tle", "mle", "re"];
+
+    /// <summary>
+    /// Tính điểm IOI cho một submission. Mỗi test case AC = 1 điểm.
+    /// </summary>
+    private async Task<IoiScoreResult> CalcIoiScoreAsync(Guid submissionId, CancellationToken ct)
+    {
+        // Lấy tất cả Result của submission có gắn TestcaseId (loại bỏ row compile)
+        // Không filter theo Type để tránh mất data do label khác nhau ("judge"/"run"/null...)
+        var results = await _db.Results
+            .AsNoTracking()
+            .Where(r => r.SubmissionId == submissionId && r.TestcaseId != null)
+            .Select(r => new
+            {
+                r.TestcaseId,
+                r.StatusCode,
+                r.RuntimeMs,
+                r.MemoryKb,
+                r.Type,
+                Ordinal = (int?)_db.Testcases
+                    .Where(t => t.Id == r.TestcaseId)
+                    .Select(t => (int?)t.Ordinal)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        if (results.Count == 0)
+            return new IoiScoreResult(0, 0, 0, []);
+
+        var ordered = results.OrderBy(r => r.Ordinal ?? int.MaxValue).ToList();
+        int passedCases = ordered.Count(r => r.StatusCode == "ac");
+
+        var caseDetails = ordered.Select(r => new
+        {
+            r.TestcaseId,
+            r.Ordinal,
+            verdict = r.StatusCode,
+            passed = r.StatusCode == "ac",
+            r.RuntimeMs,
+            r.MemoryKb,
+            r.Type
+        }).ToList<object>();
+
+        return new IoiScoreResult(
+            TotalScore: passedCases,
+            PassedCases: passedCases,
+            TotalCases: ordered.Count,
+            Cases: caseDetails);
+    }
+
+    private sealed record IoiScoreResult(
+        int TotalScore,
+        int PassedCases,
+        int TotalCases,
+        List<object> Cases);
+
+    private async Task<AcmProblemResult> CalcAcmProblemAsync(
+        Domain.Entities.ContestProblem cp,
+        DateTime contestStartAt,
+        Guid teamId,
+        CancellationToken ct)
+    {
+        const int penaltyPerWrong = 20; // chuẩn ACM: mỗi lần sai = +20 phút penalty
+
+        var submissions = await _db.Submissions
+            .AsNoTracking()
+            .Where(s => s.ContestProblemId == cp.Id
+                        && s.TeamId == teamId
+                        && s.StatusCode == "done")
+            .OrderBy(s => s.CreatedAt)
+            .Select(s => new { s.Id, s.VerdictCode, s.CreatedAt })
+            .ToListAsync(ct);
+
+        var firstAc = submissions.FirstOrDefault(s => s.VerdictCode == "ac");
+
+        var beforeAc = firstAc is null
+            ? submissions
+            : submissions.Where(s => s.CreatedAt < firstAc.CreatedAt).ToList();
+
+        int wrongAttempts = beforeAc.Count(s =>
+            s.VerdictCode != null && WrongVerdicts.Contains(s.VerdictCode));
+
+        int penaltyMinutes = 0;
+        if (firstAc is not null)
+        {
+            var minutesFromStart = (int)Math.Floor((firstAc.CreatedAt - contestStartAt).TotalMinutes);
+            penaltyMinutes = minutesFromStart + wrongAttempts * penaltyPerWrong;
+        }
+
+        return new AcmProblemResult(
+            Solved: firstAc is not null,
+            WrongAttempts: wrongAttempts,
+            PenaltyMinutes: penaltyMinutes,
+            FirstAcAt: firstAc?.CreatedAt,
+            TotalSubmissions: submissions.Count,
+            SubmissionHistory: submissions.Select(s => new
+            {
+                s.Id,
+                verdict = s.VerdictCode,
+                submittedAt = s.CreatedAt
+            }).ToList<object>()
+        );
+    }
+
+    private sealed record AcmProblemResult(
         bool Solved,
-        int Attempts,
+        int WrongAttempts,
         int PenaltyMinutes,
-        DateTime? FirstAcAt);
-
-    // IOI contest
-    public record ContestIoiScoreResult(
-        Guid ContestId,
-        string ScoringType,
-        int ProblemCount,
-        int TeamCount,
-        bool Applied,
-        List<ContestTeamIoiResult> Rankings);
-
-    public record ContestTeamIoiResult(
-        Guid TeamId,
-        decimal TotalScore,
-        int SolvedCount,
-        List<ContestProblemIoiResult> Problems);
-
-    public record ContestProblemIoiResult(
-        Guid ProblemId,
-        decimal BestScore,
-        int MaxPoints,
-        int Attempts,
-        bool FullySolved);
+        DateTime? FirstAcAt,
+        int TotalSubmissions,
+        List<object> SubmissionHistory);
 }

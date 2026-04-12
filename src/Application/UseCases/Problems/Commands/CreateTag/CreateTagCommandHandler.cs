@@ -51,7 +51,8 @@ public sealed class CreateTagCommandHandler : IRequestHandler<CreateTagCommand, 
         {
             Id = entity.Id,
             Name = entity.Name,
-            Slug = entity.Slug
+            Slug = entity.Slug,
+            IsActive = entity.IsActive
         };
     }
 }

@@ -94,14 +94,21 @@ public class ProblemsController : ControllerBase
     [HttpGet("tags")]
     public async Task<ActionResult<List<ProblemTagDto>>> GetAllTags(CancellationToken ct)
     {
-        var tags = await _db.Tags
-            .AsNoTracking()
-            .Where(t => t.IsActive)
+        var isPrivileged = User.IsInRole("admin") || User.IsInRole("manager");
+
+        var query = _db.Tags.AsNoTracking();
+
+        if ( !isPrivileged )
+            query = query.Where(t => t.IsActive);
+
+        var tags = await query
+            .OrderBy(t => t.Name)
             .Select(t => new ProblemTagDto
             {
                 Id = t.Id ,
                 Name = t.Name ,
-                Slug = t.Slug
+                Slug = t.Slug ,
+                IsActive = t.IsActive
             })
             .ToListAsync(ct);
 

@@ -1,4 +1,5 @@
 ﻿using Application.UseCases.Contests.Commands;
+using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -84,19 +85,22 @@ public class ContestsController : ControllerBase
     // =============================================
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetContestDetail(
-        Guid id,
-        CancellationToken ct)
+     Guid id,
+     CancellationToken ct)
     {
         try
         {
             Console.WriteLine($"=== HIT GET DETAIL: {id} ===");
 
             var result = await _mediator.Send(
-                new GetContestProblemsQuery(id), 
+                new GetContestDetailQuery(id),
                 ct
             );
 
-            return Ok(ApiResponse<object>.Ok(result, "Fetched contest detail successfully"));
+            return Ok(ApiResponse<ContestDetailDto>.Ok(
+                result,
+                "Fetched contest detail successfully"
+            ));
         }
         catch (Exception ex)
         {
@@ -264,6 +268,13 @@ public IActionResult Ping()
         var result = await _mediator.Send(
             new PublishContestCommand(id), ct);
 
-        return Ok(ApiResponse<Guid>.Ok(result, "Contest published"));
+        return Ok(new
+        {
+            success = true,
+            data = result,
+            message = "Contest has been successfully published",
+            errors = (object?)null,
+            traceId = HttpContext.TraceIdentifier
+        });
     }
 }

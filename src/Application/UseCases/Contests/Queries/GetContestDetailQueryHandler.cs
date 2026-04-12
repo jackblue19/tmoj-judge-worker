@@ -1,21 +1,25 @@
-﻿using Application.UseCases.Contests.Dtos;
+﻿using Application.Common.Interfaces;
+using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
+using Application.Common.Helpers;
 
 namespace Application.UseCases.Contests.Queries;
 
-// ⚠️ IMPORTANT: handler này giờ handle luôn GetContestDetailQuery
-public class GetContestProblemsQueryHandler
+public class GetContestDetailQueryHandler
     : IRequestHandler<GetContestDetailQuery, ContestDetailDto>
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
+    private readonly IContestStatusService _statusService;
 
-    public GetContestProblemsQueryHandler(
-        IReadRepository<Contest, Guid> contestRepo)
+    public GetContestDetailQueryHandler(
+        IReadRepository<Contest, Guid> contestRepo,
+        IContestStatusService statusService)
     {
         _contestRepo = contestRepo;
+        _statusService = statusService;
     }
 
     public async Task<ContestDetailDto> Handle(
@@ -27,40 +31,65 @@ public class GetContestProblemsQueryHandler
             ct);
 
         if (contest == null)
-            throw new Exception("Contest not found");
+            throw new Exception("CONTEST_NOT_FOUND");
 
-        var now = DateTime.UtcNow;
+        // 🔥 dùng service (clean + reusable)
+        var status = _statusService.GetStatus(contest.StartAt, contest.EndAt);
+        var phase = _statusService.GetPhase(contest.StartAt, contest.EndAt);
+        var canJoin = _statusService.CanJoin(contest.StartAt, contest.EndAt);
 
-        string status =
-            now < contest.StartAt ? "upcoming" :
-            now > contest.EndAt ? "ended" :
-            "running";
+        var problems = (contest.ContestProblems ?? new List<ContestProblem>())
+            .Where(cp => cp.IsActive)
+            .OrderBy(cp => cp.DisplayIndex ?? cp.Ordinal ?? 999)
+            .ThenBy(cp => cp.Alias)
+            .ToList();
 
         return new ContestDetailDto
         {
             Id = contest.Id,
-            Title = contest.Title,
-            Description = contest.DescriptionMd,
+            Title = contest.Title ?? "",
+            Description = contest.DescriptionMd ?? "",
+            Slug = !string.IsNullOrWhiteSpace(contest.Slug)
+    ? contest.Slug
+    : $"{SlugHelper.Generate(contest.Title)}-{contest.Id.ToString()[..6]}",
+
+            Visibility = contest.VisibilityCode ?? "private",
+            ContestType = contest.ContestType ?? "icpc",
+            AllowTeams = contest.AllowTeams,
+
+            Status = status,
+            Phase = phase,
+
+            IsPublished = contest.VisibilityCode == "public",
+
+            CanJoin = canJoin,
+            IsRegistered = false, // 🔥 sau này bind user
+
+            HasLeaderboard = true,
+
             StartAt = contest.StartAt,
             EndAt = contest.EndAt,
-            VisibilityCode = contest.VisibilityCode,
-            ContestType = contest.ContestType,
-            AllowTeams = contest.AllowTeams,
-            Status = status,
+            DurationMinutes = (int)(contest.EndAt - contest.StartAt).TotalMinutes,
 
-            Problems = contest.ContestProblems!
-                .Where(cp => cp.IsActive)
-                .OrderBy(cp => cp.DisplayIndex ?? cp.Ordinal ?? 999)
-                .ThenBy(cp => cp.Alias)
-                .Select(cp => new ContestProblemDto
-                {
-                    Id = cp.Id,
-                    ProblemId = cp.ProblemId,
-                    Title = cp.Problem.Title,
-                    Alias = cp.Alias,
-                    Points = cp.Points ?? 0
-                })
-                .ToList()
+            ProblemCount = problems.Count,
+            TotalPoints = problems.Sum(p => p.Points ?? 0),
+
+            Problems = problems.Select(cp => new ContestProblemDto
+            {
+                Id = cp.Id,
+                ProblemId = cp.ProblemId,
+                Title = cp.Problem != null ? cp.Problem.Title : "Unknown",
+
+                Alias = cp.Alias ?? "",
+                Ordinal = cp.Ordinal,
+                DisplayIndex = cp.DisplayIndex,
+
+                Points = cp.Points ?? 0,
+                TimeLimitMs = cp.TimeLimitMs,
+                MemoryLimitKb = cp.MemoryLimitKb,
+
+                Status = "not_started" // 🔥 next step sẽ bind submission
+            }).ToList()
         };
     }
 }

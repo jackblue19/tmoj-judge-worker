@@ -1,5 +1,6 @@
 ﻿
 using Application.UseCases.DiscussionComments.Dtos;
+using Domain.Entities;
 
 namespace Application.Common.Interfaces
 {
@@ -7,5 +8,7 @@ namespace Application.Common.Interfaces
     {
         Task<CommentResponseDto?> GetByIdWithUserAsync(Guid id);
         Task<List<CommentResponseDto>> GetByDiscussionIdAsync(Guid discussionId);
+
+        Task<DiscussionComment?> GetByIdWithDiscussionAsync(Guid id);
     }
 }

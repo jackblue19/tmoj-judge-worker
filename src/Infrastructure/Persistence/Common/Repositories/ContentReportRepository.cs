@@ -15,17 +15,60 @@ namespace Infrastructure.Persistence.Common.Repositories
             _db = db;
         }
 
-        public async Task<CursorPaginationDto<ReportDto>> GetPendingReportsAsync(
-      DateTime? cursorCreatedAt,
-      Guid? cursorId,
-      int pageSize)
+        // =========================
+        // GET AUTHOR INFO (🔥 CORE)
+        // =========================
+        public async Task<(Guid? AuthorId, string? AuthorName)> GetAuthorInfoAsync(Guid targetId, string targetType)
         {
-            // 🔥 1. query base (KHÔNG order ở đây)
-            var query = _db.ContentReports
-           .AsNoTracking()
-           .Where(x => EF.Functions.ILike(x.Status, "pending"));
+            // COMMENT
+            if (targetType == "comment")
+            {
+                var data = await _db.DiscussionComments
+                    .AsNoTracking()
+                    .Include(x => x.User)
+                    .Where(x => x.Id == targetId)
+                    .Select(x => new
+                    {
+                        x.UserId,
+                        Name = x.User.DisplayName ?? x.User.Username
+                    })
+                    .FirstOrDefaultAsync();
 
-            // 🔥 2. cursor filter
+                return (data?.UserId, data?.Name);
+            }
+
+            // DISCUSSION
+            if (targetType == "discussion")
+            {
+                var data = await _db.ProblemDiscussions
+                    .AsNoTracking()
+                    .Include(x => x.User)
+                    .Where(x => x.Id == targetId)
+                    .Select(x => new
+                    {
+                        x.UserId,
+                        Name = x.User.DisplayName ?? x.User.Username
+                    })
+                    .FirstOrDefaultAsync();
+
+                return (data?.UserId, data?.Name);
+            }
+
+            return (null, null);
+        }
+
+        // =========================
+        // PENDING REPORTS
+        // =========================
+        public async Task<CursorPaginationDto<ReportDto>> GetPendingReportsAsync(
+            DateTime? cursorCreatedAt,
+            Guid? cursorId,
+            int pageSize)
+        {
+            var query = _db.ContentReports
+                .AsNoTracking()
+                .Where(x => EF.Functions.ILike(x.Status, "pending"));
+
             if (cursorCreatedAt.HasValue && cursorId.HasValue)
             {
                 query = query.Where(x =>
@@ -34,12 +77,10 @@ namespace Infrastructure.Persistence.Common.Repositories
                      x.Id.CompareTo(cursorId.Value) < 0));
             }
 
-            // 🔥 3. order riêng
             var orderedQuery = query
                 .OrderByDescending(x => x.CreatedAt)
                 .ThenByDescending(x => x.Id);
 
-            // 🔥 4. query data
             var list = await orderedQuery
                 .Take(pageSize + 1)
                 .Select(x => new ReportDto
@@ -68,6 +109,9 @@ namespace Infrastructure.Persistence.Common.Repositories
             };
         }
 
+        // =========================
+        // GET BY ID
+        // =========================
         public async Task<ReportDto?> GetByIdAsync(Guid id)
         {
             return await _db.ContentReports
@@ -84,6 +128,10 @@ namespace Infrastructure.Persistence.Common.Repositories
                 })
                 .FirstOrDefaultAsync();
         }
+
+        // =========================
+        // GROUP
+        // =========================
         public async Task<List<ReportGroupDto>> GetReportGroupsAsync(string? status)
         {
             var query = _db.ContentReports.AsNoTracking();

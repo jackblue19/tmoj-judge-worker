@@ -1,14 +1,10 @@
-using Application.Common.Interfaces;
+﻿using Application.Common.Interfaces;
 using Application.Common.Pagination;
 using Application.UseCases.DiscussionComments.Dtos;
 using Application.UseCases.ProblemDiscussions.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Infrastructure.Persistence.Common.Repositories
 {
@@ -21,6 +17,9 @@ namespace Infrastructure.Persistence.Common.Repositories
             _db = db;
         }
 
+        // ===============================
+        // PAGED LIST
+        // ===============================
         public async Task<CursorPaginationDto<DiscussionResponseDto>> GetPagedAsync(
             Guid problemId,
             DateTime? cursorCreatedAt,
@@ -78,6 +77,9 @@ namespace Infrastructure.Persistence.Common.Repositories
             };
         }
 
+        // ===============================
+        // GET DTO (🔥 FIX)
+        // ===============================
         public async Task<DiscussionResponseDto?> GetByIdAsync(Guid id)
         {
             return await _db.ProblemDiscussions
@@ -102,9 +104,23 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<DiscussionResponseDto?> GetByIdWithUserAsync(Guid id)
-            => await GetByIdAsync(id);
+        // ===============================
+        // GET ENTITY (🔥 FIX CHUẨN CLEAN ARCH)
+        // ===============================
+        public async Task<ProblemDiscussion?> GetEntityByIdAsync(Guid id)
+        {
+            return await _db.ProblemDiscussions
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
 
+        public async Task<DiscussionResponseDto?> GetByIdWithUserAsync(Guid id)
+        {
+            return await GetByIdAsync(id);
+        }
+
+        // ===============================
+        // DISCUSSION + COMMENTS TREE
+        // ===============================
         public async Task<DiscussionResponseDto?> GetDiscussionWithCommentsTreeAsync(Guid discussionId)
         {
             var discussion = await GetByIdAsync(discussionId);
@@ -143,6 +159,9 @@ namespace Infrastructure.Persistence.Common.Repositories
             return await GetDiscussionWithCommentsTreeAsync(discussionId);
         }
 
+        // ===============================
+        // DELETE
+        // ===============================
         public async Task DeleteDiscussionWithCommentsAsync(Guid discussionId)
         {
             var comments = await _db.DiscussionComments
@@ -154,26 +173,34 @@ namespace Infrastructure.Persistence.Common.Repositories
             var discussion = await _db.ProblemDiscussions.FindAsync(discussionId);
             if (discussion != null)
                 _db.ProblemDiscussions.Remove(discussion);
-
-            await _db.SaveChangesAsync();
         }
 
+        // ===============================
+        // LOCK / UNLOCK (NO SAVE)
+        // ===============================
         public async Task LockAsync(Guid discussionId)
         {
             var discussion = await _db.ProblemDiscussions.FindAsync(discussionId);
-            if (discussion == null) throw new Exception("Not found");
+            if (discussion == null)
+                throw new Exception("Discussion not found");
 
             discussion.IsLocked = true;
-            await _db.SaveChangesAsync();
         }
 
         public async Task UnlockAsync(Guid discussionId)
         {
             var discussion = await _db.ProblemDiscussions.FindAsync(discussionId);
-            if (discussion == null) throw new Exception("Not found");
+            if (discussion == null)
+                throw new Exception("Discussion not found");
 
             discussion.IsLocked = false;
-            await _db.SaveChangesAsync();
         }
+        public async Task<List<ProblemDiscussion>> GetDiscussionEntitiesByIdsAsync(List<Guid> ids)
+        {
+            return await _db.ProblemDiscussions
+                .Where(x => ids.Contains(x.Id))
+                .ToListAsync();
+        }
+
     }
 }

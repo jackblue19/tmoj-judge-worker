@@ -1,6 +1,7 @@
 using Application.Common.Interfaces;
 using Application.Common.Services;
 using Application.UseCases.Problems;
+using Application.UseCases.Problems.Queries.GetProblemsByUser;
 using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
 using Domain.Abstractions;
@@ -42,12 +43,15 @@ public static class InfrastructureRegistration
         services.AddScoped<IUnitOfWork , EfUnitOfWork>();
         services.AddScoped<AutoModerationService>();
         services.AddScoped<ICurrentUserService , CurrentUserService>();
-        services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
-        services.AddScoped<IContentReportRepository, ContentReportRepository>();
-        services.AddScoped<IDiscussionCommentRepository, DiscussionCommentRepository>();
-        services.AddScoped<IContestRepository, ContestRepository>();
+        services.AddScoped<IProblemDiscussionRepository , ProblemDiscussionRepository>();
+        services.AddScoped<IContentReportRepository , ContentReportRepository>();
+        services.AddScoped<IDiscussionCommentRepository , DiscussionCommentRepository>();
+        services.AddScoped<IContestRepository , ContestRepository>();
         services.AddScoped<IProblemRepository , ProblemRepository>();
         services.AddScoped<ITagRepository , TagRepository>();
+        services.AddScoped<IContestStatusService, ContestStatusService>();
+
+        services.AddScoped<IUserProblemQueries , UserProblemQueries>();
         return services;
     }
 

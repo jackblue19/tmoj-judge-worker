@@ -7,6 +7,7 @@ using Application.Common.Interfaces;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
+using Application.Common.Helpers;
 
 namespace Application.UseCases.Contests.Commands;
 

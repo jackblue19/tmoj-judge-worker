@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.UseCases.Problems.Commands.CreateProblem;
 
-public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreateProblemDraftCommand , ProblemSummaryDto>
+public sealed class CreateProblemDraftCommandHandler : IRequestHandler< CreateProblemDraftCommand , ProblemSummaryDto>
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IProblemRepository _problemRepository;
@@ -85,7 +85,7 @@ public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreatePro
             Id = Guid.NewGuid() ,
             Title = title ,
             Slug = slug ,
-            StatusCode = ProblemStatusCodes.Published ,
+            StatusCode = ProblemStatusCodes.Draft ,
             TypeCode = request.TypeCode?.Trim() ,
             ScoringCode = request.ScoringCode?.Trim() ,
             VisibilityCode = request.VisibilityCode?.Trim() ,

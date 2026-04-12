@@ -85,7 +85,7 @@ public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreatePro
             Id = Guid.NewGuid() ,
             Title = title ,
             Slug = slug ,
-            StatusCode = ProblemStatusCodes.Draft ,
+            StatusCode = ProblemStatusCodes.Published ,
             TypeCode = request.TypeCode?.Trim() ,
             ScoringCode = request.ScoringCode?.Trim() ,
             VisibilityCode = request.VisibilityCode?.Trim() ,

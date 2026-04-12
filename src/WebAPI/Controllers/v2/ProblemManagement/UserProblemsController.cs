@@ -13,7 +13,7 @@ namespace WebAPI.Controllers.v2.ProblemManagement;
 [Route("api/v{version:apiVersion}/users")]
 [Authorize]
 public sealed class UserProblemsController : ControllerBase
-{
+{   
     private readonly IMediator _mediator;
 
     public UserProblemsController(IMediator mediator)
@@ -21,6 +21,8 @@ public sealed class UserProblemsController : ControllerBase
         _mediator = mediator;
     }
 
+
+    //  GET ALL PERSONAL SUBMITTED PROBLEMS 
     [HttpGet("{userId:guid}/problems")]
     [ProducesResponseType(typeof(ApiPagedResponse<ProblemByUserListItemDto>) , StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

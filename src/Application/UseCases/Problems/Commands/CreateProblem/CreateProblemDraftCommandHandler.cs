@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Application.UseCases.Problems.Commands.CreateProblem;
 
-public sealed class CreateProblemDraftCommandHandler : IRequestHandler<CreateProblemDraftCommand , ProblemSummaryDto>
+public sealed class CreateProblemDraftCommandHandler : IRequestHandler< CreateProblemDraftCommand , ProblemSummaryDto>
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IProblemRepository _problemRepository;

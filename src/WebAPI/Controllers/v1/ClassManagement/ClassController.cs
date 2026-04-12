@@ -1208,8 +1208,15 @@ public class ClassController : ControllerBase
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"Row {row.RowNumber()}: {ex.Message}");
+                    errors.Add($"Row {row.RowNumber()}: {ex.InnerException?.Message ?? ex.Message}");
                     failedCount++;
+
+                    // Detach failed entities to prevent cascading EF errors
+                    foreach (var entry in _db.ChangeTracker.Entries()
+                        .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified))
+                    {
+                        entry.State = EntityState.Detached;
+                    }
                 }
             }
 
@@ -1219,7 +1226,11 @@ public class ClassController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Message = "An error occurred while importing students: " + ex.Message });
+            var innerMsg = ex.InnerException?.Message;
+            var fullMsg = innerMsg != null
+                ? $"An error occurred while importing students: {ex.Message} → {innerMsg}"
+                : $"An error occurred while importing students: {ex.Message}";
+            return StatusCode(500, new { Message = fullMsg });
         }
     }
 

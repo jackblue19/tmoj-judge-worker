@@ -89,6 +89,13 @@ public class ClassSlotController : ControllerBase
             if (await _db.ClassSlots.AnyAsync(s => s.ClassSemesterId == instanceId && s.SlotNo == req.SlotNo, ct))
                 return Conflict(new { Message = $"SlotNo {req.SlotNo} already exists in this class instance." });
 
+            // Validate problem points (mỗi problem phải có Points, tổng <= 10)
+            if (req.Problems is { Count: > 0 })
+            {
+                var (ok, error) = ValidateSlotPoints(req.Problems.Select(p => p.Points));
+                if (!ok) return BadRequest(new { Message = error });
+            }
+
             var slot = new ClassSlot
             {
                 ClassSemesterId = instanceId,
@@ -247,24 +254,55 @@ public class ClassSlotController : ControllerBase
 
             foreach (var m in members)
             {
+                // Lấy submission kèm số test case pass/total để tính %
                 var subs = problemIds.Count > 0
                     ? await _db.Submissions.AsNoTracking()
                         .Where(s => s.UserId == m.UserId && problemIds.Contains(s.ProblemId))
+                        .Select(s => new
+                        {
+                            s.Id,
+                            s.ProblemId,
+                            s.VerdictCode,
+                            s.CreatedAt,
+                            Total = _db.Results.Count(r => r.SubmissionId == s.Id && r.TestcaseId != null),
+                            Passed = _db.Results.Count(r => r.SubmissionId == s.Id && r.TestcaseId != null && r.StatusCode == "ac")
+                        })
                         .ToListAsync(ct)
-                    : new List<Submission>();
+                    : new();
 
                 var problemScores = slotProblems.OrderBy(sp => sp.Ordinal).Select(sp =>
                 {
                     var pSubs = subs.Where(s => s.ProblemId == sp.ProblemId).ToList();
-                    var best = pSubs.Where(s => s.FinalScore.HasValue)
-                        .OrderByDescending(s => s.FinalScore).FirstOrDefault();
+
+                    // Tính điểm = (passed / total) * sp.Points cho mỗi submission, lấy max
+                    decimal? bestScore = null;
+                    string? bestVerdict = null;
+                    DateTime? lastSubmittedAt = null;
+                    int problemPoints = sp.Points ?? 0;
+
+                    foreach (var s in pSubs)
+                    {
+                        if (s.Total > 0)
+                        {
+                            var pct = (decimal)s.Passed / s.Total;
+                            var score = Math.Round(pct * problemPoints, 2);
+                            if (bestScore is null || score > bestScore)
+                            {
+                                bestScore = score;
+                                bestVerdict = s.VerdictCode;
+                            }
+                        }
+                        if (lastSubmittedAt is null || s.CreatedAt > lastSubmittedAt)
+                            lastSubmittedAt = s.CreatedAt;
+                    }
+
                     return new ProblemScoreEntry(
                         sp.ProblemId,
                         sp.Problem.Title,
-                        best?.VerdictCode,
-                        best?.FinalScore,
+                        bestVerdict,
+                        bestScore,
                         pSubs.Count,
-                        pSubs.Any() ? pSubs.Max(s => (DateTime?)s.CreatedAt) : null);
+                        lastSubmittedAt);
                 }).ToList();
 
                 var total = problemScores.Where(p => p.Score.HasValue).Sum(p => p.Score!.Value);
@@ -451,8 +489,15 @@ public class ClassSlotController : ControllerBase
             if (problems is not { Count: > 0 })
                 return BadRequest(new { Message = "At least one problem is required." });
 
-            var existingProblemIds = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>())
-                .Select(sp => sp.ProblemId).ToHashSet();
+            var existing = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).ToList();
+            var existingProblemIds = existing.Select(sp => sp.ProblemId).ToHashSet();
+
+            // Validate: tất cả Points (cả existing + new chưa duplicate) phải có và tổng <= 10
+            var newToAdd = problems.Where(p => !existingProblemIds.Contains(p.ProblemId)).ToList();
+            var combinedPoints = existing.Select(sp => sp.Points)
+                .Concat(newToAdd.Select(p => p.Points));
+            var (ok, error) = ValidateSlotPoints(combinedPoints);
+            if (!ok) return BadRequest(new { Message = error });
 
             var added = 0;
             foreach (var p in problems)
@@ -531,6 +576,10 @@ public class ClassSlotController : ControllerBase
                 }
             }
 
+            // Validate tổng Points sau khi update
+            var (ok, error) = ValidateSlotPoints(slotProblems.Select(sp => sp.Points));
+            if (!ok) return BadRequest(new { Message = error });
+
             if (updated > 0)
             {
                 slot.UpdatedBy = userId;
@@ -599,5 +648,29 @@ public class ClassSlotController : ControllerBase
         var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                  ?? User.FindFirst("sub")?.Value;
         return Guid.TryParse(idStr, out var id) ? id : null;
+    }
+
+    private const int MaxSlotPoints = 10;
+
+    /// <summary>
+    /// Validate điểm các problem trong slot:
+    /// - Mỗi problem phải có Points (không null)
+    /// - Tổng điểm tất cả problem trong slot không quá 10
+    /// </summary>
+    private static (bool Ok, string? Error) ValidateSlotPoints(IEnumerable<int?> allPoints)
+    {
+        var list = allPoints.ToList();
+
+        if (list.Any(p => !p.HasValue))
+            return (false, "Each problem must have Points (not null).");
+
+        if (list.Any(p => p!.Value < 0))
+            return (false, "Points must be non-negative.");
+
+        var total = list.Sum(p => p!.Value);
+        if (total > MaxSlotPoints)
+            return (false, $"Total points of problems in slot must not exceed {MaxSlotPoints}. Current total: {total}.");
+
+        return (true, null);
     }
 }

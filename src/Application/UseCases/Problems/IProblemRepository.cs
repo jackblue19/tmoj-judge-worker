@@ -19,4 +19,12 @@ public interface IProblemRepository : IWriteRepository<Problem , Guid>, IReadRep
         Guid currentUserId ,
         bool isAdmin ,
         CancellationToken ct = default);
+
+    Task<Problem?> GetProblemTrackedWithTagsAsync(Guid problemId , CancellationToken ct = default);
+
+    Task<Problem?> GetProblemTrackedWithTagsAndTestsetsAsync(Guid problemId , CancellationToken ct = default);
+
+    Task<IReadOnlyList<Tag>> GetTagsTrackedByIdsAsync(
+        IReadOnlyCollection<Guid> tagIds ,
+        CancellationToken ct = default);
 }

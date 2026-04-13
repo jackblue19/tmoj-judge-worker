@@ -13,6 +13,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v2.ProblemManagement;
 
@@ -29,11 +30,11 @@ public class ProblemsController : ControllerBase
     }
 
     // CREATE PROBLEM
-    [Authorize]
+    [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
-    public async Task<ActionResult<ProblemDetailDto>> Create(
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> Create(
         [FromForm] UpsertProblemContentRequestDto request ,
         CancellationToken ct)
     {
@@ -53,15 +54,26 @@ public class ProblemsController : ControllerBase
                 request.TagIds) ,
             ct);
 
-        return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
+        return CreatedAtAction(
+            nameof(GetDetail) ,
+            new { problemId = result.Id } ,
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Problem created successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
     // GET PROBLEM DETAIL
     [HttpGet("{problemId:guid}")]
-    public async Task<ActionResult<ProblemDetailDto>> GetDetail(Guid problemId , CancellationToken ct)
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> GetDetail(Guid problemId , CancellationToken ct)
     {
         var result = await _mediator.Send(new GetProblemDetailQuery(problemId) , ct);
-        return Ok(result);
+
+        return Ok(
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Problem detail fetched successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
     // GET PROBLEM STATEMENT
@@ -92,7 +104,7 @@ public class ProblemsController : ControllerBase
     [HttpPut("{problemId:guid}/content")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
-    public async Task<ActionResult<ProblemDetailDto>> UpdateContent(
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> UpdateContent(
         Guid problemId ,
         [FromForm] UpsertProblemContentRequestDto request ,
         CancellationToken ct)
@@ -114,13 +126,17 @@ public class ProblemsController : ControllerBase
                 request.TagIds) ,
             ct);
 
-        return Ok(result);
+        return Ok(
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Problem updated successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
     // CREATE TAG
     [Authorize]
     [HttpPost("tags")]
-    public async Task<ActionResult<ProblemTagDto>> CreateTag(
+    public async Task<ActionResult<ApiResponse<ProblemTagDto>>> CreateTag(
         [FromBody] CreateTagRequestDto request ,
         CancellationToken ct)
     {
@@ -133,13 +149,17 @@ public class ProblemsController : ControllerBase
                 request.Icon) ,
             ct);
 
-        return Ok(result);
+        return Ok(
+            ApiResponse<ProblemTagDto>.Ok(
+                result ,
+                "Tag created successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
     // GET ALL TAGS
     [HttpGet("tags")]
     [AllowAnonymous]
-    public async Task<ActionResult<IReadOnlyList<AllTagsListItemDto>>> GetAllTags(
+    public async Task<ActionResult<ApiResponse<IReadOnlyList<AllTagsListItemDto>>>> GetAllTags(
         [FromQuery] bool includeInactive = false ,
         CancellationToken ct = default)
     {
@@ -147,13 +167,17 @@ public class ProblemsController : ControllerBase
             new GetAllTagsQuery(includeInactive) ,
             ct);
 
-        return Ok(result);
+        return Ok(
+            ApiResponse<IReadOnlyList<AllTagsListItemDto>>.Ok(
+                result ,
+                "Tags fetched successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
     // ATTACH TAGS TO PROBLEM
     [Authorize]
     [HttpPost("{problemId:guid}/tags/attach")]
-    public async Task<ActionResult<ProblemDetailDto>> AttachTags(
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> AttachTags(
         Guid problemId ,
         [FromBody] AttachProblemTagsRequestDto request ,
         CancellationToken ct)
@@ -162,13 +186,17 @@ public class ProblemsController : ControllerBase
             new AttachProblemTagsCommand(problemId , request.TagIds) ,
             ct);
 
-        return Ok(result);
+        return Ok(
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Tags attached successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
     // REPLACE PROBLEM TAGS
     [Authorize]
     [HttpPut("{problemId:guid}/tags")]
-    public async Task<ActionResult<ProblemDetailDto>> ReplaceTags(
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> ReplaceTags(
         Guid problemId ,
         [FromBody] ReplaceProblemTagsRequestDto request ,
         CancellationToken ct)
@@ -177,7 +205,11 @@ public class ProblemsController : ControllerBase
             new ReplaceProblemTagsCommand(problemId , request.TagIds) ,
             ct);
 
-        return Ok(result);
+        return Ok(
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Problem tags replaced successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
     // GET ALL PUBLIC PROBLEMS
@@ -203,9 +235,10 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
-    //  UPDATE PROBLEM DIFFICULTY
+    // UPDATE PROBLEM DIFFICULTY
+    [Authorize]
     [HttpPut("{problemId:guid}/difficulty")]
-    public async Task<ActionResult<ProblemDetailDto>> SetDifficulty(
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> SetDifficulty(
         Guid problemId ,
         [FromBody] SetProblemDifficultyRequestDto request ,
         CancellationToken ct)
@@ -214,16 +247,21 @@ public class ProblemsController : ControllerBase
             new SetProblemDifficultyCommand(problemId , request.Difficulty) ,
             ct);
 
-        return Ok(result);
+        return Ok(
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Problem difficulty updated successfully." ,
+                HttpContext.TraceIdentifier));
     }
 
+    //  create draft => for student
     [Authorize]
     [HttpPost("drafts")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
-    public async Task<ActionResult<ProblemDetailDto>> CreateDraft(
-    [FromForm] UpsertProblemContentRequestDto request ,
-    CancellationToken ct)
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> CreateDraft(
+        [FromForm] UpsertProblemContentRequestDto request ,
+        CancellationToken ct)
     {
         var result = await _mediator.Send(
             new CreateProblemCommand(
@@ -241,8 +279,12 @@ public class ProblemsController : ControllerBase
                 request.TagIds) ,
             ct);
 
-        return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
+        return CreatedAtAction(
+            nameof(GetDetail) ,
+            new { problemId = result.Id } ,
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Problem draft created successfully." ,
+                HttpContext.TraceIdentifier));
     }
 }
-
-

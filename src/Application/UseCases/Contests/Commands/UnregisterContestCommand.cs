@@ -2,8 +2,7 @@
 
 namespace Application.UseCases.Contests.Commands;
 
-public class JoinContestCommand : IRequest<Guid>
+public class UnregisterContestCommand : IRequest<bool>
 {
     public Guid ContestId { get; set; }
-    public Guid TeamId { get; set; }
 }

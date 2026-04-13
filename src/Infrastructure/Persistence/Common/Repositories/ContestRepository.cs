@@ -1,6 +1,7 @@
 ﻿using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.UseCases.Contests.Dtos;
+using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -89,7 +90,7 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // GET DETAIL (FIX CHUẨN DTO MỚI)
+    // GET DETAIL
     // =============================================
     public async Task<ContestDetailDto?> GetContestDetailAsync(Guid contestId)
     {
@@ -115,24 +116,17 @@ public class ContestRepository : IContestRepository
             Title = contest.Title,
             Description = contest.DescriptionMd ?? "",
             Slug = contest.Slug ?? "",
-
-            // ✅ FIX CHÍNH
             Visibility = contest.VisibilityCode,
-
             ContestType = contest.ContestType ?? "icpc",
             AllowTeams = contest.AllowTeams,
-
             Status =
                 contest.StartAt > now ? "upcoming" :
                 contest.EndAt < now ? "ended" :
                 "running",
-
             IsPublished = contest.VisibilityCode == "public",
-
             StartAt = contest.StartAt,
             EndAt = contest.EndAt,
             DurationMinutes = (int)(contest.EndAt - contest.StartAt).TotalMinutes,
-
             ProblemCount = problems.Count,
             TotalPoints = problems.Sum(p => p.Points ?? 0),
 
@@ -164,5 +158,52 @@ public class ContestRepository : IContestRepository
     {
         return await _db.TeamMembers
             .AnyAsync(x => x.TeamId == teamId && x.UserId == userId);
+    }
+
+    // =============================================
+    // GET TEAM MEMBER IDS
+    // =============================================
+    public async Task<List<Guid>> GetTeamMemberIdsAsync(Guid teamId)
+    {
+        return await _db.TeamMembers
+            .Where(x => x.TeamId == teamId)
+            .Select(x => x.UserId)
+            .ToListAsync();
+    }
+
+    // =============================================
+    // 🔥 CHECK TIME CONFLICT (ICPC RULE - GLOBAL)
+    // =============================================
+    public async Task<bool> HasTimeConflictAsync(Guid userId, DateTime start, DateTime end)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.Team.TeamMembers.Any(m => m.UserId == userId))
+            .AnyAsync(ct =>
+                ct.Contest.StartAt < end &&
+                ct.Contest.EndAt > start
+            );
+    }
+
+    // =============================================
+    // CHECK ACTIVE CONTEST BY TEAM ID
+    // =============================================
+    public async Task<Contest?> GetActiveContestByTeamIdAsync(Guid teamId)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.TeamId == teamId)
+            .Select(ct => ct.Contest)
+            .OrderByDescending(c => c.StartAt) // lấy contest gần nhất
+            .FirstOrDefaultAsync();
+    }
+
+    // =============================================
+    // CHECK CONTEST TEAM
+    // =============================================
+    public async Task<ContestTeam?> GetContestTeamAsync(Guid contestId, Guid teamId)
+    {
+        return await _db.ContestTeams
+            .FirstOrDefaultAsync(x =>
+                x.ContestId == contestId &&
+                x.TeamId == teamId);
     }
 }

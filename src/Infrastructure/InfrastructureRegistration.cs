@@ -51,6 +51,7 @@ public static class InfrastructureRegistration
         services.AddScoped<ITagRepository , TagRepository>();
         services.AddScoped<IContestStatusService, ContestStatusService>();
         services.AddScoped<ITeamRepository, TeamRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
 
 
         services.AddScoped<IUserProblemQueries , UserProblemQueries>();

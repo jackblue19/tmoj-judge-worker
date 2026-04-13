@@ -23,6 +23,7 @@ public class TeamRepository : ITeamRepository
         var team = await _db.Teams
             .AsNoTracking()
             .Include(x => x.TeamMembers)
+                .ThenInclude(tm => tm.User)
             .FirstOrDefaultAsync(x => x.Id == teamId);
 
         if (team == null) return null;
@@ -40,6 +41,12 @@ public class TeamRepository : ITeamRepository
             Members = team.TeamMembers.Select(m => new TeamMemberDto
             {
                 UserId = m.UserId,
+                UserName =
+                    !string.IsNullOrEmpty(m.User.DisplayName)
+                        ? m.User.DisplayName
+                        : !string.IsNullOrEmpty(m.User.FirstName)
+                            ? $"{m.User.FirstName} {m.User.LastName}"
+                            : m.User.Username,
                 JoinedAt = m.JoinedAt
             }).ToList()
         };
@@ -97,6 +104,17 @@ public class TeamRepository : ITeamRepository
     }
 
     // =========================
+    // 🔥 FIX: GET TEAM MEMBERS
+    // =========================
+    public async Task<List<TeamMember>> GetTeamMembersAsync(Guid teamId)
+    {
+        return await _db.TeamMembers
+            .AsNoTracking()
+            .Where(x => x.TeamId == teamId)
+            .ToListAsync();
+    }
+
+    // =========================
     // DELETE MEMBER
     // =========================
     public void DeleteTeamMember(TeamMember member)
@@ -114,8 +132,7 @@ public class TeamRepository : ITeamRepository
     }
 
     // =========================
-    // TEAM VALIDATION (CONTEST RULE)
-    // MIN 3 - MAX 5
+    // VALIDATION
     // =========================
     public async Task<bool> IsTeamValidForContestAsync(Guid teamId)
     {
@@ -124,12 +141,80 @@ public class TeamRepository : ITeamRepository
 
         return count >= 3 && count <= 5;
     }
+
     // =========================
-    // GET BY INVITE CODE
+    // INVITE CODE
     // =========================
     public async Task<Team?> GetByInviteCodeAsync(string code)
     {
         return await _db.Teams
             .FirstOrDefaultAsync(x => x.InviteCode == code);
+    }
+
+    // =========================
+    // CONTEST BUSY CHECK
+    // =========================
+    public async Task<bool> IsUserBusyInContestAsync(Guid userId, Guid contestId)
+    {
+        var contest = await _db.Contests
+            .FirstOrDefaultAsync(x => x.Id == contestId);
+
+        if (contest == null)
+            throw new Exception("Contest not found");
+
+        var userContests = await _db.TeamMembers
+            .Where(tm => tm.UserId == userId)
+            .SelectMany(tm => tm.Team.ContestTeams)
+            .Select(ct => ct.Contest)
+            .ToListAsync();
+
+        return userContests.Any(c =>
+            !(c.EndAt <= contest.StartAt || c.StartAt >= contest.EndAt));
+    }
+
+    // =========================
+    // ADMIN
+    // =========================
+    public async Task<List<TeamDto>> GetAllTeamsAsync()
+    {
+        return await _db.Teams
+            .AsNoTracking()
+            .Include(t => t.TeamMembers)
+                .ThenInclude(tm => tm.User)
+            .Select(t => new TeamDto
+            {
+                Id = t.Id,
+                TeamName = t.TeamName,
+                LeaderId = t.LeaderId,
+                IsPersonal = t.IsPersonal,
+                InviteCode = t.InviteCode,
+                CreatedAt = t.CreatedAt,
+                TeamSize = t.TeamMembers.Count,
+
+                Members = t.TeamMembers.Select(m => new TeamMemberDto
+                {
+                    UserId = m.UserId,
+                    UserName =
+                        !string.IsNullOrEmpty(m.User.DisplayName)
+                            ? m.User.DisplayName
+                            : !string.IsNullOrEmpty(m.User.FirstName)
+                                ? $"{m.User.FirstName} {m.User.LastName}"
+                                : m.User.Username,
+                    JoinedAt = m.JoinedAt
+                }).ToList()
+            })
+            .ToListAsync();
+    }
+
+    // =========================
+    // GET PERSONAL TEAM
+    // =========================
+    public async Task<Team?> GetPersonalTeamAsync(Guid userId)
+    {
+        return await _db.Teams
+            .Include(t => t.TeamMembers)
+            .FirstOrDefaultAsync(t =>
+                t.IsPersonal &&
+                t.LeaderId == userId);
     }
 }

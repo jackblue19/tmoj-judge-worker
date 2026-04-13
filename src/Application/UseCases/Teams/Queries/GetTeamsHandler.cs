@@ -7,15 +7,30 @@ namespace Application.UseCases.Teams.Queries;
 public class GetTeamsHandler : IRequestHandler<GetTeamsQuery, List<TeamDto>>
 {
     private readonly ITeamRepository _repo;
+    private readonly ICurrentUserService _currentUser;
 
-    public GetTeamsHandler(ITeamRepository repo)
+    public GetTeamsHandler(
+        ITeamRepository repo,
+        ICurrentUserService currentUser)
     {
         _repo = repo;
+        _currentUser = currentUser;
     }
 
     public async Task<List<TeamDto>> Handle(GetTeamsQuery request, CancellationToken ct)
     {
-        return await _repo.GetTeamsByUserAsync(Guid.Empty);
-        // NOTE: nếu muốn global list thì mình sửa lại repo sau
+        if (!_currentUser.IsAuthenticated)
+            throw new UnauthorizedAccessException();
+
+        // 🔥 ADMIN → lấy tất cả team
+        if (_currentUser.IsInRole("Admin"))
+        {
+            return await _repo.GetAllTeamsAsync();
+        }
+
+        // 🔥 USER → chỉ lấy team của mình
+        var userId = _currentUser.UserId!.Value;
+
+        return await _repo.GetTeamsByUserAsync(userId);
     }
 }

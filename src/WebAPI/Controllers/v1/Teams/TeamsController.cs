@@ -28,7 +28,7 @@ public class TeamsController : ControllerBase
     {
         var result = await _mediator.Send(command, ct);
 
-        return Ok(ApiResponse<Guid>.Ok(result, "Team created successfully"));
+        return Ok(ApiResponse<CreateTeamResponse>.Ok(result, "Team created successfully"));
     }
 
     // =========================

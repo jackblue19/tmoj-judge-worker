@@ -14,6 +14,9 @@ public class AddTeamMemberCommandHandler
     private readonly IWriteRepository<TeamMember, Guid> _memberWriteRepo;
     private readonly IWriteRepository<Team, Guid> _teamWriteRepo;
     private readonly ITeamRepository _teamCustomRepo;
+    private readonly IContestRepository _contestRepo;
+    private readonly IContestStatusService _contestStatus;
+    private readonly IUserRepository _userRepo;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
 
@@ -23,6 +26,9 @@ public class AddTeamMemberCommandHandler
         IWriteRepository<TeamMember, Guid> memberWriteRepo,
         IWriteRepository<Team, Guid> teamWriteRepo,
         ITeamRepository teamCustomRepo,
+        IContestRepository contestRepo,
+        IContestStatusService contestStatus,
+        IUserRepository userRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
@@ -31,6 +37,9 @@ public class AddTeamMemberCommandHandler
         _memberWriteRepo = memberWriteRepo;
         _teamWriteRepo = teamWriteRepo;
         _teamCustomRepo = teamCustomRepo;
+        _contestRepo = contestRepo;
+        _contestStatus = contestStatus;
+        _userRepo = userRepo;
         _currentUser = currentUser;
         _uow = uow;
     }
@@ -57,16 +66,39 @@ public class AddTeamMemberCommandHandler
             throw new Exception("Only leader can add members");
 
         // ======================
-        // 3. CHECK USER ALREADY IN TEAM
+        // 🔥 3. CHECK TIME WINDOW (CLEAN)
         // ======================
-        var isInAnyTeam = await _teamCustomRepo
+        var contest = await _contestRepo
+            .GetActiveContestByTeamIdAsync(team.Id);
+
+        if (contest != null)
+        {
+            var canEdit = _contestStatus
+                .CanUnregister(contest.StartAt);
+
+            if (!canEdit)
+                throw new Exception(
+                    "Cannot modify team after unregister deadline (4h before contest)");
+        }
+
+        // ======================
+        // 4. CHECK USER LOCK
+        // ======================
+        var isActive = await _userRepo.IsUserActiveAsync(request.UserId);
+        if (!isActive)
+            throw new Exception("User is locked");
+
+        // ======================
+        // 5. CHECK USER ALREADY IN TEAM
+        // ======================
+        var isInTeam = await _teamCustomRepo
             .IsUserInTeamAsync(request.UserId, request.TeamId);
 
-        if (isInAnyTeam)
+        if (isInTeam)
             throw new Exception("User already in this team");
 
         // ======================
-        // 4. GET MEMBERS
+        // 6. CHECK TEAM SIZE
         // ======================
         var members = await _memberReadRepo.ListAsync(
             new TeamMemberByTeamSpec(request.TeamId), ct);
@@ -75,7 +107,7 @@ public class AddTeamMemberCommandHandler
             throw new Exception("Team max size is 5");
 
         // ======================
-        // 5. ADD MEMBER
+        // 7. ADD MEMBER
         // ======================
         var entity = new TeamMember
         {
@@ -87,7 +119,7 @@ public class AddTeamMemberCommandHandler
         await _memberWriteRepo.AddAsync(entity, ct);
 
         // ======================
-        // 6. UPDATE TEAM SIZE
+        // 8. UPDATE TEAM SIZE
         // ======================
         team.TeamSize = members.Count + 1;
         team.UpdatedAt = DateTime.UtcNow;

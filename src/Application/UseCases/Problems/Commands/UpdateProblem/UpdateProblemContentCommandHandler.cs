@@ -2,7 +2,10 @@
 using Application.Common.Interfaces;
 using Application.UseCases.Problems.Constants;
 using Application.UseCases.Problems.Dtos;
+using Application.UseCases.Problems.Mappings;
+using Application.UseCases.Problems.Specifications;
 using Domain.Abstractions;
+using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 
@@ -12,17 +15,26 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IProblemRepository _problemRepository;
+    private readonly IReadRepository<Problem , Guid> _problemReadRepository;
+    private readonly IReadRepository<Tag , Guid> _tagReadRepository;
+    private readonly IWriteRepository<Problem , Guid> _problemWriteRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IR2Service _r2Service;
 
     public UpdateProblemContentCommandHandler(
         ICurrentUserService currentUser ,
         IProblemRepository problemRepository ,
+        IReadRepository<Problem , Guid> problemReadRepository ,
+        IReadRepository<Tag , Guid> tagReadRepository ,
+        IWriteRepository<Problem , Guid> problemWriteRepository ,
         IUnitOfWork unitOfWork ,
         IR2Service r2Service)
     {
         _currentUser = currentUser;
         _problemRepository = problemRepository;
+        _problemReadRepository = problemReadRepository;
+        _tagReadRepository = tagReadRepository;
+        _problemWriteRepository = problemWriteRepository;
         _unitOfWork = unitOfWork;
         _r2Service = r2Service;
     }
@@ -51,22 +63,31 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
         };
     }
 
+    private static string NormalizeStatusCode(string? statusCode)
+    {
+        var normalized = statusCode?.Trim().ToLowerInvariant();
+
+        return normalized switch
+        {
+            null or "" => "draft",
+            "draft" => "draft",
+            "pending" => "pending",
+            "published" => "published",
+            "archived" => "archived",
+            _ => throw new ArgumentException("Invalid status code.")
+        };
+    }
+
     public async Task<ProblemDetailDto> Handle(UpdateProblemContentCommand request , CancellationToken ct)
     {
         if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
             throw new UnauthorizedAccessException("User is not authenticated.");
 
-        var currentUserId = _currentUser.UserId.Value;
-        var isAdmin = _currentUser.IsInRole("Admin");
+        var problem = await _problemReadRepository.FirstOrDefaultAsync(
+            new ProblemWithTagsAndTestsetsSpec(request.ProblemId) , ct);
 
-        var entity = await _problemRepository.GetProblemForManagementAsync(
-            request.ProblemId ,
-            currentUserId ,
-            isAdmin ,
-            ct);
-
-        if ( entity is null )
-            throw new KeyNotFoundException("Problem not found or access denied.");
+        if ( problem is null )
+            throw new KeyNotFoundException("Problem not found.");
 
         var title = request.Title?.Trim();
         var slug = request.Slug?.Trim().ToLowerInvariant();
@@ -77,21 +98,29 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
         if ( string.IsNullOrWhiteSpace(slug) )
             throw new ArgumentException("Slug is required.");
 
-        ValidateStatementInput(request.DescriptionMd , request.StatementFile);
-
-        var slugExists = await _problemRepository.SlugExistsAsync(slug , entity.Id , ct);
+        var slugExists = await _problemRepository.SlugExistsAsync(slug , request.ProblemId , ct);
         if ( slugExists )
             throw new InvalidOperationException($"Problem slug '{slug}' already exists.");
 
-        entity.Title = title;
-        entity.Slug = slug;
-        entity.TimeLimitMs = request.TimeLimitMs;
-        entity.MemoryLimitKb = request.MemoryLimitKb;
-        entity.TypeCode = request.TypeCode?.Trim();
-        entity.ScoringCode = request.ScoringCode?.Trim();
-        entity.VisibilityCode = request.VisibilityCode?.Trim();
-        entity.UpdatedAt = DateTime.UtcNow;
-        entity.UpdatedBy = currentUserId;
+        ValidateStatementInput(request.DescriptionMd , request.StatementFile);
+
+        var now = DateTime.UtcNow;
+        var statusCode = NormalizeStatusCode(request.StatusCode);
+
+        problem.Title = title;
+        problem.Slug = slug;
+        problem.Difficulty = request.Difficulty?.Trim();
+        problem.TypeCode = request.TypeCode?.Trim();
+        problem.VisibilityCode = request.VisibilityCode?.Trim();
+        problem.ScoringCode = request.ScoringCode?.Trim();
+        problem.StatusCode = statusCode;
+        problem.TimeLimitMs = request.TimeLimitMs;
+        problem.MemoryLimitKb = request.MemoryLimitKb;
+        problem.UpdatedAt = now;
+        problem.UpdatedBy = _currentUser.UserId.Value;
+        problem.PublishedAt = statusCode == "published"
+            ? problem.PublishedAt ?? now
+            : null;
 
         if ( request.StatementFile is not null && request.StatementFile.Length > 0 )
         {
@@ -99,7 +128,7 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
             var fileId = Guid.NewGuid();
 
             await using var stream = request.StatementFile.OpenReadStream();
-            await _r2Service.ReplaceIfExistsAsync(       // ReplaceIfExistsAsync    ||  UploadAsync
+            await _r2Service.UploadAsync(
                 type: "Problem" ,
                 id: fileId ,
                 fileExtension: ext ,
@@ -107,33 +136,45 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
                 contentType: contentType ,
                 cancellationToken: ct);
 
-            entity.DescriptionMd = null;
-            entity.StatementSourceCode = sourceCode;
-            entity.StatementFileId = fileId;
-            entity.StatementFileName = Path.GetFileName(request.StatementFile.FileName);
-            entity.StatementContentType = contentType;
-            entity.StatementExtension = ext;
-            entity.StatementUploadedAt = DateTime.UtcNow;
+            problem.DescriptionMd = null;
+            problem.StatementSourceCode = sourceCode;
+            problem.StatementFileId = fileId;
+            problem.StatementFileName = Path.GetFileName(request.StatementFile.FileName);
+            problem.StatementContentType = contentType;
+            problem.StatementExtension = ext;
+            problem.StatementUploadedAt = now;
         }
         else
         {
-            entity.DescriptionMd = request.DescriptionMd?.Trim();
-            entity.StatementSourceCode = ProblemStatementSourceCodes.InlineMd;
-            entity.StatementFileId = null;
-            entity.StatementFileName = null;
-            entity.StatementContentType = null;
-            entity.StatementExtension = null;
-            entity.StatementUploadedAt = null;
+            problem.DescriptionMd = request.DescriptionMd?.Trim();
+            problem.StatementSourceCode = ProblemStatementSourceCodes.InlineMd;
+            problem.StatementFileId = null;
+            problem.StatementFileName = null;
+            problem.StatementContentType = null;
+            problem.StatementExtension = null;
+            problem.StatementUploadedAt = null;
         }
 
+        if ( request.TagIds is not null )
+        {
+            var tags = request.TagIds.Count == 0
+                ? []
+                : await _tagReadRepository.ListAsync(new TagsByIdsSpec(request.TagIds) , ct);
+
+            var foundIds = tags.Select(x => x.Id).ToHashSet();
+            var missingIds = request.TagIds.Where(x => !foundIds.Contains(x)).ToArray();
+
+            if ( missingIds.Length > 0 )
+                throw new KeyNotFoundException($"Some tags were not found: {string.Join(", " , missingIds)}");
+
+            problem.Tags.Clear();
+            foreach ( var tag in tags )
+                problem.Tags.Add(tag);
+        }
+
+        _problemWriteRepository.Update(problem);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        var detail = await _problemRepository.GetProblemDetailForManagementAsync(
-            entity.Id ,
-            currentUserId ,
-            isAdmin ,
-            ct);
-
-        return detail ?? throw new KeyNotFoundException("Problem detail not found after update.");
+        return problem.ToDetailDto();
     }
 }

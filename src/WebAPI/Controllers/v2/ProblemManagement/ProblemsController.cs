@@ -1,10 +1,11 @@
 ﻿using Application.Common.Pagination;
+using Application.UseCases.Problems.Commands.AttachProblemTags;
 using Application.UseCases.Problems.Commands.CreateProblem;
 using Application.UseCases.Problems.Commands.CreateTag;
+using Application.UseCases.Problems.Commands.ReplaceProblemTags;
 using Application.UseCases.Problems.Commands.UpdateProblem;
 using Application.UseCases.Problems.Dtos;
-using Application.UseCases.Problems.Mappings;
-using Application.UseCases.Problems.Queries.GetAllProblems;
+using Application.UseCases.Problems.Queries.GetAllTags;
 using Application.UseCases.Problems.Queries.GetProblemById;
 using Application.UseCases.Problems.Queries.GetPublicProblems;
 using Asp.Versioning;
@@ -12,15 +13,12 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.OutputCaching;
-using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v2.ProblemManagement;
 
 [ApiController]
 [ApiVersion("2.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-//[Authorize]
 public class ProblemsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -30,32 +28,35 @@ public class ProblemsController : ControllerBase
         _mediator = mediator;
     }
 
-    //  CREATE PROBLEM
+    // CREATE PROBLEM
     [Authorize]
-    [HttpPost("drafts")]
+    [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
-    public async Task<ActionResult<ProblemSummaryDto>> CreateDraft(
-    [FromForm] UpsertProblemContentRequestDto request ,
-    CancellationToken ct)
+    public async Task<ActionResult<ProblemDetailDto>> Create(
+        [FromForm] UpsertProblemContentRequestDto request ,
+        CancellationToken ct)
     {
         var result = await _mediator.Send(
-            new CreateProblemDraftCommand(
+            new CreateProblemCommand(
                 request.Title ,
                 request.Slug ,
+                request.Difficulty ,
+                request.TypeCode ,
+                request.VisibilityCode ,
+                request.ScoringCode ,
+                request.StatusCode ,
                 request.TimeLimitMs ,
                 request.MemoryLimitKb ,
-                request.TypeCode ,
-                request.ScoringCode ,
-                request.VisibilityCode ,
                 request.DescriptionMd ,
-                request.StatementFile) ,
+                request.StatementFile ,
+                request.TagIds) ,
             ct);
 
         return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
     }
 
-    //  GET PROBLEM BY ID
+    // GET PROBLEM DETAIL
     [HttpGet("{problemId:guid}")]
     public async Task<ActionResult<ProblemDetailDto>> GetDetail(Guid problemId , CancellationToken ct)
     {
@@ -63,8 +64,7 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
-
-    //  GET PROBLEM DESCRIPTION
+    // GET PROBLEM STATEMENT
     [Authorize]
     [HttpGet("{problemId:guid}/statement")]
     public async Task<IActionResult> GetStatement(Guid problemId , CancellationToken ct)
@@ -87,64 +87,71 @@ public class ProblemsController : ControllerBase
             enableRangeProcessing: true);
     }
 
-
-    //  UPDATE PROBLEM      (EDIT PROBLEM)
+    // UPDATE PROBLEM
     [Authorize]
     [HttpPut("{problemId:guid}/content")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
     public async Task<ActionResult<ProblemDetailDto>> UpdateContent(
-    Guid problemId ,
-    [FromForm] UpsertProblemContentRequestDto request ,
-    CancellationToken ct)
+        Guid problemId ,
+        [FromForm] UpsertProblemContentRequestDto request ,
+        CancellationToken ct)
     {
         var result = await _mediator.Send(
             new UpdateProblemContentCommand(
                 problemId ,
                 request.Title ,
                 request.Slug ,
-                request.DescriptionMd ,
+                request.Difficulty ,
+                request.TypeCode ,
+                request.VisibilityCode ,
+                request.ScoringCode ,
+                request.StatusCode ,
                 request.TimeLimitMs ,
                 request.MemoryLimitKb ,
-                request.TypeCode ,
-                request.ScoringCode ,
-                request.VisibilityCode ,
-                request.StatementFile) ,
+                request.DescriptionMd ,
+                request.StatementFile ,
+                request.TagIds) ,
             ct);
 
         return Ok(result);
     }
 
-
-    //  UPDATE PROBLEM DIFFICULTY
-    [HttpPut("{problemId:guid}/difficulty")]
-    public async Task<ActionResult<ProblemDetailDto>> SetDifficulty(
-        Guid problemId ,
-        [FromBody] SetProblemDifficultyRequestDto request ,
-        CancellationToken ct)
-    {
-        var result = await _mediator.Send(
-            new SetProblemDifficultyCommand(problemId , request.Difficulty) ,
-            ct);
-
-        return Ok(result);
-    }
-
-
-    //  CREATE TAGS
+    // CREATE TAG
+    [Authorize]
     [HttpPost("tags")]
     public async Task<ActionResult<ProblemTagDto>> CreateTag(
         [FromBody] CreateTagRequestDto request ,
         CancellationToken ct)
     {
         var result = await _mediator.Send(
-            new CreateTagCommand(request.Name , request.Slug) ,
+            new CreateTagCommand(
+                request.Name ,
+                request.Slug ,
+                request.Description ,
+                request.Color ,
+                request.Icon) ,
             ct);
 
         return Ok(result);
     }
 
-    //  ATTACH TAGS TO PROBLEM
+    // GET ALL TAGS
+    [HttpGet("tags")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IReadOnlyList<AllTagsListItemDto>>> GetAllTags(
+        [FromQuery] bool includeInactive = false ,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GetAllTagsQuery(includeInactive) ,
+            ct);
+
+        return Ok(result);
+    }
+
+    // ATTACH TAGS TO PROBLEM
+    [Authorize]
     [HttpPost("{problemId:guid}/tags/attach")]
     public async Task<ActionResult<ProblemDetailDto>> AttachTags(
         Guid problemId ,
@@ -158,8 +165,8 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
-
-    //  REPLACE PROBLEMS TAGS
+    // REPLACE PROBLEM TAGS
+    [Authorize]
     [HttpPut("{problemId:guid}/tags")]
     public async Task<ActionResult<ProblemDetailDto>> ReplaceTags(
         Guid problemId ,
@@ -173,7 +180,7 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
-    //  GET ALL PUBLIC PROBLEMS
+    // GET ALL PUBLIC PROBLEMS
     [HttpGet("public")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiPagedResponse<PublicProblemListItemDto>) , StatusCodes.Status200OK)]
@@ -195,4 +202,47 @@ public class ProblemsController : ControllerBase
 
         return Ok(result);
     }
+
+    //  UPDATE PROBLEM DIFFICULTY
+    [HttpPut("{problemId:guid}/difficulty")]
+    public async Task<ActionResult<ProblemDetailDto>> SetDifficulty(
+        Guid problemId ,
+        [FromBody] SetProblemDifficultyRequestDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new SetProblemDifficultyCommand(problemId , request.Difficulty) ,
+            ct);
+
+        return Ok(result);
+    }
+
+    [Authorize]
+    [HttpPost("drafts")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ProblemDetailDto>> CreateDraft(
+    [FromForm] UpsertProblemContentRequestDto request ,
+    CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateProblemCommand(
+                request.Title ,
+                request.Slug ,
+                request.Difficulty ,
+                request.TypeCode ,
+                request.VisibilityCode ,
+                request.ScoringCode ,
+                "draft" ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.DescriptionMd ,
+                request.StatementFile ,
+                request.TagIds) ,
+            ct);
+
+        return CreatedAtAction(nameof(GetDetail) , new { problemId = result.Id } , result);
+    }
 }
+
+

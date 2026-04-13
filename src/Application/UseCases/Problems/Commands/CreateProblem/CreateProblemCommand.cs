@@ -2,10 +2,9 @@
 using MediatR;
 using Microsoft.AspNetCore.Http;
 
-namespace Application.UseCases.Problems.Commands.UpdateProblem;
+namespace Application.UseCases.Problems.Commands.CreateProblem;
 
-public sealed record UpdateProblemContentCommand(
-    Guid ProblemId ,
+public sealed record CreateProblemCommand(
     string Title ,
     string Slug ,
     string? Difficulty ,

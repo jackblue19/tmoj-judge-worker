@@ -39,7 +39,7 @@ public class TeamsController : ControllerBase
     {
         var result = await _mediator.Send(new GetTeamDetailQuery(id), ct);
 
-        return Ok(ApiResponse<object>.Ok(result, "Fetched team detail"));
+        return Ok(ApiResponse<object?>.Ok(result, "Fetched team detail"));
     }
 
     // =========================
@@ -50,7 +50,7 @@ public class TeamsController : ControllerBase
     {
         var result = await _mediator.Send(new GetTeamsQuery(), ct);
 
-        return Ok(ApiResponse<object>.Ok(result, "Fetched teams"));
+        return Ok(ApiResponse<object?>.Ok(result, "Fetched teams"));
     }
 
     // =========================
@@ -80,7 +80,7 @@ public class TeamsController : ControllerBase
             UserId = userId
         }, ct);
 
-        return Ok(ApiResponse<object>.Ok(null, "Member removed"));
+        return Ok(ApiResponse<object?>.Ok(null, "Member removed"));
     }
 
     // =========================
@@ -92,7 +92,7 @@ public class TeamsController : ControllerBase
     {
         await _mediator.Send(command, ct);
 
-        return Ok(ApiResponse<object>.Ok(null, "Joined team"));
+        return Ok(ApiResponse<object?>.Ok(null, "Joined team"));
     }
 
     // =========================
@@ -104,6 +104,6 @@ public class TeamsController : ControllerBase
     {
         await _mediator.Send(new DeleteTeamCommand(id), ct);
 
-        return Ok(ApiResponse<object>.Ok(null, "Team deleted"));
+        return Ok(ApiResponse<object?>.Ok(null, "Team deleted"));
     }
 }

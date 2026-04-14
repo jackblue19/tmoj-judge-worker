@@ -28,4 +28,7 @@ public interface IContestRepository
     Task<Contest?> GetActiveContestByTeamIdAsync(Guid teamId);
 
     Task<ContestTeam?> GetContestTeamAsync(Guid contestId, Guid teamId);
+    Task<List<Contest>> GetMyContestsAsync(Guid userId);
+
+    Task<List<MyContestDto>> GetMyContestsDetailedAsync(Guid userId);
 }

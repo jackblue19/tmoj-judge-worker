@@ -74,7 +74,7 @@ public class ProblemUploadsController : ControllerBase
         if ( !problem.IsActive || problem.StatusCode == "archived" )
             return Conflict("Problem is archived/inactive.");
 
-        if ( !_currentUser.IsInRole("admin") || !_currentUser.IsInRole("teacher") || !_currentUser.IsInRole("manager") )
+        if ( !(_currentUser.IsInRole("admin") || _currentUser.IsInRole("teacher") || _currentUser.IsInRole("manager")) )
             return Unauthorized("You do not have any permisisons");
 
         var testset = new Testset

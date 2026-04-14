@@ -1,4 +1,5 @@
 ﻿using Application.Common.Interfaces;
+using Application.UseCases.Problems.Constants;
 using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Specifications;
 using Domain.Abstractions;
@@ -7,63 +8,48 @@ using MediatR;
 
 namespace Application.UseCases.Problems.Queries.GetProblemById;
 
-public sealed class GetProblemDetailQueryHandler : IRequestHandler<GetProblemDetailQuery , ProblemDetailDto>
+public sealed class GetProblemDetailQueryHandler
+    : IRequestHandler<GetProblemDetailQuery , ProblemDetailDto>
 {
     private readonly ICurrentUserService _currentUser;
-    private readonly IProblemRepository _problemRepository;
-    private readonly IReadRepository<Problem , Guid> _problemReadRepository;
+    private readonly IReadRepository<Problem , Guid> _readRepository;
 
     public GetProblemDetailQueryHandler(
         ICurrentUserService currentUser ,
-        IProblemRepository problemRepository ,
-        IReadRepository<Problem , Guid> problemReadRepository)
+        IReadRepository<Problem , Guid> readRepository)
     {
         _currentUser = currentUser;
-        _problemRepository = problemRepository;
-        _problemReadRepository = problemReadRepository;
+        _readRepository = readRepository;
     }
 
-    public async Task<ProblemDetailDto> Handle(GetProblemDetailQuery request , CancellationToken ct)
+    public async Task<ProblemDetailDto> Handle(
+        GetProblemDetailQuery request ,
+        CancellationToken ct)
     {
-        var problem = await _problemReadRepository.GetByIdAsync(request.ProblemId , ct);
+        var publicResult = await _readRepository.FirstOrDefaultAsync(
+            new ProblemPublicDetailSpec(request.ProblemId) , ct);
 
-        if ( problem is null )
-            throw new KeyNotFoundException("Problem not found.");
-
-        var isPublic =
-            problem.IsActive &&
-            problem.StatusCode == "published" &&
-            problem.VisibilityCode == "public";
-
-        if ( isPublic )
-        {
-            var publicDetail = await _problemReadRepository.FirstOrDefaultAsync(
-                new ProblemDetailSpec(request.ProblemId) , ct);
-
-            if ( publicDetail is null )
-                throw new KeyNotFoundException("Problem not found.");
-
-            return publicDetail;
-        }
+        if ( publicResult is not null )
+            return publicResult;
 
         if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
             throw new UnauthorizedAccessException("User is not authenticated.");
 
         var currentUserId = _currentUser.UserId.Value;
-        var isAdmin = _currentUser.IsInRole("Admin") ||
-                      _currentUser.IsInRole("admin") ||
-                      _currentUser.IsInRole("teacher") ||
-                      _currentUser.IsInRole("manager");
 
-        var detail = await _problemRepository.GetProblemDetailForManagementAsync(
-            request.ProblemId ,
-            currentUserId ,
-            isAdmin ,
+        var isAdmin = Roles.AdminRoles
+            .Any(role => _currentUser.IsInRole(role));
+
+        var managementResult = await _readRepository.FirstOrDefaultAsync(
+            new ProblemManagementDetailSpec(
+                request.ProblemId ,
+                currentUserId ,
+                isAdmin) ,
             ct);
 
-        if ( detail is null )
+        if ( managementResult is null )
             throw new KeyNotFoundException("Problem not found or access denied.");
 
-        return detail;
+        return managementResult;
     }
 }

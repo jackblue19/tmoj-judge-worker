@@ -51,9 +51,6 @@ public class ProblemUploadsController : ControllerBase
         if ( !problem.IsActive || problem.StatusCode == "archived" )
             return Conflict("Problem is archived/inactive.");
 
-        if ( problem.StatusCode == "published" )
-            return Conflict("Cannot upload assets for a published problem.");
-
         return Ok(new ProblemUploadRequestResponseDto
         {
             UploadSessionId = Guid.NewGuid().ToString("N") ,
@@ -129,9 +126,6 @@ public class ProblemUploadsController : ControllerBase
         if ( !problem.IsActive || problem.StatusCode == "archived" )
             return Conflict("Problem is archived/inactive.");
 
-        if ( problem.StatusCode == "published" )
-            return Conflict("Cannot upload assets for a published problem.");
-
         var testset = await _db.Testsets.FirstOrDefaultAsync(x => x.Id == testsetId && x.ProblemId == id , ct);
         if ( testset is null ) return NotFound("Testset not found.");
 
@@ -167,9 +161,6 @@ public class ProblemUploadsController : ControllerBase
 
         if ( !problem.IsActive || problem.StatusCode == "archived" )
             return Conflict("Problem is archived/inactive.");
-
-        if ( problem.StatusCode == "published" )
-            return Conflict("Cannot upload assets for a published problem.");
 
         if ( string.IsNullOrWhiteSpace(problem.Slug) )
             return BadRequest("Problem.slug is required to store testcases in local folder.");

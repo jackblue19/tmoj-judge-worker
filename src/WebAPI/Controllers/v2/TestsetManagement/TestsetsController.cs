@@ -78,7 +78,7 @@ public class TestsetsController : ControllerBase
     //  Get all testcase
     //[NonAction]
     [ApiExplorerSettings(IgnoreApi = true)]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     [HttpGet("{problemId:guid}/{testsetId:guid}/all")]
     public async Task<IActionResult> GetAll(
         Guid problemId ,
@@ -103,7 +103,7 @@ public class TestsetsController : ControllerBase
     {
         var isInternal = InternalAuthHelper.IsInternalRequest(HttpContext);
         var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
-        var isAdmin = User.IsInRole("Admin");
+        var isAdmin = User.IsInRole("Admin") || User.IsInRole("admin");
 
         Console.WriteLine($"[DownloadZip] isInternal={isInternal}, hasApiKey={hasApiKey}, isAdmin={isAdmin}");
         Console.WriteLine($"[DownloadZip] Header X-API-KEY = {HttpContext.Request.Headers["X-API-KEY"].ToString()}");

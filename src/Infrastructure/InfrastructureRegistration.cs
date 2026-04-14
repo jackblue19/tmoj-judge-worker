@@ -52,7 +52,7 @@ public static class InfrastructureRegistration
         services.AddScoped<IContestStatusService, ContestStatusService>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
-
+        services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
 
         services.AddScoped<IUserProblemQueries , UserProblemQueries>();
         return services;

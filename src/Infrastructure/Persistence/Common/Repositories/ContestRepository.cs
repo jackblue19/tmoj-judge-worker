@@ -161,7 +161,7 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // GET TEAM MEMBER IDS
+    // TEAM MEMBERS
     // =============================================
     public async Task<List<Guid>> GetTeamMemberIdsAsync(Guid teamId)
     {
@@ -172,7 +172,7 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // 🔥 CHECK TIME CONFLICT (ICPC RULE - GLOBAL)
+    // TIME CONFLICT
     // =============================================
     public async Task<bool> HasTimeConflictAsync(Guid userId, DateTime start, DateTime end)
     {
@@ -185,19 +185,19 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // CHECK ACTIVE CONTEST BY TEAM ID
+    // ACTIVE CONTEST
     // =============================================
     public async Task<Contest?> GetActiveContestByTeamIdAsync(Guid teamId)
     {
         return await _db.ContestTeams
             .Where(ct => ct.TeamId == teamId)
             .Select(ct => ct.Contest)
-            .OrderByDescending(c => c.StartAt) // lấy contest gần nhất
+            .OrderByDescending(c => c.StartAt)
             .FirstOrDefaultAsync();
     }
 
     // =============================================
-    // CHECK CONTEST TEAM
+    // CONTEST TEAM
     // =============================================
     public async Task<ContestTeam?> GetContestTeamAsync(Guid contestId, Guid teamId)
     {
@@ -205,5 +205,44 @@ public class ContestRepository : IContestRepository
             .FirstOrDefaultAsync(x =>
                 x.ContestId == contestId &&
                 x.TeamId == teamId);
+    }
+
+    // =============================================
+    // GET MY CONTESTS (BASIC)
+    // =============================================
+    public async Task<List<Contest>> GetMyContestsAsync(Guid userId)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.Team.TeamMembers.Any(tm => tm.UserId == userId))
+            .Select(ct => ct.Contest)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    // =============================================
+    // 🔥 GET MY CONTESTS (DETAILED - FIXED)
+    // =============================================
+    public async Task<List<MyContestDto>> GetMyContestsDetailedAsync(Guid userId)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.Team.TeamMembers.Any(tm => tm.UserId == userId))
+            .Select(ct => new MyContestDto
+            {
+                ContestId = ct.Contest.Id,
+                Title = ct.Contest.Title,
+                StartAt = ct.Contest.StartAt,
+                EndAt = ct.Contest.EndAt,
+
+                TeamId = ct.Team.Id,
+                TeamName = ct.Team.TeamName,   // ✅ FIX
+                LeaderId = ct.Team.LeaderId,   // ✅ FIX
+
+                JoinedAt = ct.JoinAt,
+                Rank = ct.Rank,
+                Score = ct.Score,
+                Solved = ct.SolvedProblem
+            })
+            .OrderByDescending(x => x.StartAt)
+            .ToListAsync();
     }
 }

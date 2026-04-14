@@ -64,7 +64,60 @@ public class ContestsController : ControllerBase
             "Fetched contest detail successfully"
         ));
     }
+    // =============================================
+    // GET MY CONTESTS
+    // =============================================
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> GetMyContests(
+        [FromQuery] string? status,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetMyContestsQuery { Status = status }, ct);
 
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Fetched my contests successfully"
+        ));
+    }
+
+    // =============================================
+    // UPDATE CONTEST
+    // =============================================
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> UpdateContest(
+        Guid id,
+        [FromBody] UpdateContestCommand command,
+        CancellationToken ct)
+    {
+        try
+        {
+            Console.WriteLine("=== HIT UPDATE CONTEST ===");
+
+            command.ContestId = id;
+
+            var result = await _mediator.Send(command, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Contest updated successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("=== UPDATE ERROR ===");
+            Console.WriteLine(ex.ToString());
+
+            return BadRequest(new
+            {
+                message = ex.Message,
+                inner = ex.InnerException?.Message,
+                stack = ex.StackTrace
+            });
+        }
+    }
     // =============================================
     // JOIN CONTEST (ONLY WHEN RUNNING)
     // =============================================

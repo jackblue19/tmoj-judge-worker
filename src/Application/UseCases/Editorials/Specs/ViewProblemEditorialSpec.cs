@@ -3,9 +3,9 @@ using Domain.Entities;
 
 namespace Application.UseCases.Editorials.Specs
 {
-    public class ViewEditorialSpec : Specification<Editorial>
+    public class ViewProblemEditorialSpec : Specification<Editorial>
     {
-        public ViewEditorialSpec(
+        public ViewProblemEditorialSpec(
             Guid problemId,
             Guid? cursorId,
             DateTime? cursorCreatedAt,

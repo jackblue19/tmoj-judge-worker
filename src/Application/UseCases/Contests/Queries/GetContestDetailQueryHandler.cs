@@ -33,7 +33,6 @@ public class GetContestDetailQueryHandler
         if (contest == null)
             throw new Exception("CONTEST_NOT_FOUND");
 
-        // 🔥 dùng service (clean + reusable)
         var status = _statusService.GetStatus(contest.StartAt, contest.EndAt);
         var phase = _statusService.GetPhase(contest.StartAt, contest.EndAt);
         var canJoin = _statusService.CanJoin(contest.StartAt, contest.EndAt);
@@ -50,8 +49,8 @@ public class GetContestDetailQueryHandler
             Title = contest.Title ?? "",
             Description = contest.DescriptionMd ?? "",
             Slug = !string.IsNullOrWhiteSpace(contest.Slug)
-    ? contest.Slug
-    : $"{SlugHelper.Generate(contest.Title)}-{contest.Id.ToString()[..6]}",
+                ? contest.Slug
+                : $"{SlugHelper.Generate(contest.Title)}-{contest.Id.ToString()[..6]}",
 
             Visibility = contest.VisibilityCode ?? "private",
             ContestType = contest.ContestType ?? "icpc",
@@ -63,7 +62,7 @@ public class GetContestDetailQueryHandler
             IsPublished = contest.VisibilityCode == "public",
 
             CanJoin = canJoin,
-            IsRegistered = false, // 🔥 sau này bind user
+            IsRegistered = false, // 🔥 sẽ bind sau
 
             HasLeaderboard = true,
 
@@ -88,7 +87,7 @@ public class GetContestDetailQueryHandler
                 TimeLimitMs = cp.TimeLimitMs,
                 MemoryLimitKb = cp.MemoryLimitKb,
 
-                Status = "not_started" // 🔥 next step sẽ bind submission
+                Status = "not_started" // 🔥 bước sau bind submission
             }).ToList()
         };
     }

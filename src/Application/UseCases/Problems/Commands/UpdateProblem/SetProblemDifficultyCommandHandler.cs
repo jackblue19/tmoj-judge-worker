@@ -37,7 +37,7 @@ public sealed class SetProblemDifficultyCommandHandler : IRequestHandler<SetProb
             throw new ArgumentException("Difficulty must be one of: easy, medium, hard.");
 
         var currentUserId = _currentUser.UserId.Value;
-        var isAdmin = _currentUser.IsInRole("Admin");
+        var isAdmin = _currentUser.IsInRole("Admin") || _currentUser.IsInRole("admin");
 
         var entity = await _problemRepository.GetProblemForManagementAsync(
             request.ProblemId,

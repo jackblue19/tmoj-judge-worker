@@ -77,7 +77,8 @@ public class ProblemsController : ControllerBase
     }
 
     // GET PROBLEM STATEMENT
-    [Authorize]
+    [Authorize(Roles = "admin,manager,teacher")]
+    //[Authorize]
     [HttpGet("{problemId:guid}/statement")]
     public async Task<IActionResult> GetStatement(Guid problemId , CancellationToken ct)
     {
@@ -100,7 +101,8 @@ public class ProblemsController : ControllerBase
     }
 
     // UPDATE PROBLEM
-    [Authorize]
+    [Authorize(Roles = "admin,manager,teacher")]
+    //[Authorize]
     [HttpPut("{problemId:guid}/content")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
@@ -134,7 +136,8 @@ public class ProblemsController : ControllerBase
     }
 
     // CREATE TAG
-    [Authorize]
+    [Authorize(Roles = "admin,manager,teacher")]
+    //[Authorize]
     [HttpPost("tags")]
     public async Task<ActionResult<ApiResponse<ProblemTagDto>>> CreateTag(
         [FromBody] CreateTagRequestDto request ,
@@ -175,7 +178,8 @@ public class ProblemsController : ControllerBase
     }
 
     // ATTACH TAGS TO PROBLEM
-    [Authorize]
+    [Authorize(Roles = "admin,manager,teacher")]
+    //[Authorize]
     [HttpPost("{problemId:guid}/tags/attach")]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> AttachTags(
         Guid problemId ,
@@ -194,7 +198,8 @@ public class ProblemsController : ControllerBase
     }
 
     // REPLACE PROBLEM TAGS
-    [Authorize]
+    [Authorize(Roles = "admin,manager,teacher")]
+    //[Authorize]
     [HttpPut("{problemId:guid}/tags")]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> ReplaceTags(
         Guid problemId ,
@@ -236,7 +241,8 @@ public class ProblemsController : ControllerBase
     }
 
     // UPDATE PROBLEM DIFFICULTY
-    [Authorize]
+    [Authorize(Roles = "admin,manager,teacher")]
+    //[Authorize]
     [HttpPut("{problemId:guid}/difficulty")]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> SetDifficulty(
         Guid problemId ,

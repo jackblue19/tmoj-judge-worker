@@ -61,8 +61,8 @@ public sealed class UploadTestcasesZipCommandHandler
         if ( !problem.IsActive || string.Equals(problem.StatusCode , "archived" , StringComparison.OrdinalIgnoreCase) )
             throw new InvalidOperationException("Problem is archived/inactive.");
 
-        if ( string.Equals(problem.StatusCode , "published" , StringComparison.OrdinalIgnoreCase) )
-            throw new InvalidOperationException("Cannot upload assets for a published problem.");
+        //if ( string.Equals(problem.StatusCode , "published" , StringComparison.OrdinalIgnoreCase) )
+        //    throw new InvalidOperationException("Cannot upload assets for a published problem.");
 
         if ( string.IsNullOrWhiteSpace(problem.Slug) )
             throw new InvalidOperationException("Problem.slug is required.");

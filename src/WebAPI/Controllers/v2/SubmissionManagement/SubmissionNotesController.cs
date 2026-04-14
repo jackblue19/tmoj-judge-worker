@@ -71,7 +71,7 @@ public sealed class SubmissionNotesController : ControllerBase
 
     private bool CanReviewNotes()
     {
-        return User.IsInRole("admin")
+        return User.IsInRole("admin") || User.IsInRole("Admin")
             || User.IsInRole("manager")
             || User.IsInRole("teacher");
     }

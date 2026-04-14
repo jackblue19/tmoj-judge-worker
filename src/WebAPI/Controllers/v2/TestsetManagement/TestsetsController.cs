@@ -46,7 +46,8 @@ public class TestsetsController : ControllerBase
 
     //  Preview 3 testcase -> chuyển qua dùng /samples
     //[NonAction]
-    [ApiExplorerSettings(IgnoreApi = true)]
+    //[ApiExplorerSettings(IgnoreApi = true)]
+    [AllowAnonymous]
     [HttpGet("{problemId:guid}/{testsetId:guid}/preview")]
     public async Task<IActionResult> GetPreview(
         Guid problemId ,
@@ -76,9 +77,9 @@ public class TestsetsController : ControllerBase
     }
 
     //  Get all testcase
-    //[NonAction]
-    [ApiExplorerSettings(IgnoreApi = true)]
-    [Authorize(Roles = "admin")]
+    [NonAction]
+    //[ApiExplorerSettings(IgnoreApi = true)]
+    [Authorize(Roles = "admin,teacher,manager")]
     [HttpGet("{problemId:guid}/{testsetId:guid}/all")]
     public async Task<IActionResult> GetAll(
         Guid problemId ,
@@ -103,11 +104,12 @@ public class TestsetsController : ControllerBase
     {
         var isInternal = InternalAuthHelper.IsInternalRequest(HttpContext);
         var hasApiKey = InternalAuthHelper.HasValidApiKey(HttpContext , _configuration);
-        var isAdmin = User.IsInRole("Admin") || User.IsInRole("admin");
+        var isAdmin = User.IsInRole("Admin") || User.IsInRole("admin")
+                   || User.IsInRole("teacher") || User.IsInRole("manager");
 
-        Console.WriteLine($"[DownloadZip] isInternal={isInternal}, hasApiKey={hasApiKey}, isAdmin={isAdmin}");
-        Console.WriteLine($"[DownloadZip] Header X-API-KEY = {HttpContext.Request.Headers["X-API-KEY"].ToString()}");
-        Console.WriteLine($"[DownloadZip] Config JudgeApiKey = {_configuration["InternalAuth:JudgeApiKey"]}");
+        //Console.WriteLine($"[DownloadZip] isInternal={isInternal}, hasApiKey={hasApiKey}, isAdmin={isAdmin}");
+        //Console.WriteLine($"[DownloadZip] Header X-API-KEY = {HttpContext.Request.Headers["X-API-KEY"].ToString()}");
+        //Console.WriteLine($"[DownloadZip] Config JudgeApiKey = {_configuration["InternalAuth:JudgeApiKey"]}");
 
         if ( !isInternal && !hasApiKey && !isAdmin )
             return Unauthorized("Invalid access");

@@ -17,12 +17,10 @@ public sealed class ProblemUploadRequestResponseDto
 
 public sealed class ProblemTestsetCreateDto
 {
-    [Required]
-    public string Type { get; set; } = null!; // testsets.type NOT NULL
+    //[Required]
+    //public string Type { get; set; } = null!; // testsets.type NOT NULL
 
     public string? Note { get; set; }
-    public Guid? CreatedBy { get; set; }
-    public DateTime? ExpireAt { get; set; }
 }
 
 public sealed class ProblemTestsetResponseDto

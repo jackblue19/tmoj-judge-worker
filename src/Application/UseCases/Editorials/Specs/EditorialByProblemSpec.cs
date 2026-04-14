@@ -1,38 +1,13 @@
-﻿
-using Ardalis.Specification;
+﻿using Ardalis.Specification;
 using Domain.Entities;
 
-namespace Application.UseCases.Editorials.Specs;
-
-public class EditorialByProblemSpec : Specification<Editorial>
+namespace Application.UseCases.ProblemEditorials.Specs
 {
-    public EditorialByProblemSpec(Guid problemId)
+    public class ProblemEditorialByIdSpec : Specification<ProblemEditorial>
     {
-        Query.Where(e => e.ProblemId == problemId);
+        public ProblemEditorialByIdSpec(Guid id)
+        {
+            Query.Where(x => x.Id == id);
+        }
     }
 }
-
-public class EditorialByStorageSpec : Specification<Editorial>
-{
-    public EditorialByStorageSpec(Guid storageId)
-    {
-        Query.Where(e => e.StorageId == storageId);
-    }
-}
-
-public class ProblemByIdSpec : Specification<Problem>
-{
-    public ProblemByIdSpec(Guid id)
-    {
-        Query.Where(p => p.Id == id);
-    }
-}
-
-public class StorageByIdSpec : Specification<StorageFile>
-{
-    public StorageByIdSpec(Guid id)
-    {
-        Query.Where(s => s.StorageId == id);
-    }
-}
-

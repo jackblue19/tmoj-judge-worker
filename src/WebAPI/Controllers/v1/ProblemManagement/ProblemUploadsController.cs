@@ -8,6 +8,9 @@ using WebAPI.Extensions;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using Application.UseCases.Problems.Constants;
+using Application.Common.Interfaces;
 
 namespace WebAPI.Controllers.v1.ProblemManagement;
 
@@ -19,12 +22,15 @@ public class ProblemUploadsController : ControllerBase
     private readonly TmojDbContext _db;
     private readonly IWebHostEnvironment _env;
     private readonly LocalStorageOptions _storage;
+    private readonly ICurrentUserService _currentUser;
 
-    public ProblemUploadsController(TmojDbContext db , IWebHostEnvironment env , IOptions<LocalStorageOptions> storage)
+    public ProblemUploadsController(TmojDbContext db , IWebHostEnvironment env ,
+                                    IOptions<LocalStorageOptions> storage , ICurrentUserService currentUser)
     {
         _db = db;
         _env = env;
         _storage = storage.Value;
+        _currentUser = currentUser;
     }
 
     [ApiExplorerSettings(IgnoreApi = true)]
@@ -34,20 +40,16 @@ public class ProblemUploadsController : ControllerBase
         [FromBody] ProblemUploadRequestDto? dto ,
         CancellationToken ct)
     {
-        var problem = await _db.Problems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id , ct);
-        if ( problem is null ) return NotFound();
-
-        if ( !problem.IsActive || problem.StatusCode == "archived" )
-            return Conflict("Problem is archived/inactive.");
-
-        if ( problem.StatusCode == "published" )
-            return Conflict("Cannot upload assets for a published problem.");
-
         if ( dto?.RequestedBy is Guid userId )
         {
             var ok = await _db.Users.AsNoTracking().AnyAsync(x => x.UserId == userId , ct);
             if ( !ok ) return BadRequest("Invalid requestedBy (user does not exist).");
         }
+        var problem = await _db.Problems.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id , ct);
+        if ( problem is null ) return NotFound();
+
+        if ( !problem.IsActive || problem.StatusCode == "archived" )
+            return Conflict("Problem is archived/inactive.");
 
         return Ok(new ProblemUploadRequestResponseDto
         {
@@ -56,6 +58,7 @@ public class ProblemUploadsController : ControllerBase
         });
     }
 
+    [Authorize(Roles = "admin,teacher,manager")]
     [HttpPost("{id:guid}/testsets")]
     public async Task<ActionResult<ProblemTestsetResponseDto>> CreateTestset(
         Guid id ,
@@ -68,26 +71,20 @@ public class ProblemUploadsController : ControllerBase
         if ( !problem.IsActive || problem.StatusCode == "archived" )
             return Conflict("Problem is archived/inactive.");
 
-        if ( problem.StatusCode == "published" )
-            return Conflict("Cannot modify testsets for a published problem.");
-
-        if ( dto.CreatedBy is Guid userId )
-        {
-            var ok = await _db.Users.AsNoTracking().AnyAsync(x => x.UserId == userId , ct);
-            if ( !ok ) return BadRequest("Invalid createdBy (user does not exist).");
-        }
+        if ( !(_currentUser.IsInRole("admin") || _currentUser.IsInRole("teacher") || _currentUser.IsInRole("manager")) )
+            return Unauthorized("You do not have any permisisons");
 
         var testset = new Testset
         {
             Id = Guid.NewGuid() ,
             ProblemId = id ,
-            Type = dto.Type.Trim() ,
+            Type = "primary" ,
             IsActive = true ,
             Note = dto.Note ,
             CreatedAt = DateTime.UtcNow ,
-            CreatedBy = dto.CreatedBy ,
+            CreatedBy = _currentUser.UserId ,
             StorageBlobId = null ,
-            ExpireAt = dto.ExpireAt
+            ExpireAt = null
         };
 
         _db.Testsets.Add(testset);
@@ -129,9 +126,6 @@ public class ProblemUploadsController : ControllerBase
         if ( !problem.IsActive || problem.StatusCode == "archived" )
             return Conflict("Problem is archived/inactive.");
 
-        if ( problem.StatusCode == "published" )
-            return Conflict("Cannot upload assets for a published problem.");
-
         var testset = await _db.Testsets.FirstOrDefaultAsync(x => x.Id == testsetId && x.ProblemId == id , ct);
         if ( testset is null ) return NotFound("Testset not found.");
 
@@ -167,9 +161,6 @@ public class ProblemUploadsController : ControllerBase
 
         if ( !problem.IsActive || problem.StatusCode == "archived" )
             return Conflict("Problem is archived/inactive.");
-
-        if ( problem.StatusCode == "published" )
-            return Conflict("Cannot upload assets for a published problem.");
 
         if ( string.IsNullOrWhiteSpace(problem.Slug) )
             return BadRequest("Problem.slug is required to store testcases in local folder.");

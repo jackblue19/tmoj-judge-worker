@@ -2,11 +2,6 @@
 using Application.UseCases.Problems.Specifications;
 using Application.UseCases.Problems;
 using Domain.Abstractions;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
@@ -16,17 +11,13 @@ namespace Infrastructure.Persistence.Repositories.Problems;
 
 public sealed class ProblemRepository : EfRepository<Problem , Guid>, IProblemRepository
 {
-    //private readonly TmojDbContext _db;   
-
     public ProblemRepository(TmojDbContext db) : base(db)
     {
-        //_db = db;
     }
 
     public async Task<bool> SlugExistsAsync(string slug , Guid? excludingProblemId , CancellationToken ct = default)
     {
         var spec = new ProblemBySlugSpec(slug , excludingProblemId);
-        //return await _problemReadRepository.AnyAsync(spec , ct);
         return await AnyAsync(spec , ct);
     }
 
@@ -36,9 +27,9 @@ public sealed class ProblemRepository : EfRepository<Problem , Guid>, IProblemRe
         bool isAdmin ,
         CancellationToken ct = default)
     {
-        var query = _set            //  protected -> _set = _db.Set<TEntity>(); => _db.Set<Problems> 
-                    .Include(x => x.Tags)
-                    .Where(x => x.Id == problemId);
+        var query = _set
+            .Include(x => x.Tags)
+            .Where(x => x.Id == problemId);
 
         if ( !isAdmin )
         {
@@ -65,5 +56,38 @@ public sealed class ProblemRepository : EfRepository<Problem , Guid>, IProblemRe
 
         var spec = new ProblemDetailForManagementSpec(problemId);
         return await FirstOrDefaultAsync(spec , ct);
+    }
+
+    public async Task<Problem?> GetProblemTrackedWithTagsAsync(Guid problemId , CancellationToken ct = default)
+    {
+        return await _db.Problems
+            .Include(x => x.Tags)
+            .FirstOrDefaultAsync(x => x.Id == problemId , ct);
+    }
+
+    public async Task<Problem?> GetProblemTrackedWithTagsAndTestsetsAsync(Guid problemId , CancellationToken ct = default)
+    {
+        return await _db.Problems
+            .Include(x => x.Tags)
+            .Include(x => x.Testsets)
+            .FirstOrDefaultAsync(x => x.Id == problemId , ct);
+    }
+
+    public async Task<IReadOnlyList<Tag>> GetTagsTrackedByIdsAsync(
+    IReadOnlyCollection<Guid> tagIds ,
+    CancellationToken ct = default)
+    {
+        if ( tagIds.Count == 0 )
+            return [];
+
+        var normalized = tagIds
+            .Where(x => x != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        return await _db.Tags
+            .Where(x => normalized.Contains(x.Id) && x.IsActive)
+            .OrderBy(x => x.Name)
+            .ToListAsync(ct);
     }
 }

@@ -8,11 +8,14 @@ public sealed record UpdateProblemContentCommand(
     Guid ProblemId ,
     string Title ,
     string Slug ,
-    string? DescriptionMd ,
+    string? Difficulty ,
+    string? TypeCode ,
+    string? VisibilityCode ,
+    string? ScoringCode ,
+    string? StatusCode ,
     int? TimeLimitMs ,
     int? MemoryLimitKb ,
-    string? TypeCode ,
-    string? ScoringCode ,
-    string? VisibilityCode ,
-    IFormFile? StatementFile
+    string? DescriptionMd ,
+    IFormFile? StatementFile ,
+    IReadOnlyCollection<Guid>? TagIds
 ) : IRequest<ProblemDetailDto>;

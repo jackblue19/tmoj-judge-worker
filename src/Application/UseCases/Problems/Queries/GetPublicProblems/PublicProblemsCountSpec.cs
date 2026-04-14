@@ -9,14 +9,12 @@ public sealed class PublicProblemsCountSpec : Specification<Problem>
     {
         Query.Where(x =>
             x.IsActive &&
-            (x.StatusCode == "published" ||
-            x.StatusCode == "draft") &&
+            x.StatusCode == "published" &&
             x.VisibilityCode == "public");
 
         if ( !string.IsNullOrWhiteSpace(search) )
         {
             var keyword = search.Trim();
-
             Query.Where(x =>
                 x.Title.Contains(keyword) ||
                 (x.Slug != null && x.Slug.Contains(keyword)));

@@ -61,8 +61,8 @@ public sealed class UploadTestcasesZipCommandHandler
         if ( !problem.IsActive || string.Equals(problem.StatusCode , "archived" , StringComparison.OrdinalIgnoreCase) )
             throw new InvalidOperationException("Problem is archived/inactive.");
 
-        if ( string.Equals(problem.StatusCode , "published" , StringComparison.OrdinalIgnoreCase) )
-            throw new InvalidOperationException("Cannot upload assets for a published problem.");
+        //if ( string.Equals(problem.StatusCode , "published" , StringComparison.OrdinalIgnoreCase) )
+        //    throw new InvalidOperationException("Cannot upload assets for a published problem.");
 
         if ( string.IsNullOrWhiteSpace(problem.Slug) )
             throw new InvalidOperationException("Problem.slug is required.");
@@ -247,13 +247,17 @@ public sealed class UploadTestcasesZipCommandHandler
 
     private void EnsureCanManageProblem(Problem problem)
     {
-        var isAdmin = _currentUser.IsInRole("Admin");
+        var isAdmin = _currentUser.IsInRole("Admin") ||
+                      _currentUser.IsInRole("admin") ||
+                      _currentUser.IsInRole("teacher") ||
+                      _currentUser.IsInRole("manager");
         if ( isAdmin ) return;
 
         var currentUserId = _currentUser.UserId!.Value;
 
         if ( problem.CreatedBy != currentUserId )
-            throw new KeyNotFoundException("Problem not found or access denied.");
+            throw new UnauthorizedAccessException("You do not have permission for this action!");
+        //throw new KeyNotFoundException("Problem not found or access denied.");
     }
 
     private static string ResolveContentType(string extension)

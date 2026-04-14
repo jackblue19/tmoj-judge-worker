@@ -2,7 +2,7 @@
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
-using Application.Common.Helpers;
+
 namespace Application.UseCases.Contests.Commands;
 
 public class JoinContestCommandHandler
@@ -10,112 +10,121 @@ public class JoinContestCommandHandler
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
     private readonly IReadRepository<Team, Guid> _teamRepo;
+    private readonly IUserRepository _userRepo;
     private readonly IWriteRepository<ContestTeam, Guid> _contestTeamRepo;
-    private readonly IWriteRepository<Team, Guid> _teamWriteRepo;
     private readonly IContestRepository _contestCustomRepo;
+    private readonly ITeamRepository _teamCustomRepo;
+    private readonly IContestStatusService _statusService;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
 
     public JoinContestCommandHandler(
         IReadRepository<Contest, Guid> contestRepo,
         IReadRepository<Team, Guid> teamRepo,
+        IUserRepository userRepo,
         IWriteRepository<ContestTeam, Guid> contestTeamRepo,
-        IWriteRepository<Team, Guid> teamWriteRepo,
         IContestRepository contestCustomRepo,
+        ITeamRepository teamCustomRepo,
+        IContestStatusService statusService,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
         _contestRepo = contestRepo;
         _teamRepo = teamRepo;
+        _userRepo = userRepo;
         _contestTeamRepo = contestTeamRepo;
-        _teamWriteRepo = teamWriteRepo;
         _contestCustomRepo = contestCustomRepo;
+        _teamCustomRepo = teamCustomRepo;
+        _statusService = statusService;
         _currentUser = currentUser;
         _uow = uow;
     }
 
     public async Task<Guid> Handle(JoinContestCommand request, CancellationToken ct)
     {
-        var userId = _currentUser.UserId;
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException();
 
-        if (!userId.HasValue)
-            throw new UnauthorizedAccessException("User not authenticated");
+        // =========================
+        // 🔥 CHECK USER LOCK
+        // =========================
+        var isActive = await _userRepo.IsUserActiveAsync(userId);
+        if (!isActive)
+            throw new Exception("Account is locked");
 
-        // ===============================
-        // 1. GET CONTEST
-        // ===============================
-        var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
+        // =========================
+        // CONTEST
+        // =========================
+        var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct)
+            ?? throw new Exception("Contest not found");
 
-        if (contest == null)
-            throw new Exception("Contest not found");
+        if (contest.EndAt < DateTime.UtcNow)
+            throw new Exception("Contest ended");
 
-        // 🔥 ADD THIS (QUAN TRỌNG)
-        if (contest.VisibilityCode != "public")
-            throw new Exception("Contest is not available");
+        // 🔥 NEW: CHECK JOIN TIME (PHẢI ĐANG TRONG CONTEST)
+        if (!_statusService.CanJoin(contest.StartAt, contest.EndAt))
+            throw new Exception("Cannot join outside contest time");
 
-        var now = DateTime.UtcNow;
+        // 🔥 CHECK ALLOW TEAM
+        if (!contest.AllowTeams)
+            throw new Exception("This contest does not allow teams");
 
-        if (contest.EndAt < now)
-            throw new Exception("Contest has ended");
+        // =========================
+        // TEAM
+        // =========================
+        var team = await _teamRepo.GetByIdAsync(request.TeamId, ct)
+            ?? throw new Exception("Team not found");
 
-        // ===============================
-        // 2. DETERMINE TEAM
-        // ===============================
-        Guid teamId;
+        var isMember = await _teamCustomRepo
+            .IsUserInTeamAsync(userId, team.Id);
 
-        if (contest.AllowTeams)
+        if (!isMember)
+            throw new Exception("Not in team");
+
+        var isValid = await _teamCustomRepo
+            .IsTeamValidForContestAsync(team.Id);
+
+        if (!isValid)
+            throw new Exception("Team must have 3-5 members");
+
+        // =========================
+        // MEMBER IDS
+        // =========================
+        var memberIds = await _contestCustomRepo
+            .GetTeamMemberIdsAsync(team.Id);
+
+        // 🔥 CHECK LOCK BATCH
+        var lockedUsers = await _userRepo.GetLockedUsersAsync(memberIds);
+        if (lockedUsers.Any())
+            throw new Exception("Some members are locked");
+
+        // 🔥 TIME CONFLICT
+        foreach (var m in memberIds)
         {
-            if (!request.TeamId.HasValue)
-                throw new Exception("TeamId is required");
+            var conflict = await _contestCustomRepo
+                .HasTimeConflictAsync(m, contest.StartAt, contest.EndAt);
 
-            var team = await _teamRepo.GetByIdAsync(request.TeamId.Value, ct);
-
-            if (team == null)
-                throw new Exception("Team not found");
-
-            var isMember = await _contestCustomRepo
-                .IsUserInTeamAsync(userId.Value, team.Id);
-
-            if (!isMember)
-                throw new Exception("You are not a member of this team");
-
-            teamId = team.Id;
-        }
-        else
-        {
-            var team = new Team
-            {
-                Id = Guid.NewGuid(),
-                LeaderId = userId.Value,
-                TeamName = $"User-{userId}",
-                TeamSize = 1,
-                IsPersonal = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            await _teamWriteRepo.AddAsync(team, ct);
-
-            teamId = team.Id;
+            if (conflict)
+                throw new Exception("Member has time conflict");
         }
 
-        // ===============================
-        // 3. CHECK ALREADY JOINED
-        // ===============================
-        var alreadyJoined = await _contestCustomRepo
-            .IsTeamJoinedAsync(request.ContestId, teamId);
+        // =========================
+        // ALREADY JOINED
+        // =========================
+        var joined = await _contestCustomRepo
+            .IsTeamJoinedAsync(request.ContestId, team.Id);
 
-        if (alreadyJoined)
-            throw new Exception("Already joined this contest");
+        if (joined)
+            throw new Exception("Already joined");
 
-        // ===============================
-        // 4. INSERT
-        // ===============================
+        // =========================
+        // INSERT
+        // =========================
         var entry = new ContestTeam
         {
             Id = Guid.NewGuid(),
             ContestId = request.ContestId,
-            TeamId = teamId,
+            TeamId = team.Id,
             JoinAt = DateTime.UtcNow,
             Score = 0,
             SolvedProblem = 0,

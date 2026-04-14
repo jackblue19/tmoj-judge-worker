@@ -164,7 +164,7 @@ public sealed class DownloadTestsetZipQueryHandler
 
     private void EnsureCanManageProblem(Problem problem)
     {
-        var isAdmin = _currentUser.IsInRole("Admin");
+        var isAdmin = _currentUser.IsInRole("Admin") || _currentUser.IsInRole("admin");
         if ( isAdmin ) return;
 
         var currentUserId = _currentUser.UserId!.Value;

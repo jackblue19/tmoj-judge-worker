@@ -1,58 +1,76 @@
+using Application.Common.Interfaces;
 using Application.UseCases.Problems.Dtos;
+using Application.UseCases.Problems.Mappings;
+using Application.UseCases.Problems.Specifications;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 
 namespace Application.UseCases.Problems.Commands.CreateTag;
 
-public sealed class CreateTagCommandHandler : IRequestHandler<CreateTagCommand, ProblemTagDto>
+public sealed class CreateTagCommandHandler : IRequestHandler<CreateTagCommand , ProblemTagDto>
 {
-    private readonly ITagRepository _tagRepository;
-    private readonly IWriteRepository<Tag, Guid> _tagWriteRepository;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IReadRepository<Tag , Guid> _tagReadRepository;
+    private readonly IWriteRepository<Tag , Guid> _tagWriteRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public CreateTagCommandHandler(
-        ITagRepository tagRepository,
-        IWriteRepository<Tag, Guid> tagWriteRepository,
+        ICurrentUserService currentUser ,
+        IReadRepository<Tag , Guid> tagReadRepository ,
+        IWriteRepository<Tag , Guid> tagWriteRepository ,
         IUnitOfWork unitOfWork)
     {
-        _tagRepository = tagRepository;
+        _currentUser = currentUser;
+        _tagReadRepository = tagReadRepository;
         _tagWriteRepository = tagWriteRepository;
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<ProblemTagDto> Handle(CreateTagCommand request, CancellationToken ct)
+    private static string ToSlug(string value)
     {
+        return value.Trim().ToLowerInvariant().Replace(' ' , '-');
+    }
+
+    public async Task<ProblemTagDto> Handle(CreateTagCommand request , CancellationToken ct)
+    {
+        if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
+            throw new UnauthorizedAccessException("User is not authenticated.");
+
         var name = request.Name?.Trim();
-        if (string.IsNullOrWhiteSpace(name))
+        if ( string.IsNullOrWhiteSpace(name) )
             throw new ArgumentException("Tag name is required.");
 
         var slug = string.IsNullOrWhiteSpace(request.Slug)
-            ? name.Trim().ToLower().Replace(' ', '-')
-            : request.Slug.Trim().ToLower();
+            ? ToSlug(name)
+            : ToSlug(request.Slug);
 
-        if (await _tagRepository.ExistsByNameAsync(name, ct))
-            throw new InvalidOperationException($"Tag name '{name}' already exists.");
+        var existed = await _tagReadRepository.FirstOrDefaultAsync(
+            new TagByNameOrSlugSpec(name , slug) , ct);
 
-        if (!string.IsNullOrWhiteSpace(slug) && await _tagRepository.ExistsBySlugAsync(slug, ct))
-            throw new InvalidOperationException($"Tag slug '{slug}' already exists.");
+        if ( existed is not null )
+            throw new InvalidOperationException("Tag name or slug already exists.");
+
+        var now = DateTime.UtcNow;
 
         var entity = new Tag
         {
-            Id = Guid.NewGuid(),
-            Name = name,
-            Slug = slug
+            Id = Guid.NewGuid() ,
+            Name = name ,
+            Slug = slug ,
+            Description = request.Description?.Trim() ,
+            Color = request.Color?.Trim() ,
+            Icon = request.Icon?.Trim() ,
+            IsActive = true ,
+            CreatedAt = now ,
+            CreatedBy = _currentUser.UserId.Value ,
+            UpdatedAt = now ,
+            UpdatedBy = _currentUser.UserId.Value
         };
 
-        await _tagWriteRepository.AddAsync(entity, ct);
+        await _tagWriteRepository.AddAsync(entity , ct);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        return new ProblemTagDto
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            Slug = entity.Slug,
-            IsActive = entity.IsActive
-        };
+        return entity.ToDto();
     }
 }

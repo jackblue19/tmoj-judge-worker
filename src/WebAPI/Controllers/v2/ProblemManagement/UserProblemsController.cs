@@ -13,7 +13,7 @@ namespace WebAPI.Controllers.v2.ProblemManagement;
 [Route("api/v{version:apiVersion}/users")]
 [Authorize]
 public sealed class UserProblemsController : ControllerBase
-{   
+{
     private readonly IMediator _mediator;
 
     public UserProblemsController(IMediator mediator)
@@ -37,6 +37,7 @@ public sealed class UserProblemsController : ControllerBase
 
         var isElevated =
             User.IsInRole("admin") ||
+            User.IsInRole("Admin") ||
             User.IsInRole("manager") ||
             User.IsInRole("teacher");
 

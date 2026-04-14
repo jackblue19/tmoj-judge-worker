@@ -50,9 +50,10 @@ public sealed class GetProblemDetailQueryHandler : IRequestHandler<GetProblemDet
             throw new UnauthorizedAccessException("User is not authenticated.");
 
         var currentUserId = _currentUser.UserId.Value;
-        var isAdmin =
-            _currentUser.IsInRole("Admin") ||
-            _currentUser.IsInRole("admin");
+        var isAdmin = _currentUser.IsInRole("Admin") ||
+                      _currentUser.IsInRole("admin") ||
+                      _currentUser.IsInRole("teacher") ||
+                      _currentUser.IsInRole("manager");
 
         var detail = await _problemRepository.GetProblemDetailForManagementAsync(
             request.ProblemId ,

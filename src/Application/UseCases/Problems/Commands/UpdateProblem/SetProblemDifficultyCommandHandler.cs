@@ -7,15 +7,15 @@ using MediatR;
 namespace Application.UseCases.Problems.Commands.UpdateProblem;
 
 
-public sealed class SetProblemDifficultyCommandHandler : IRequestHandler<SetProblemDifficultyCommand, ProblemDetailDto>
+public sealed class SetProblemDifficultyCommandHandler : IRequestHandler<SetProblemDifficultyCommand , ProblemDetailDto>
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IProblemRepository _problemRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     public SetProblemDifficultyCommandHandler(
-        ICurrentUserService currentUser,
-        IProblemRepository problemRepository,
+        ICurrentUserService currentUser ,
+        IProblemRepository problemRepository ,
         IUnitOfWork unitOfWork)
     {
         _currentUser = currentUser;
@@ -23,29 +23,32 @@ public sealed class SetProblemDifficultyCommandHandler : IRequestHandler<SetProb
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<ProblemDetailDto> Handle(SetProblemDifficultyCommand request, CancellationToken ct)
+    public async Task<ProblemDetailDto> Handle(SetProblemDifficultyCommand request , CancellationToken ct)
     {
-        if (!_currentUser.IsAuthenticated || _currentUser.UserId is null)
+        if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
             throw new UnauthorizedAccessException("User is not authenticated.");
 
         var difficulty = request.Difficulty?.Trim().ToLowerInvariant();
 
-        if (string.IsNullOrWhiteSpace(difficulty))
+        if ( string.IsNullOrWhiteSpace(difficulty) )
             throw new ArgumentException("Difficulty is required.");
 
-        if (!ProblemDifficultyCodes.Allowed.Contains(difficulty))
+        if ( !ProblemDifficultyCodes.Allowed.Contains(difficulty) )
             throw new ArgumentException("Difficulty must be one of: easy, medium, hard.");
 
         var currentUserId = _currentUser.UserId.Value;
-        var isAdmin = _currentUser.IsInRole("Admin") || _currentUser.IsInRole("admin");
+        var isAdmin = _currentUser.IsInRole("Admin") ||
+                      _currentUser.IsInRole("admin") ||
+                      _currentUser.IsInRole("teacher") ||
+                      _currentUser.IsInRole("manager");
 
         var entity = await _problemRepository.GetProblemForManagementAsync(
-            request.ProblemId,
-            currentUserId,
-            isAdmin,
+            request.ProblemId ,
+            currentUserId ,
+            isAdmin ,
             ct);
 
-        if (entity is null)
+        if ( entity is null )
             throw new KeyNotFoundException("Problem not found or access denied.");
 
         entity.Difficulty = difficulty;
@@ -55,9 +58,9 @@ public sealed class SetProblemDifficultyCommandHandler : IRequestHandler<SetProb
         await _unitOfWork.SaveChangesAsync(ct);
 
         var detail = await _problemRepository.GetProblemDetailForManagementAsync(
-            entity.Id,
-            currentUserId,
-            isAdmin,
+            entity.Id ,
+            currentUserId ,
+            isAdmin ,
             ct);
 
         return detail ?? throw new KeyNotFoundException("Problem detail not found after update.");

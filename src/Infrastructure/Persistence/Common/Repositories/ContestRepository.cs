@@ -1,6 +1,7 @@
 ﻿using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.UseCases.Contests.Dtos;
+using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -89,7 +90,7 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // GET DETAIL (FIX CHUẨN DTO MỚI)
+    // GET DETAIL
     // =============================================
     public async Task<ContestDetailDto?> GetContestDetailAsync(Guid contestId)
     {
@@ -115,24 +116,17 @@ public class ContestRepository : IContestRepository
             Title = contest.Title,
             Description = contest.DescriptionMd ?? "",
             Slug = contest.Slug ?? "",
-
-            // ✅ FIX CHÍNH
             Visibility = contest.VisibilityCode,
-
             ContestType = contest.ContestType ?? "icpc",
             AllowTeams = contest.AllowTeams,
-
             Status =
                 contest.StartAt > now ? "upcoming" :
                 contest.EndAt < now ? "ended" :
                 "running",
-
             IsPublished = contest.VisibilityCode == "public",
-
             StartAt = contest.StartAt,
             EndAt = contest.EndAt,
             DurationMinutes = (int)(contest.EndAt - contest.StartAt).TotalMinutes,
-
             ProblemCount = problems.Count,
             TotalPoints = problems.Sum(p => p.Points ?? 0),
 
@@ -164,5 +158,91 @@ public class ContestRepository : IContestRepository
     {
         return await _db.TeamMembers
             .AnyAsync(x => x.TeamId == teamId && x.UserId == userId);
+    }
+
+    // =============================================
+    // TEAM MEMBERS
+    // =============================================
+    public async Task<List<Guid>> GetTeamMemberIdsAsync(Guid teamId)
+    {
+        return await _db.TeamMembers
+            .Where(x => x.TeamId == teamId)
+            .Select(x => x.UserId)
+            .ToListAsync();
+    }
+
+    // =============================================
+    // TIME CONFLICT
+    // =============================================
+    public async Task<bool> HasTimeConflictAsync(Guid userId, DateTime start, DateTime end)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.Team.TeamMembers.Any(m => m.UserId == userId))
+            .AnyAsync(ct =>
+                ct.Contest.StartAt < end &&
+                ct.Contest.EndAt > start
+            );
+    }
+
+    // =============================================
+    // ACTIVE CONTEST
+    // =============================================
+    public async Task<Contest?> GetActiveContestByTeamIdAsync(Guid teamId)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.TeamId == teamId)
+            .Select(ct => ct.Contest)
+            .OrderByDescending(c => c.StartAt)
+            .FirstOrDefaultAsync();
+    }
+
+    // =============================================
+    // CONTEST TEAM
+    // =============================================
+    public async Task<ContestTeam?> GetContestTeamAsync(Guid contestId, Guid teamId)
+    {
+        return await _db.ContestTeams
+            .FirstOrDefaultAsync(x =>
+                x.ContestId == contestId &&
+                x.TeamId == teamId);
+    }
+
+    // =============================================
+    // GET MY CONTESTS (BASIC)
+    // =============================================
+    public async Task<List<Contest>> GetMyContestsAsync(Guid userId)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.Team.TeamMembers.Any(tm => tm.UserId == userId))
+            .Select(ct => ct.Contest)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    // =============================================
+    // 🔥 GET MY CONTESTS (DETAILED - FIXED)
+    // =============================================
+    public async Task<List<MyContestDto>> GetMyContestsDetailedAsync(Guid userId)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.Team.TeamMembers.Any(tm => tm.UserId == userId))
+            .Select(ct => new MyContestDto
+            {
+                ContestId = ct.Contest.Id,
+                Title = ct.Contest.Title,
+                StartAt = ct.Contest.StartAt,
+                EndAt = ct.Contest.EndAt,
+
+                TeamId = ct.Team.Id,
+                TeamName = ct.Team.TeamName,   // ✅ FIX
+                LeaderId = ct.Team.LeaderId,   // ✅ FIX
+
+                JoinedAt = ct.JoinAt,
+                Rank = ct.Rank,
+                Score = ct.Score,
+                Solved = ct.SolvedProblem
+            })
+            .OrderByDescending(x => x.StartAt)
+            .ToListAsync();
     }
 }

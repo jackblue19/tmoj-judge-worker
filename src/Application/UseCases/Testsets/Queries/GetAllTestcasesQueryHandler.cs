@@ -82,9 +82,14 @@ public sealed class GetAllTestcasesQueryHandler
 
     private void EnsureCanManage(Problem problem)
     {
-        if ( _currentUser.IsInRole("Admin") ) return;
+        if ( _currentUser.IsInRole("Admin") ||
+             _currentUser.IsInRole("admin") ||
+             _currentUser.IsInRole("teacher") ||
+             _currentUser.IsInRole("manager") )
+            return;
 
         if ( problem.CreatedBy != _currentUser.UserId )
-            throw new KeyNotFoundException("Problem not found or access denied.");
+            throw new UnauthorizedAccessException("You dont have permission for this action");
+        //throw new KeyNotFoundException("Problem not found or access denied.");
     }
 }

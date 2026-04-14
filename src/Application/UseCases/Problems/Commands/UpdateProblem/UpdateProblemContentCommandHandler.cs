@@ -1,10 +1,13 @@
 ﻿using Application.Abstractions.Outbound.Services;
 using Application.Common.Interfaces;
-using Application.UseCases.Problems.Constants;
 using Application.UseCases.Problems.Dtos;
+using Application.UseCases.Problems.Helpers;
+using Application.UseCases.Problems.Mappings;
 using Domain.Abstractions;
+using Domain.Entities;
 using MediatR;
-using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Application.UseCases.Problems.Commands.UpdateProblem;
 
@@ -14,41 +17,20 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
     private readonly IProblemRepository _problemRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IR2Service _r2Service;
+    private readonly ILogger<UpdateProblemContentCommandHandler> _logger;
 
     public UpdateProblemContentCommandHandler(
         ICurrentUserService currentUser ,
         IProblemRepository problemRepository ,
         IUnitOfWork unitOfWork ,
-        IR2Service r2Service)
+        IR2Service r2Service ,
+        ILogger<UpdateProblemContentCommandHandler> logger)
     {
         _currentUser = currentUser;
         _problemRepository = problemRepository;
         _unitOfWork = unitOfWork;
         _r2Service = r2Service;
-    }
-
-    private static void ValidateStatementInput(string? descriptionMd , IFormFile? statementFile)
-    {
-        var hasDescription = !string.IsNullOrWhiteSpace(descriptionMd);
-        var hasFile = statementFile is not null && statementFile.Length > 0;
-
-        if ( !hasDescription && !hasFile )
-            throw new ArgumentException("Either description markdown or statement file is required.");
-
-        if ( hasDescription && hasFile )
-            throw new ArgumentException("Description markdown and statement file cannot be provided together.");
-    }
-
-    private static (string ext, string contentType, string sourceCode) ResolveStatement(IFormFile file)
-    {
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-
-        return ext switch
-        {
-            ".md" => (".md", "text/markdown; charset=utf-8", ProblemStatementSourceCodes.R2Md),
-            ".pdf" => (".pdf", "application/pdf", ProblemStatementSourceCodes.R2Pdf),
-            _ => throw new ArgumentException("Statement file must be .md or .pdf.")
-        };
+        _logger = logger;
     }
 
     public async Task<ProblemDetailDto> Handle(UpdateProblemContentCommand request , CancellationToken ct)
@@ -56,84 +38,141 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
         if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
             throw new UnauthorizedAccessException("User is not authenticated.");
 
-        var currentUserId = _currentUser.UserId.Value;
-        var isAdmin = _currentUser.IsInRole("Admin");
-
-        var entity = await _problemRepository.GetProblemForManagementAsync(
-            request.ProblemId ,
-            currentUserId ,
-            isAdmin ,
-            ct);
-
-        if ( entity is null )
-            throw new KeyNotFoundException("Problem not found or access denied.");
+        var problem = await _problemRepository.GetProblemTrackedWithTagsAndTestsetsAsync(request.ProblemId , ct);
+        if ( problem is null )
+            throw new KeyNotFoundException("Problem not found.");
 
         var title = request.Title?.Trim();
         var slug = request.Slug?.Trim().ToLowerInvariant();
 
-        if ( string.IsNullOrWhiteSpace(title) )
-            throw new ArgumentException("Title is required.");
+        ProblemCommandGuard.ValidateProblemCoreFields(
+            title ,
+            slug ,
+            request.TimeLimitMs ,
+            request.MemoryLimitKb);
 
-        if ( string.IsNullOrWhiteSpace(slug) )
-            throw new ArgumentException("Slug is required.");
+        ProblemCommandGuard.ValidateStatementInput(request.DescriptionMd , request.StatementFile);
 
-        ValidateStatementInput(request.DescriptionMd , request.StatementFile);
-
-        var slugExists = await _problemRepository.SlugExistsAsync(slug , entity.Id , ct);
+        var slugExists = await _problemRepository.SlugExistsAsync(slug! , request.ProblemId , ct);
         if ( slugExists )
             throw new InvalidOperationException($"Problem slug '{slug}' already exists.");
 
-        entity.Title = title;
-        entity.Slug = slug;
-        entity.TimeLimitMs = request.TimeLimitMs;
-        entity.MemoryLimitKb = request.MemoryLimitKb;
-        entity.TypeCode = request.TypeCode?.Trim();
-        entity.ScoringCode = request.ScoringCode?.Trim();
-        entity.VisibilityCode = request.VisibilityCode?.Trim();
-        entity.UpdatedAt = DateTime.UtcNow;
-        entity.UpdatedBy = currentUserId;
+        var statusCode = ProblemCommandGuard.NormalizeStatusCode(request.StatusCode);
+        var difficulty = ProblemCommandGuard.NormalizeDifficulty(request.Difficulty);
+        var visibilityCode = ProblemCommandGuard.NormalizeVisibilityCode(request.VisibilityCode);
+        var normalizedTagIds = ProblemCommandGuard.NormalizeTagIds(request.TagIds);
 
-        if ( request.StatementFile is not null && request.StatementFile.Length > 0 )
+        var now = DateTime.UtcNow;
+
+        problem.Title = title!;
+        problem.Slug = slug!;
+        problem.Difficulty = difficulty;
+        problem.TypeCode = request.TypeCode?.Trim();
+        problem.VisibilityCode = visibilityCode;
+        problem.ScoringCode = request.ScoringCode?.Trim();
+        problem.StatusCode = statusCode;
+        problem.TimeLimitMs = request.TimeLimitMs;
+        problem.MemoryLimitKb = request.MemoryLimitKb;
+        problem.UpdatedAt = now;
+        problem.UpdatedBy = _currentUser.UserId.Value;
+        problem.PublishedAt = statusCode == "published"
+            ? problem.PublishedAt ?? now
+            : null;
+
+        try
         {
-            var (ext, contentType, sourceCode) = ResolveStatement(request.StatementFile);
-            var fileId = Guid.NewGuid();
+            if ( request.StatementFile is not null && request.StatementFile.Length > 0 )
+            {
+                var (ext, contentType, sourceCode, _) =
+                    ProblemCommandGuard.ResolveStatement(request.StatementFile);
 
-            await using var stream = request.StatementFile.OpenReadStream();
-            await _r2Service.ReplaceIfExistsAsync(       // ReplaceIfExistsAsync    ||  UploadAsync
-                type: "Problem" ,
-                id: fileId ,
-                fileExtension: ext ,
-                fileStream: stream ,
-                contentType: contentType ,
-                cancellationToken: ct);
+                var normalizedStatementFileName = $"{slug}{ext}";
 
-            entity.DescriptionMd = null;
-            entity.StatementSourceCode = sourceCode;
-            entity.StatementFileId = fileId;
-            entity.StatementFileName = Path.GetFileName(request.StatementFile.FileName);
-            entity.StatementContentType = contentType;
-            entity.StatementExtension = ext;
-            entity.StatementUploadedAt = DateTime.UtcNow;
+                if ( ext == ".md" )
+                {
+                    var markdownContent = await ProblemCommandGuard.ReadMarkdownFileAsync(request.StatementFile , ct);
+
+                    problem.DescriptionMd = markdownContent;
+                    problem.StatementSourceCode = "inline_md";
+                    problem.StatementFileId = null;
+                    problem.StatementFileName = normalizedStatementFileName;
+                    problem.StatementContentType = contentType;
+                    problem.StatementExtension = ext;
+                    problem.StatementUploadedAt = now;
+                }
+                else
+                {
+                    var fileId = Guid.NewGuid();
+
+                    await using var stream = request.StatementFile.OpenReadStream();
+                    await _r2Service.UploadAsync(
+                        type: "Problem" ,
+                        id: fileId ,
+                        fileExtension: ext ,
+                        fileStream: stream ,
+                        contentType: contentType ,
+                        cancellationToken: ct);
+
+                    problem.DescriptionMd = null;
+                    problem.StatementSourceCode = sourceCode; // r2_pdf
+                    problem.StatementFileId = fileId;
+                    problem.StatementFileName = normalizedStatementFileName;
+                    problem.StatementContentType = contentType;
+                    problem.StatementExtension = ext;
+                    problem.StatementUploadedAt = now;
+                }
+            }
+            else
+            {
+                problem.DescriptionMd = request.DescriptionMd?.Trim();
+                problem.StatementSourceCode = "inline_md";
+                problem.StatementFileId = null;
+                problem.StatementFileName = null;
+                problem.StatementContentType = null;
+                problem.StatementExtension = null;
+                problem.StatementUploadedAt = null;
+            }
+
+            if ( request.TagIds is not null )
+            {
+                var tags = normalizedTagIds.Count == 0
+                    ? []
+                    : await _problemRepository.GetTagsTrackedByIdsAsync(normalizedTagIds , ct);
+
+                var foundIds = tags.Select(x => x.Id).ToHashSet();
+                var missingIds = normalizedTagIds.Where(x => !foundIds.Contains(x)).ToArray();
+
+                if ( missingIds.Length > 0 )
+                    throw new KeyNotFoundException($"Some tags were not found: {string.Join(", " , missingIds)}");
+
+                problem.Tags.Clear();
+
+                foreach ( var tag in tags.OrderBy(x => x.Name) )
+                    problem.Tags.Add(tag);
+            }
+
+            await _unitOfWork.SaveChangesAsync(ct);
+            return problem.ToDetailDto();
         }
-        else
+        catch ( OperationCanceledException )
         {
-            entity.DescriptionMd = request.DescriptionMd?.Trim();
-            entity.StatementSourceCode = ProblemStatementSourceCodes.InlineMd;
-            entity.StatementFileId = null;
-            entity.StatementFileName = null;
-            entity.StatementContentType = null;
-            entity.StatementExtension = null;
-            entity.StatementUploadedAt = null;
+            _logger.LogWarning("Update problem was cancelled. ProblemId={ProblemId}" , request.ProblemId);
+            throw;
         }
-
-        await _unitOfWork.SaveChangesAsync(ct);
-
-        var detail = await _problemRepository.GetProblemDetailForManagementAsync(
-            entity.Id ,
-            currentUserId ,
-            isAdmin ,
-            ct);
-
-        return detail ?? throw new KeyNotFoundException("Problem detail not found after update.");
+        catch ( DbUpdateException ex )
+        {
+            _logger.LogError(ex , "Database update failed while updating problem. ProblemId={ProblemId}" , request.ProblemId);
+            throw new InvalidOperationException("Failed to update problem. Please verify input data and try again.");
+        }
+        catch ( IOException ex )
+        {
+            _logger.LogError(ex , "I/O error while handling statement for problem. ProblemId={ProblemId}" , request.ProblemId);
+            throw new InvalidOperationException("Failed to process statement file. Please try again.");
+        }
+        catch ( Exception ex ) when ( ex is not ArgumentException and not InvalidOperationException and not KeyNotFoundException and not UnauthorizedAccessException )
+        {
+            _logger.LogError(ex , "Unexpected error while updating problem. ProblemId={ProblemId}" , request.ProblemId);
+            throw new InvalidOperationException("Unexpected error occurred while updating problem.");
+        }
     }
 }

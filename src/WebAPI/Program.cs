@@ -23,8 +23,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 //  database
-builder.Services.AddScoped<IEditorialRepository, EditorialRepository>();
+builder.Services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
 builder.Services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
+builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {
@@ -85,7 +86,7 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
-builder.Services.AddScoped<IContestStatusService, ContestStatusService>();
+builder.Services.AddScoped<IContestStatusService , ContestStatusService>();
 
 //  v2  -   Judge Worker    -   DI
 builder.Services.AddScoped<WebAPI.Services.Judging.JudgeJobDispatchService>();
@@ -224,6 +225,7 @@ app.MapControllers();
 app.UseStatusCodePages();
 app.UseHttpLogging();
 app.UseMiddleware<RequestLogScopeMiddleware>();
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.MapHub<WebAPI.Hubs.SubmissionHub>("/hubs/submissions");
 

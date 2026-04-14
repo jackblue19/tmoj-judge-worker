@@ -1,8 +1,8 @@
-﻿namespace Application.Common.Interfaces;
+﻿    namespace Application.Common.Interfaces;
 
-public interface ICurrentUserService
-{
-    Guid? UserId { get; }
-    bool IsAuthenticated { get; }
-    bool IsInRole(string role);
-}
+    public interface ICurrentUserService
+    {
+        Guid? UserId { get; }
+        bool IsAuthenticated { get; }
+        bool IsInRole(string role);
+    }

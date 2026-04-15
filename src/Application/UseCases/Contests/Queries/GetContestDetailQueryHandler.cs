@@ -46,8 +46,8 @@ public class GetContestDetailQueryHandler
             .ThenBy(cp => cp.Alias)
             .ToList();
 
-        // 🔥 FREEZE ENFORCEMENT (IMPORTANT)
-        FreezeContestPatch.EnsureViewAllowed(contest);
+        // ❌ REMOVE:
+        // FreezeContestPatch.EnsureViewAllowed(contest);
 
         return new ContestDetailDto
         {
@@ -67,9 +67,11 @@ public class GetContestDetailQueryHandler
 
             IsPublished = contest.VisibilityCode == "public",
 
+            // ✅ chỉ expose flag cho FE
             IsFrozen = isFrozen,
 
-            CanJoin = canJoin && !isFrozen,
+            // ⚠️ freeze KHÔNG ảnh hưởng join rule (tùy business)
+            CanJoin = canJoin,
             IsRegistered = false,
             HasLeaderboard = true,
 
@@ -80,21 +82,20 @@ public class GetContestDetailQueryHandler
             ProblemCount = problems.Count,
             TotalPoints = problems.Sum(p => p.Points ?? 0),
 
-            Problems = isFrozen
-                ? new List<ContestProblemDto>()   // 🔥 NO DATA LEAK
-                : problems.Select(cp => new ContestProblemDto
-                {
-                    Id = cp.Id,
-                    ProblemId = cp.ProblemId,
-                    Title = cp.Problem != null ? cp.Problem.Title : "Unknown",
-                    Alias = cp.Alias ?? "",
-                    Ordinal = cp.Ordinal,
-                    DisplayIndex = cp.DisplayIndex,
-                    Points = cp.Points ?? 0,
-                    TimeLimitMs = cp.TimeLimitMs,
-                    MemoryLimitKb = cp.MemoryLimitKb,
-                    Status = "not_started"
-                }).ToList()
+            // ✅ ALWAYS return problems
+            Problems = problems.Select(cp => new ContestProblemDto
+            {
+                Id = cp.Id,
+                ProblemId = cp.ProblemId,
+                Title = cp.Problem != null ? cp.Problem.Title : "Unknown",
+                Alias = cp.Alias ?? "",
+                Ordinal = cp.Ordinal,
+                DisplayIndex = cp.DisplayIndex,
+                Points = cp.Points ?? 0,
+                TimeLimitMs = cp.TimeLimitMs,
+                MemoryLimitKb = cp.MemoryLimitKb,
+                Status = "not_started"
+            }).ToList()
         };
     }
 }

@@ -48,4 +48,7 @@ public class MyContestDto
     public bool? CanRegister { get; set; }
 
     public bool? CanUnregister { get; set; }
+
+    public bool IsClosed { get; set; }
+    public bool CanViewSource { get; set; }
 }

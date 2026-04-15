@@ -40,20 +40,12 @@ public class GetMyTeamInContestQueryHandler
         Console.WriteLine($"ContestId: {request.ContestId}");
 
         // =========================
-        // FREEZE CHECK (CONTEST LEVEL)
+        // VALIDATE CONTEST
         // =========================
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
 
         if (contest == null)
             throw new Exception("CONTEST_NOT_FOUND");
-
-        var now = DateTime.UtcNow;
-
-        var isFrozen =
-            contest.FreezeAt.HasValue &&
-            now >= contest.FreezeAt.Value;
-
-        Console.WriteLine($"IsFrozen: {isFrozen}");
 
         // =========================
         // CALL REPOSITORY
@@ -67,15 +59,6 @@ public class GetMyTeamInContestQueryHandler
         {
             Console.WriteLine("❌ No team found for this user in contest");
             return null;
-        }
-
-        // =========================
-        // FREEZE ENRICHMENT (SAFE)
-        // =========================
-        if (isFrozen)
-        {
-            Console.WriteLine("⚠ MyTeamInContest is in FROZEN mode");
-            // future: mask Rank / Score / Submission stats
         }
 
         Console.WriteLine($"✅ Team found: {result.TeamName} | Members: {result.TeamSize}");

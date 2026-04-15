@@ -1,31 +1,26 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Queries;
-using Domain.Abstractions;
-using Domain.Entities;
 using MediatR;
 
 namespace Application.UseCases.Teams.Queries;
 
-public class GetMyTeamInContestQueryHandler
-    : IRequestHandler<GetMyTeamInContestQuery, MyTeamInContestDto?>
+public class GetMyContestsQueryHandler
+    : IRequestHandler<GetMyContestsQuery, List<MyContestDto>>
 {
     private readonly IContestRepository _contestRepository;
-    private readonly IReadRepository<Contest, Guid> _contestRepo;
     private readonly ICurrentUserService _currentUser;
 
-    public GetMyTeamInContestQueryHandler(
+    public GetMyContestsQueryHandler(
         IContestRepository contestRepository,
-        IReadRepository<Contest, Guid> contestRepo,
         ICurrentUserService currentUser)
     {
         _contestRepository = contestRepository;
-        _contestRepo = contestRepo;
         _currentUser = currentUser;
     }
 
-    public async Task<MyTeamInContestDto?> Handle(
-        GetMyTeamInContestQuery request,
+    public async Task<List<MyContestDto>> Handle(
+        GetMyContestsQuery request,
         CancellationToken ct)
     {
         // =========================
@@ -36,54 +31,78 @@ public class GetMyTeamInContestQueryHandler
 
         var userId = _currentUser.UserId!.Value;
 
-        Console.WriteLine("=== GET MY TEAM IN CONTEST ===");
+        Console.WriteLine("=== GET MY CONTESTS ===");
         Console.WriteLine($"UserId: {userId}");
-        Console.WriteLine($"ContestId: {request.ContestId}");
 
         // =========================
-        // GET CONTEST (FREEZE CHECK)
+        // ✅ USE CORRECT METHOD
         // =========================
-        var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
-
-        if (contest == null)
-            throw new Exception("CONTEST_NOT_FOUND");
+        var contests = await _contestRepository
+            .GetMyContestsDetailedAsync(userId);
 
         var now = DateTime.UtcNow;
 
-        var isFrozen =
-            contest.FreezeAt.HasValue &&
-            now >= contest.FreezeAt.Value;
-
-        Console.WriteLine($"IsFrozen: {isFrozen}");
-
         // =========================
-        // CALL REPOSITORY
+        // 🔥 ENRICH BUSINESS RULE
         // =========================
-        var team = await _contestRepository.GetMyTeamInContestAsync(
-            request.ContestId,
-            userId
-        );
-
-        // =========================
-        // RESULT LOGIC
-        // =========================
-        if (team == null)
+        foreach (var c in contests)
         {
-            Console.WriteLine("❌ No team found for this user in contest");
-            return null;
+            var isEnded = now > c.EndAt;
+
+            // status
+            c.Status =
+                now < c.StartAt ? "upcoming" :
+                now <= c.EndAt ? "running" :
+                "ended";
+
+            // phase
+            c.Phase =
+                now < c.StartAt ? "BEFORE" :
+                now <= c.EndAt ? "CODING" :
+                "FINISHED";
+
+            // optional flags
+            c.CanJoin = now < c.StartAt;
+            c.CanRegister = now < c.StartAt;
+            c.CanUnregister = now < c.StartAt;
+
+            // 🔥 RULE END CONTEST
+            if (isEnded)
+            {
+                // =========================
+                // STATUS OVERRIDE
+                // =========================
+                c.Status = "ended";
+                c.Phase = "FINISHED";
+
+                // =========================
+                // LOCK ACTIONS
+                // =========================
+                c.CanJoin = false;
+                c.CanRegister = false;
+                c.CanUnregister = false;
+
+                // =========================
+                // BUSINESS RULE
+                // =========================
+                // ✅ ĐƯỢC PHÉP:
+                // - xem verdict
+                // - xem rank
+                // - xem score
+                // - xem submission list (metadata)
+
+                // ❌ KHÔNG ĐƯỢC:
+                // - xem source code
+                // - submit thêm
+
+                // 👉 backend KHÔNG cần sửa DTO
+                // 👉 FE chỉ cần check:
+                // if (contest.status === "ended") => hide source code
+            }
         }
 
-        // =========================
-        // FREEZE ENRICHMENT (SAFE)
-        // =========================
-        if (isFrozen)
-        {
-            // optional: you can later mask rank/score here
-            Console.WriteLine("⚠ Team view is in FROZEN mode");
-        }
+        Console.WriteLine($"✅ Total contests: {contests.Count}");
 
-        Console.WriteLine($"✅ Team found: {team.TeamName} | Members: {team.TeamSize}");
-
-        return team;
+        return contests;
     }
 }

@@ -27,30 +27,18 @@ public class GetContestScoreboardQueryHandler
         Console.WriteLine("=== GET SCOREBOARD ===");
         Console.WriteLine($"ContestId: {request.ContestId}");
 
+        // =========================
+        // VALIDATE CONTEST
+        // =========================
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
 
         if (contest == null)
             throw new Exception("CONTEST_NOT_FOUND");
 
-        var now = DateTime.UtcNow;
-
-        var isFrozen =
-            contest.FreezeAt.HasValue &&
-            now >= contest.FreezeAt.Value;
-
-        Console.WriteLine($"IsFrozen: {isFrozen}");
-
+        // =========================
+        // GET SCOREBOARD (REPO HANDLE FREEZE)
+        // =========================
         var result = await _contestRepository.GetScoreboardAsync(request.ContestId);
-
-        // =========================
-        // FREEZE MODE NOTE
-        // =========================
-        if (isFrozen)
-        {
-            // Không mutate result ở đây
-            // Repo should already handle filtering submissions if needed
-            Console.WriteLine("⚠ Scoreboard is FROZEN (read-only view)");
-        }
 
         Console.WriteLine($"Returned rows: {result.Count}");
 

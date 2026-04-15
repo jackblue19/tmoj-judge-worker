@@ -24,20 +24,17 @@ public class GetContestProblemsQueryHandler
         GetContestProblemsQuery request,
         CancellationToken ct)
     {
-        var now = DateTime.UtcNow;
-
         // =========================
-        // GET CONTEST (FREEZE CHECK)
+        // CHECK CONTEST
         // =========================
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
 
         if (contest == null)
             throw new Exception("CONTEST_NOT_FOUND");
 
-        var isFrozen =
-            contest.FreezeAt.HasValue &&
-            now >= contest.FreezeAt.Value;
-
+        // =========================
+        // GET PROBLEMS
+        // =========================
         var data = await _repo.ListAsync(
             new ContestProblemByContestSpec(request.ContestId),
             ct);
@@ -48,17 +45,17 @@ public class GetContestProblemsQueryHandler
             .ThenBy(x => x.Alias)
             .ToList();
 
+        // =========================
+        // RETURN (NO FREEZE MASK)
+        // =========================
         return problems.Select(x => new ContestProblemDto
         {
             Id = x.Id,
             ProblemId = x.ProblemId,
 
-            // =========================
-            // FREEZE MASK
-            // =========================
-            Title = isFrozen
-                ? "Frozen"
-                : (x.Problem != null ? x.Problem.Title : "Unknown"),
+            Title = x.Problem != null
+                ? x.Problem.Title
+                : "Unknown",
 
             Alias = x.Alias ?? "",
             Ordinal = x.Ordinal,
@@ -68,10 +65,8 @@ public class GetContestProblemsQueryHandler
             TimeLimitMs = x.TimeLimitMs,
             MemoryLimitKb = x.MemoryLimitKb,
 
-            // =========================
-            // STATUS MASK
-            // =========================
-            Status = isFrozen ? "frozen" : "not_started"
+            // status UI tự xử lý, backend không cần fake
+            Status = "not_started"
         }).ToList();
     }
 }

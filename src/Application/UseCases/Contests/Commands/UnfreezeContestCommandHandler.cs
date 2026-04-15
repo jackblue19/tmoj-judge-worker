@@ -31,24 +31,40 @@ public class UnfreezeContestCommandHandler
 
     public async Task<bool> Handle(UnfreezeContestCommand request, CancellationToken ct)
     {
+        // =========================
+        // AUTH
+        // =========================
         if (!_currentUser.IsAuthenticated)
             throw new UnauthorizedAccessException("UNAUTHORIZED");
 
+        if (!_currentUser.IsInRole("admin") && !_currentUser.IsInRole("manager"))
+            throw new UnauthorizedAccessException("NO_PERMISSION");
+
         var userId = _currentUser.UserId!.Value;
 
+        // =========================
+        // GET CONTEST
+        // =========================
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
 
         if (contest == null)
             throw new Exception("CONTEST_NOT_FOUND");
 
-        if (!_currentUser.IsInRole("admin") && !_currentUser.IsInRole("manager"))
-            throw new UnauthorizedAccessException("NO_PERMISSION");
+        var now = DateTime.UtcNow;
 
-        if (contest.FreezeAt == null)
+        // =========================
+        // VALIDATE: must be frozen
+        // =========================
+        if (!contest.FreezeAt.HasValue || now < contest.FreezeAt.Value)
             throw new Exception("NOT_FROZEN");
 
-        contest.FreezeAt = null;
-        contest.UpdatedAt = DateTime.UtcNow;
+        // =========================
+        // UNFREEZE
+        // =========================
+        // 👉 đẩy FreezeAt về tương lai để "tắt freeze"
+        contest.FreezeAt = contest.EndAt.AddYears(10);
+
+        contest.UpdatedAt = now;
         contest.UpdatedBy = userId;
 
         _writeRepo.Update(contest);

@@ -1,6 +1,7 @@
 ﻿using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.UseCases.Contests.Dtos;
+using Application.UseCases.Score.Helpers;
 using Application.UseCases.Teams.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -265,7 +266,7 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // SCOREBOARD (FREEZE FIXED)
+    // SCOREBOARD (FREEZE FIXED) — branch ACM vs IOI theo Contest.ContestType
     // =============================================
     public async Task<List<ContestScoreboardDto>> GetScoreboardAsync(Guid contestId)
     {
@@ -278,62 +279,83 @@ public class ContestRepository : IContestRepository
 
         var freezeTime = contest.FreezeAt;
         var now = DateTime.UtcNow;
-
         var isFrozen = freezeTime.HasValue && now >= freezeTime.Value;
+        var isAcm = ScoringHelper.IsAcmContest(contest);
 
         var teams = await _db.ContestTeams
+            .AsNoTracking()
             .Where(ct => ct.ContestId == contestId)
-            .Select(ct => new
-            {
-                ct.TeamId,
-                ct.Team.TeamName
-            })
+            .Select(ct => new ScoreboardTeamRow(ct.TeamId, ct.Team.TeamName))
             .ToListAsync();
 
         var problems = await _db.ContestProblems
+            .AsNoTracking()
             .Where(p => p.ContestId == contestId && p.IsActive)
-            .Select(p => new
-            {
-                ContestProblemId = p.Id,
-                p.ProblemId,
-                p.Alias
-            })
+            .Select(p => new ScoreboardProblemRow(p.Id, p.ProblemId, p.Alias))
             .ToListAsync();
 
         var contestProblemIds = problems.Select(p => p.ContestProblemId).ToList();
 
         var submissions = await _db.Submissions
+            .AsNoTracking()
             .Where(s =>
                 s.ContestProblemId != null &&
                 contestProblemIds.Contains(s.ContestProblemId.Value) &&
                 s.TeamId != null)
-            .Select(s => new
-            {
+            .Select(s => new ScoreboardSubmissionRow(
+                s.Id,
                 s.TeamId,
                 s.ContestProblemId,
                 s.VerdictCode,
-                s.CreatedAt
-            })
+                s.CreatedAt))
             .ToListAsync();
 
-        if (isFrozen)
+        if (isFrozen && freezeTime.HasValue)
+            submissions = submissions.Where(s => s.CreatedAt <= freezeTime.Value).ToList();
+
+        // IOI cần Result + Testcase để cộng điểm theo Weight. ACM thì không cần.
+        Dictionary<Guid, List<Result>>? resultsBySubmission = null;
+        Dictionary<Guid, (int Ordinal, int Weight)>? testcaseInfo = null;
+
+        if (!isAcm)
         {
-            submissions = submissions
-                .Where(s => s.CreatedAt <= freezeTime.Value)
+            var submissionIds = submissions.Select(s => s.Id).Distinct().ToList();
+
+            resultsBySubmission = submissionIds.Count == 0
+                ? new Dictionary<Guid, List<Result>>()
+                : (await _db.Results
+                    .AsNoTracking()
+                    .Where(r => submissionIds.Contains(r.SubmissionId) && r.TestcaseId != null)
+                    .ToListAsync())
+                    .GroupBy(r => r.SubmissionId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+            var testcaseIds = resultsBySubmission.Values
+                .SelectMany(rs => rs)
+                .Where(r => r.TestcaseId.HasValue)
+                .Select(r => r.TestcaseId!.Value)
+                .Distinct()
                 .ToList();
+
+            testcaseInfo = testcaseIds.Count == 0
+                ? new Dictionary<Guid, (int Ordinal, int Weight)>()
+                : (await _db.Testcases
+                    .AsNoTracking()
+                    .Where(t => testcaseIds.Contains(t.Id))
+                    .Select(t => new { t.Id, t.Ordinal, t.Weight })
+                    .ToListAsync())
+                    .ToDictionary(t => t.Id, t => (t.Ordinal, t.Weight));
         }
 
         var result = new List<ContestScoreboardDto>();
 
         foreach (var team in teams)
         {
-            var teamSubs = submissions
-                .Where(s => s.TeamId == team.TeamId)
-                .ToList();
+            var teamSubs = submissions.Where(s => s.TeamId == team.TeamId).ToList();
 
             int solved = 0;
             int penalty = 0;
-
+            int totalScore = 0;
             var problemStats = new List<ScoreboardProblemDto>();
 
             foreach (var problem in problems)
@@ -343,59 +365,113 @@ public class ContestRepository : IContestRepository
                     .OrderBy(s => s.CreatedAt)
                     .ToList();
 
-                int wrong = 0;
-                DateTime? acTime = null;
-
-                foreach (var sub in subs)
+                if (isAcm)
                 {
-                    bool isAC =
-                        !string.IsNullOrEmpty(sub.VerdictCode) &&
-                        sub.VerdictCode.Equals("AC", StringComparison.OrdinalIgnoreCase);
+                    int wrong = 0;
+                    DateTime? acTime = null;
 
-                    if (acTime == null && isAC)
+                    foreach (var sub in subs)
                     {
-                        acTime = sub.CreatedAt;
+                        bool isAc = !string.IsNullOrEmpty(sub.VerdictCode)
+                            && sub.VerdictCode.Equals("ac", StringComparison.OrdinalIgnoreCase);
+
+                        if (acTime == null && isAc)
+                        {
+                            acTime = sub.CreatedAt;
+                            solved++;
+                            var minutes = (int)(acTime.Value - contest.StartAt).TotalMinutes;
+                            penalty += minutes + wrong * ScoringHelper.AcmPenaltyPerWrong;
+                        }
+                        else if (!isAc)
+                        {
+                            wrong++;
+                        }
+                    }
+
+                    problemStats.Add(new ScoreboardProblemDto
+                    {
+                        ProblemId = problem.ProblemId,
+                        Alias = problem.Alias ?? "",
+                        IsSolved = acTime != null,
+                        Attempts = subs.Count,
+                        SolvedAt = acTime
+                    });
+                }
+                else
+                {
+                    int bestScore = 0;
+                    int bestPassed = 0;
+                    int bestTotal = 0;
+                    DateTime? firstFullAc = null;
+
+                    foreach (var s in subs)
+                    {
+                        if (!resultsBySubmission!.TryGetValue(s.Id, out var results) || results.Count == 0)
+                            continue;
+
+                        var (score, passed, total, _) =
+                            ScoringHelper.CalcIoiScore(results, testcaseInfo!);
+
+                        if (score > bestScore)
+                        {
+                            bestScore = score;
+                            bestPassed = passed;
+                            bestTotal = total;
+                        }
+
+                        if (firstFullAc == null && total > 0 && passed == total)
+                            firstFullAc = s.CreatedAt;
+                    }
+
+                    if (firstFullAc != null)
                         solved++;
 
-                        var minutes = (int)(acTime.Value - contest.StartAt).TotalMinutes;
-                        penalty += minutes + wrong * 20;
-                    }
-                    else if (!isAC)
-                    {
-                        wrong++;
-                    }
-                }
+                    totalScore += bestScore;
 
-                problemStats.Add(new ScoreboardProblemDto
-                {
-                    ProblemId = problem.ProblemId,
-                    Alias = problem.Alias ?? "",
-                    IsSolved = acTime != null,
-                    Attempts = subs.Count,
-                    SolvedAt = acTime
-                });
+                    problemStats.Add(new ScoreboardProblemDto
+                    {
+                        ProblemId = problem.ProblemId,
+                        Alias = problem.Alias ?? "",
+                        IsSolved = firstFullAc != null,
+                        Attempts = subs.Count,
+                        SolvedAt = firstFullAc,
+                        Score = bestScore,
+                        PassedCases = bestPassed,
+                        TotalCases = bestTotal
+                    });
+                }
             }
 
             result.Add(new ContestScoreboardDto
             {
                 TeamId = team.TeamId,
                 TeamName = team.TeamName,
+                ScoringMode = isAcm ? "acm" : "ioi",
                 Solved = solved,
-                Penalty = penalty,
+                Penalty = isAcm ? penalty : 0,
+                TotalScore = isAcm ? 0 : totalScore,
                 Problems = problemStats
             });
         }
 
-        return result
-            .OrderByDescending(x => x.Solved)
-            .ThenBy(x => x.Penalty)
-            .Select((x, i) =>
-            {
-                x.Rank = i + 1;
-                return x;
-            })
-            .ToList();
+        var sorted = isAcm
+            ? result.OrderByDescending(x => x.Solved).ThenBy(x => x.Penalty).ToList()
+            : result.OrderByDescending(x => x.TotalScore).ToList();
+
+        for (int i = 0; i < sorted.Count; i++)
+            sorted[i].Rank = i + 1;
+
+        return sorted;
     }
+
+    private sealed record ScoreboardTeamRow(Guid TeamId, string TeamName);
+    private sealed record ScoreboardProblemRow(Guid ContestProblemId, Guid ProblemId, string? Alias);
+    private sealed record ScoreboardSubmissionRow(
+        Guid Id,
+        Guid? TeamId,
+        Guid? ContestProblemId,
+        string? VerdictCode,
+        DateTime CreatedAt);
 
     // =============================================
     // GET MY CONTESTS

@@ -170,22 +170,27 @@ public sealed class JudgeJobDispatchService
             var parsed = JsonSerializer.Deserialize<JudgeExecutionOptionsContract>(optionsJson);
             if ( parsed is not null )
             {
+                var timeLimitMs = problem.TimeLimitMs ?? (parsed.TimeLimitMs > 0 ? parsed.TimeLimitMs : runtime.DefaultTimeLimitMs);
+                var memoryLimitKb = problem.MemoryLimitKb ?? (parsed.MemoryLimitKb > 0 ? parsed.MemoryLimitKb : runtime.DefaultMemoryLimitKb);
+
                 return new JudgeExecutionOptionsContract
                 {
-                    TimeLimitMs = problem.TimeLimitMs ?? parsed.TimeLimitMs ,
-                    MemoryLimitKb = problem.MemoryLimitKb ?? parsed.MemoryLimitKb ,
+                    TimeLimitMs = timeLimitMs ,
+                    MemoryLimitKb = memoryLimitKb ,
                     CompareMode = string.IsNullOrWhiteSpace(parsed.CompareMode) ? "trim" : parsed.CompareMode ,
                     StopOnFirstFail = parsed.StopOnFirstFail
                 };
             }
         }
 
+        // Không có OptionsJson: mặc định IOI (chấm hết test case theo Weight).
+        // Chỉ contest ACM mới bật StopOnFirstFail qua SubmitContestCommandHandler.
         return new JudgeExecutionOptionsContract
         {
             TimeLimitMs = problem.TimeLimitMs ?? runtime.DefaultTimeLimitMs ,
             MemoryLimitKb = problem.MemoryLimitKb ?? runtime.DefaultMemoryLimitKb ,
             CompareMode = "trim" ,
-            StopOnFirstFail = true
+            StopOnFirstFail = false
         };
     }
 

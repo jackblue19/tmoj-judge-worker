@@ -37,7 +37,7 @@ public sealed class ScoreContestQueryHandler
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
         if (contest is null) return null;
 
-        var scoringMode = contest.ContestType?.ToLower() == "acm" ? "acm" : "ioi";
+        var scoringMode = ScoringHelper.IsAcmContest(contest) ? "acm" : "ioi";
 
         var contestProblems = await _cpRepo.ListAsync(
             new ContestProblemsByContestActiveSpec(request.ContestId), ct);
@@ -125,12 +125,12 @@ public sealed class ScoreContestQueryHandler
                     .Distinct()
                     .ToList();
 
-                var ordinalMap = testcaseIds.Count == 0
-                    ? new Dictionary<Guid, int>()
+                var testcaseInfo = testcaseIds.Count == 0
+                    ? new Dictionary<Guid, (int Ordinal, int Weight)>()
                     : (await _testcaseRepo.ListAsync(new TestcasesByIdsSpec(testcaseIds), ct))
-                        .ToDictionary(t => t.Id, t => t.Ordinal);
+                        .ToDictionary(t => t.Id, t => (t.Ordinal, t.Weight));
 
-                var score = ScoringHelper.CalcIoiScore(results, ordinalMap);
+                var score = ScoringHelper.CalcIoiScore(results, testcaseInfo);
 
                 if (best is null || score.TotalScore > best.Value.TotalScore)
                 {

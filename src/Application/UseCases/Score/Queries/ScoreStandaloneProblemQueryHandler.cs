@@ -43,13 +43,13 @@ public sealed class ScoreStandaloneProblemQueryHandler
             .Distinct()
             .ToList();
 
-        var ordinalMap = testcaseIds.Count == 0
-            ? new Dictionary<Guid, int>()
+        var testcaseInfo = testcaseIds.Count == 0
+            ? new Dictionary<Guid, (int Ordinal, int Weight)>()
             : (await _testcaseRepo.ListAsync(new TestcasesByIdsSpec(testcaseIds), ct))
-                .ToDictionary(t => t.Id, t => t.Ordinal);
+                .ToDictionary(t => t.Id, t => (t.Ordinal, t.Weight));
 
         var (totalScore, passedCases, totalCases, cases) =
-            ScoringHelper.CalcIoiScore(results, ordinalMap);
+            ScoringHelper.CalcIoiScore(results, testcaseInfo);
 
         var dto = new IoiStandaloneProblemScoreDto(
             SubmissionId: request.SubmissionId,

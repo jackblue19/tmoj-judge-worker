@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using WebAPI.Controllers.v1.ClassManagement;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Users;
@@ -206,6 +207,149 @@ public class UserController : ControllerBase
         }
     }
 
+    // ──────────────────────────────────────────
+    // GET api/v1/user/students/{id}  →  Student profile with joined classes (filter by semester/subject)
+    // ──────────────────────────────────────────
+    [HttpGet("students/{id:guid}")]
+    public async Task<IActionResult> GetStudentDetail(
+        Guid id,
+        [FromQuery] Guid? semesterId,
+        [FromQuery] Guid? subjectId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var student = await _db.Users.AsNoTracking()
+                .Include(u => u.Role)
+                .Where(u => u.UserId == id && u.DeletedAt == null)
+                .Select(u => new UserDto(
+                    u.UserId, u.Email, u.FirstName, u.LastName,
+                    u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
+                    u.AvatarUrl, u.EmailVerified,
+                    u.Role != null ? u.Role.RoleCode : null))
+                .FirstOrDefaultAsync(ct);
+
+            if (student == null)
+                return NotFound(new { Message = "Student not found." });
+
+            var query = _db.ClassMembers.AsNoTracking()
+                .Include(m => m.ClassSemester).ThenInclude(cs => cs.Semester)
+                .Include(m => m.ClassSemester).ThenInclude(cs => cs.Subject)
+                .Include(m => m.ClassSemester).ThenInclude(cs => cs.Teacher)
+                .Include(m => m.ClassSemester).ThenInclude(cs => cs.ClassMembers)
+                .Where(m => m.UserId == id && m.IsActive);
+
+            if (semesterId.HasValue)
+                query = query.Where(m => m.ClassSemester.SemesterId == semesterId.Value);
+            if (subjectId.HasValue)
+                query = query.Where(m => m.ClassSemester.SubjectId == subjectId.Value);
+
+            var memberships = await query.ToListAsync(ct);
+
+            var classes = memberships
+                .Where(m => m.ClassSemester != null && m.ClassSemester.Semester != null && m.ClassSemester.Subject != null)
+                .OrderByDescending(m => m.ClassSemester.CreatedAt)
+                .Select(m => new ClassInstanceInfo(
+                    m.ClassSemester.Id,
+                    m.ClassSemester.Semester.SemesterId, m.ClassSemester.Semester.Code,
+                    m.ClassSemester.Subject.SubjectId, m.ClassSemester.Subject.Code,
+                    m.ClassSemester.Subject.Name, m.ClassSemester.Subject.Description,
+                    m.ClassSemester.Semester.StartAt, m.ClassSemester.Semester.EndAt,
+                    null, null, m.ClassSemester.CreatedAt,
+                    m.ClassSemester.Teacher != null
+                        ? new ClassTeacherInfo(
+                            m.ClassSemester.Teacher.UserId,
+                            m.ClassSemester.Teacher.DisplayName,
+                            m.ClassSemester.Teacher.Email,
+                            m.ClassSemester.Teacher.AvatarUrl)
+                        : null,
+                    m.ClassSemester.ClassMembers.Count(cm => cm.IsActive)))
+                .ToList();
+
+            var result = new StudentProfileWithClassesResponse(student, classes, classes.Count);
+            return Ok(ApiResponse<StudentProfileWithClassesResponse>.Ok(result, "Student profile fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching the student profile." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/user/teachers/{id}  →  Teacher detail with subjects and taught classes (filter by semester/subject)
+    // ──────────────────────────────────────────
+    [HttpGet("teachers/{id:guid}")]
+    public async Task<IActionResult> GetTeacherDetail(
+        Guid id,
+        [FromQuery] Guid? semesterId,
+        [FromQuery] Guid? subjectId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var teacher = await _db.Users.AsNoTracking()
+                .Include(u => u.Role)
+                .Where(u => u.UserId == id && u.DeletedAt == null)
+                .Select(u => new UserDto(
+                    u.UserId, u.Email, u.FirstName, u.LastName,
+                    u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
+                    u.AvatarUrl, u.EmailVerified,
+                    u.Role != null ? u.Role.RoleCode : null))
+                .FirstOrDefaultAsync(ct);
+
+            if (teacher == null)
+                return NotFound(new { Message = "Teacher not found." });
+
+            var query = _db.ClassSemesters.AsNoTracking()
+                .Include(cs => cs.Semester)
+                .Include(cs => cs.Subject)
+                .Include(cs => cs.Teacher)
+                .Include(cs => cs.ClassMembers)
+                .Where(cs => cs.TeacherId == id);
+
+            if (semesterId.HasValue)
+                query = query.Where(cs => cs.SemesterId == semesterId.Value);
+            if (subjectId.HasValue)
+                query = query.Where(cs => cs.SubjectId == subjectId.Value);
+
+            var classSemesters = await query.ToListAsync(ct);
+
+            var classes = classSemesters
+                .Where(cs => cs.Semester != null && cs.Subject != null)
+                .OrderByDescending(cs => cs.CreatedAt)
+                .Select(cs => new ClassInstanceInfo(
+                    cs.Id,
+                    cs.Semester.SemesterId, cs.Semester.Code,
+                    cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
+                    cs.Semester.StartAt, cs.Semester.EndAt,
+                    null, null, cs.CreatedAt,
+                    cs.Teacher != null
+                        ? new ClassTeacherInfo(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl)
+                        : null,
+                    cs.ClassMembers.Count(m => m.IsActive)))
+                .ToList();
+
+            var subjects = classSemesters
+                .Where(cs => cs.Subject != null)
+                .GroupBy(cs => cs.Subject.SubjectId)
+                .Select(g => new TeacherSubjectInfo(
+                    g.Key,
+                    g.First().Subject.Code,
+                    g.First().Subject.Name,
+                    g.First().Subject.Description,
+                    g.Count()))
+                .OrderBy(s => s.Code)
+                .ToList();
+
+            var result = new TeacherDetailResponse(teacher, subjects, classes, classes.Count);
+            return Ok(ApiResponse<TeacherDetailResponse>.Ok(result, "Teacher detail fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching the teacher detail." });
+        }
+    }
+
     [Authorize(Roles = "admin")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
@@ -256,9 +400,9 @@ public class UserController : ControllerBase
                     u.LastName,
                     u.DisplayName,
                     u.Username,
-                    u.AvatarUrl,
                     u.RollNumber,
                     u.MemberCode,
+                    u.AvatarUrl,
                     u.EmailVerified,
                     u.Role != null ? u.Role.RoleCode : null
                 ))

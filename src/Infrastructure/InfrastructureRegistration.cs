@@ -5,6 +5,7 @@ using Application.UseCases.Problems.Queries.GetProblemsByUser;
 using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
 using Domain.Abstractions;
+using Domain.Entities;
 using Infrastructure.Configurations.FileStorage;
 using Infrastructure.ExternalServices;
 using Infrastructure.Persistence.Common;
@@ -50,8 +51,13 @@ public static class InfrastructureRegistration
         services.AddScoped<IProblemRepository , ProblemRepository>();
         services.AddScoped<ITagRepository , TagRepository>();
         services.AddScoped<IContestStatusService, ContestStatusService>();
+        services.AddScoped<ITeamRepository, TeamRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
+        services.AddScoped<IUserProblemQueries, UserProblemQueries>();
+        services.AddScoped<IWriteRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
+        services.AddScoped<IReadRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
 
-        services.AddScoped<IUserProblemQueries , UserProblemQueries>();
         return services;
     }
 

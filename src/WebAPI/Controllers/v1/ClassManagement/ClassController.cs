@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using WebAPI.Controllers.v1.Users;
 using WebAPI.Models.Common;
 using Microsoft.AspNetCore.Http;
 using System.IO;
@@ -1468,6 +1469,79 @@ public class ClassController : ControllerBase
         catch (Exception)
         {
             return StatusCode(500, new { Message = "An error occurred while cancelling invite code." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/class/{classSemesterId}/students/available  →  List students NOT yet in this class (for manual add picker)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("{classSemesterId:guid}/students/available")]
+    public async Task<IActionResult> GetAvailableStudents(
+        Guid classSemesterId,
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var instance = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (instance is null) return NotFound(new { Message = "Class instance not found." });
+
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            if (userRole == "teacher" && instance.TeacherId != userId.Value)
+                return Forbid();
+
+            var enrolledIds = _db.ClassMembers.AsNoTracking()
+                .Where(m => m.ClassSemesterId == classSemesterId && m.IsActive)
+                .Select(m => m.UserId);
+
+            var studentRoleId = await _db.Roles.AsNoTracking()
+                .Where(r => r.RoleCode == "student")
+                .Select(r => (Guid?)r.RoleId)
+                .FirstOrDefaultAsync(ct);
+
+            var query = _db.Users.AsNoTracking()
+                .Include(u => u.Role)
+                .Where(u => u.DeletedAt == null && u.Status)
+                .Where(u => u.RoleId == studentRoleId)
+                .Where(u => !enrolledIds.Contains(u.UserId));
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(u =>
+                    (u.DisplayName != null && u.DisplayName.ToLower().Contains(s)) ||
+                    u.Email.ToLower().Contains(s) ||
+                    (u.RollNumber != null && u.RollNumber.ToLower().Contains(s)) ||
+                    (u.MemberCode != null && u.MemberCode.ToLower().Contains(s)));
+            }
+
+            var totalCount = await query.CountAsync(ct);
+
+            var items = await query
+                .OrderBy(u => u.DisplayName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(u => new UserDto(
+                    u.UserId, u.Email, u.FirstName, u.LastName,
+                    u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
+                    u.AvatarUrl, u.EmailVerified,
+                    u.Role != null ? u.Role.RoleCode : null))
+                .ToListAsync(ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                new { Items = items, TotalCount = totalCount, Page = page, PageSize = pageSize },
+                "Available students fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching available students." });
         }
     }
 

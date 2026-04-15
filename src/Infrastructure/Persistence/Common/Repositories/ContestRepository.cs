@@ -1,6 +1,7 @@
 ﻿using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.UseCases.Contests.Dtos;
+using Application.UseCases.Teams.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
@@ -104,11 +105,27 @@ public class ContestRepository : IContestRepository
 
         if (contest == null) return null;
 
+        // =========================
+        // ❌ STRICT FREEZE - BLOCK VIEW DETAIL
+        // =========================
+        if (contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value)
+            throw new Exception("CONTEST_FROZEN_VIEW_BLOCKED");
+
         var problems = contest.ContestProblems!
             .Where(p => p.IsActive)
             .OrderBy(p => p.DisplayIndex ?? p.Ordinal ?? 999)
             .ThenBy(p => p.Alias)
             .ToList();
+
+        var freezeAt = contest.FreezeAt;
+
+        var startAt = contest.StartAt;
+        var endAt = contest.EndAt;
+
+        var durationMinutes =
+            endAt != default && startAt != default
+                ? (int)(endAt - startAt).TotalMinutes
+                : 0;
 
         return new ContestDetailDto
         {
@@ -119,14 +136,25 @@ public class ContestRepository : IContestRepository
             Visibility = contest.VisibilityCode,
             ContestType = contest.ContestType ?? "icpc",
             AllowTeams = contest.AllowTeams,
+
             Status =
-                contest.StartAt > now ? "upcoming" :
-                contest.EndAt < now ? "ended" :
+                startAt > now ? "upcoming" :
+                endAt < now ? "ended" :
                 "running",
+
             IsPublished = contest.VisibilityCode == "public",
-            StartAt = contest.StartAt,
-            EndAt = contest.EndAt,
-            DurationMinutes = (int)(contest.EndAt - contest.StartAt).TotalMinutes,
+
+            // freeze info (optional for UI)
+            IsFrozen = freezeAt.HasValue && now >= freezeAt.Value,
+            FreezeAt = freezeAt,
+
+            CanJoin = !(freezeAt.HasValue && now >= freezeAt.Value) && now < startAt,
+            HasLeaderboard = now >= startAt,
+
+            StartAt = startAt,
+            EndAt = endAt,
+            DurationMinutes = durationMinutes,
+
             ProblemCount = problems.Count,
             TotalPoints = problems.Sum(p => p.Points ?? 0),
 
@@ -144,7 +172,6 @@ public class ContestRepository : IContestRepository
             }).ToList()
         };
     }
-
     // =============================================
     // CHECK JOIN
     // =============================================
@@ -208,7 +235,170 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // GET MY CONTESTS (BASIC)
+    // GET MY TEAM IN CONTEST
+    // =============================================
+    public async Task<MyTeamInContestDto?> GetMyTeamInContestAsync(Guid contestId, Guid userId)
+    {
+        return await _db.ContestTeams
+            .Where(ct => ct.ContestId == contestId)
+            .Where(ct => ct.Team.TeamMembers.Any(m => m.UserId == userId))
+            .Select(ct => new MyTeamInContestDto
+            {
+                ContestId = ct.ContestId,
+                TeamId = ct.Team.Id,
+                TeamName = ct.Team.TeamName,
+                LeaderId = ct.Team.LeaderId,
+                TeamSize = ct.Team.TeamSize,
+                MemberCount = ct.Team.TeamMembers.Count(),
+                JoinedAt = ct.JoinAt,
+                Rank = ct.Rank,
+                Score = ct.Score,
+                Members = ct.Team.TeamMembers.Select(m => new TeamMemberDto
+                {
+                    UserId = m.UserId,
+                    UserName = m.User.Username,
+                    JoinedAt = m.JoinedAt
+                }).ToList()
+            })
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
+    }
+
+    // =============================================
+    // SCOREBOARD (FREEZE FIXED)
+    // =============================================
+    public async Task<List<ContestScoreboardDto>> GetScoreboardAsync(Guid contestId)
+    {
+        var contest = await _db.Contests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == contestId);
+
+        if (contest == null)
+            return new List<ContestScoreboardDto>();
+
+        var freezeTime = contest.FreezeAt;
+        var now = DateTime.UtcNow;
+
+        var isFrozen = freezeTime.HasValue && now >= freezeTime.Value;
+
+        var teams = await _db.ContestTeams
+            .Where(ct => ct.ContestId == contestId)
+            .Select(ct => new
+            {
+                ct.TeamId,
+                ct.Team.TeamName
+            })
+            .ToListAsync();
+
+        var problems = await _db.ContestProblems
+            .Where(p => p.ContestId == contestId && p.IsActive)
+            .Select(p => new
+            {
+                ContestProblemId = p.Id,
+                p.ProblemId,
+                p.Alias
+            })
+            .ToListAsync();
+
+        var contestProblemIds = problems.Select(p => p.ContestProblemId).ToList();
+
+        var submissions = await _db.Submissions
+            .Where(s =>
+                s.ContestProblemId != null &&
+                contestProblemIds.Contains(s.ContestProblemId.Value) &&
+                s.TeamId != null)
+            .Select(s => new
+            {
+                s.TeamId,
+                s.ContestProblemId,
+                s.VerdictCode,
+                s.CreatedAt
+            })
+            .ToListAsync();
+
+        if (isFrozen)
+        {
+            submissions = submissions
+                .Where(s => s.CreatedAt <= freezeTime.Value)
+                .ToList();
+        }
+
+        var result = new List<ContestScoreboardDto>();
+
+        foreach (var team in teams)
+        {
+            var teamSubs = submissions
+                .Where(s => s.TeamId == team.TeamId)
+                .ToList();
+
+            int solved = 0;
+            int penalty = 0;
+
+            var problemStats = new List<ScoreboardProblemDto>();
+
+            foreach (var problem in problems)
+            {
+                var subs = teamSubs
+                    .Where(s => s.ContestProblemId == problem.ContestProblemId)
+                    .OrderBy(s => s.CreatedAt)
+                    .ToList();
+
+                int wrong = 0;
+                DateTime? acTime = null;
+
+                foreach (var sub in subs)
+                {
+                    bool isAC =
+                        !string.IsNullOrEmpty(sub.VerdictCode) &&
+                        sub.VerdictCode.Equals("AC", StringComparison.OrdinalIgnoreCase);
+
+                    if (acTime == null && isAC)
+                    {
+                        acTime = sub.CreatedAt;
+                        solved++;
+
+                        var minutes = (int)(acTime.Value - contest.StartAt).TotalMinutes;
+                        penalty += minutes + wrong * 20;
+                    }
+                    else if (!isAC)
+                    {
+                        wrong++;
+                    }
+                }
+
+                problemStats.Add(new ScoreboardProblemDto
+                {
+                    ProblemId = problem.ProblemId,
+                    Alias = problem.Alias ?? "",
+                    IsSolved = acTime != null,
+                    Attempts = subs.Count,
+                    SolvedAt = acTime
+                });
+            }
+
+            result.Add(new ContestScoreboardDto
+            {
+                TeamId = team.TeamId,
+                TeamName = team.TeamName,
+                Solved = solved,
+                Penalty = penalty,
+                Problems = problemStats
+            });
+        }
+
+        return result
+            .OrderByDescending(x => x.Solved)
+            .ThenBy(x => x.Penalty)
+            .Select((x, i) =>
+            {
+                x.Rank = i + 1;
+                return x;
+            })
+            .ToList();
+    }
+
+    // =============================================
+    // GET MY CONTESTS
     // =============================================
     public async Task<List<Contest>> GetMyContestsAsync(Guid userId)
     {
@@ -220,7 +410,7 @@ public class ContestRepository : IContestRepository
     }
 
     // =============================================
-    // 🔥 GET MY CONTESTS (DETAILED - FIXED)
+    // GET MY CONTESTS DETAILED
     // =============================================
     public async Task<List<MyContestDto>> GetMyContestsDetailedAsync(Guid userId)
     {
@@ -232,11 +422,9 @@ public class ContestRepository : IContestRepository
                 Title = ct.Contest.Title,
                 StartAt = ct.Contest.StartAt,
                 EndAt = ct.Contest.EndAt,
-
                 TeamId = ct.Team.Id,
-                TeamName = ct.Team.TeamName,   // ✅ FIX
-                LeaderId = ct.Team.LeaderId,   // ✅ FIX
-
+                TeamName = ct.Team.TeamName,
+                LeaderId = ct.Team.LeaderId,
                 JoinedAt = ct.JoinAt,
                 Rank = ct.Rank,
                 Score = ct.Score,

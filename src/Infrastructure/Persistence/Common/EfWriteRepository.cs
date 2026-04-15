@@ -61,10 +61,11 @@ public class EfWriteRepository<TEntity, TKey> : IWriteRepository<TEntity , TKey>
         _set.RemoveRange(entities);
     }
 
-    public virtual async Task RemoveByIdAsync(TKey id , CancellationToken ct = default)
+    public virtual async Task RemoveByIdAsync(TKey id, CancellationToken ct = default)
     {
-        var entity = await _set.FindAsync(new object?[] { id } , ct);
-        if ( entity is null ) return;
+        var entity = await _set.FindAsync(new object?[] { id }, ct);
+        if (entity is null) return;
         _set.Remove(entity);
     }
+
 }

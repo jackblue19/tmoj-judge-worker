@@ -232,18 +232,50 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
-    // GET LEADERBOARD
+    // GET SCOREBOARD
     // =============================================
-    [HttpGet("{contestId}/leaderboard")]
-    public async Task<IActionResult> GetLeaderboard(Guid contestId)
+    [HttpGet("{contestId:guid}/scoreboard")]
+    public async Task<IActionResult> GetScoreboard(
+        Guid contestId,
+        CancellationToken ct)
     {
-        var result = await _mediator.Send(
-            new GetContestLeaderboardQuery
+        if (contestId == Guid.Empty)
+        {
+            return BadRequest(new
             {
-                ContestId = contestId
+                message = "contestId is required"
             });
+        }
 
-        return Ok(result);
+        try
+        {
+            Console.WriteLine("=== HIT SCOREBOARD ===");
+            Console.WriteLine($"ContestId: {contestId}");
+
+            var result = await _mediator.Send(
+                new GetContestLeaderboardQuery
+                {
+                    ContestId = contestId
+                },
+                ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched scoreboard successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("=== SCOREBOARD ERROR ===");
+            Console.WriteLine(ex.ToString());
+
+            return BadRequest(new
+            {
+                message = ex.Message,
+                inner = ex.InnerException?.Message,
+                stack = ex.StackTrace
+            });
+        }
     }
 
     // =============================================
@@ -337,5 +369,74 @@ public class ContestsController : ControllerBase
     public IActionResult Ping()
     {
         return Ok("OK");
+    }
+    // =============================================
+    // GET MY TEAM IN CONTEST
+    // =============================================
+
+    [HttpGet("{contestId}/my-team")]
+    [Authorize]
+    public async Task<IActionResult> GetMyTeam(Guid contestId)
+    {
+        var result = await _mediator.Send(
+            new GetMyTeamInContestQuery
+            {
+                ContestId = contestId
+            });
+
+        return Ok(ApiResponse<object?>.Ok(
+            result,
+            "Fetched my team in contest"
+        ));
+    }
+    // =============================================
+    // FREEZE SCOREBOARD
+    // =============================================
+    [HttpPost("{id:guid}/freeze")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> Freeze(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(
+                new FreezeContestCommand { ContestId = id }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Scoreboard frozen successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+    // =============================================
+    // UNFREEZE SCOREBOARD
+    // =============================================
+    [HttpPost("{id:guid}/unfreeze")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> Unfreeze(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(
+                new UnfreezeContestCommand { ContestId = id }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Scoreboard unfrozen successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = ex.Message
+            });
+        }
     }
 }

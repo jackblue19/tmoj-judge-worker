@@ -1,0 +1,14 @@
+﻿using Ardalis.Specification;
+using Domain.Entities;
+
+namespace Application.UseCases.Contests.Specs;
+
+public class ContestTeamsSpec : Specification<ContestTeam>
+{
+    public ContestTeamsSpec(Guid contestId)
+    {
+        Query
+            .Where(x => x.ContestId == contestId)
+            .Include(x => x.Team);
+    }
+}

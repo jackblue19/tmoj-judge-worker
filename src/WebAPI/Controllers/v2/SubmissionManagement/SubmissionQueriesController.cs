@@ -43,7 +43,8 @@ public sealed class SubmissionQueriesController : ControllerBase
             return NotFound();
 
         var currentUserId = GetUserId();
-        var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+        var isAdmin = User.IsInRole("admin") || User.IsInRole("manager")
+                    || User.IsInRole("teacher") || User.IsInRole("Admin");
 
         if ( detail.UserId != currentUserId && !isAdmin )
             return Forbid();
@@ -62,7 +63,7 @@ public sealed class SubmissionQueriesController : ControllerBase
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var isElevated =
-            User.IsInRole("admin") ||
+            User.IsInRole("admin") || User.IsInRole("Admin") ||
             User.IsInRole("manager") ||
             User.IsInRole("teacher");
 
@@ -84,7 +85,7 @@ public sealed class SubmissionQueriesController : ControllerBase
         CancellationToken ct)
     {
         var currentUserId = GetUserId();
-        var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+        var isAdmin = User.IsInRole("admin") || User.IsInRole("manager") || User.IsInRole("teacher");
 
         if ( !isAdmin )
             req.UserId = currentUserId;

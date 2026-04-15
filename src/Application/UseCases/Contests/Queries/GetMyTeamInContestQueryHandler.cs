@@ -1,11 +1,10 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.Contests.Dtos;
-using Application.UseCases.Contests.Queries;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Teams.Queries;
+namespace Application.UseCases.Contests.Queries;
 
 public class GetMyTeamInContestQueryHandler
     : IRequestHandler<GetMyTeamInContestQuery, MyTeamInContestDto?>
@@ -41,7 +40,7 @@ public class GetMyTeamInContestQueryHandler
         Console.WriteLine($"ContestId: {request.ContestId}");
 
         // =========================
-        // GET CONTEST (FREEZE CHECK)
+        // FREEZE CHECK (CONTEST LEVEL)
         // =========================
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
 
@@ -59,15 +58,12 @@ public class GetMyTeamInContestQueryHandler
         // =========================
         // CALL REPOSITORY
         // =========================
-        var team = await _contestRepository.GetMyTeamInContestAsync(
+        var result = await _contestRepository.GetMyTeamInContestAsync(
             request.ContestId,
             userId
         );
 
-        // =========================
-        // RESULT LOGIC
-        // =========================
-        if (team == null)
+        if (result == null)
         {
             Console.WriteLine("❌ No team found for this user in contest");
             return null;
@@ -78,12 +74,12 @@ public class GetMyTeamInContestQueryHandler
         // =========================
         if (isFrozen)
         {
-            // optional: you can later mask rank/score here
-            Console.WriteLine("⚠ Team view is in FROZEN mode");
+            Console.WriteLine("⚠ MyTeamInContest is in FROZEN mode");
+            // future: mask Rank / Score / Submission stats
         }
 
-        Console.WriteLine($"✅ Team found: {team.TeamName} | Members: {team.TeamSize}");
+        Console.WriteLine($"✅ Team found: {result.TeamName} | Members: {result.TeamSize}");
 
-        return team;
+        return result;
     }
 }

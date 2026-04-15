@@ -1,12 +1,10 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.Contests.Specs;
-using Application.UseCases.Score.Helpers;
 using Ardalis.Specification;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 using Application.Common.Helpers;
-using System.Text.Json;
 
 namespace Application.UseCases.Contests.Commands;
 
@@ -67,12 +65,10 @@ public class SubmitContestCommandHandler
             throw new Exception("Contest has ended");
 
         // ======================
-        // 🔥 FREEZE RULE (STRICT MODE)
+        // ✅ FREEZE FIX
         // ======================
-        if (contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value)
-        {
-            throw new Exception("CONTEST_FROZEN_SUBMIT_BLOCKED");
-        }
+        // KHÔNG block submit khi freeze
+        // Freeze chỉ ảnh hưởng scoreboard
 
         // ======================
         // 2. CHECK CONTEST PROBLEM
@@ -127,20 +123,6 @@ public class SubmitContestCommandHandler
             TestsetId = cp.OverrideTestsetId ?? testset.Id
         };
 
-        // ACM ⇔ StopOnFirstFail. Contest.ContestType == "acm" → dừng tại test đầu FAIL;
-        // mọi giá trị khác (ioi, class, null, …) → IOI, chấm hết, cộng điểm theo Weight.
-        // OptionsJson phải match shape của JudgeExecutionOptionsContract (ở project Contracts,
-        // nhưng Application không reference Contracts nên serialize qua anonymous object).
-        var isAcm = ScoringHelper.IsAcmContest(contest);
-
-        var optionsJson = JsonSerializer.Serialize(new
-        {
-            TimeLimitMs = 0,
-            MemoryLimitKb = 0,
-            CompareMode = "trim",
-            StopOnFirstFail = isAcm
-        });
-
         var judgeJob = new JudgeJob
         {
             Id = judgeJobId,
@@ -150,8 +132,7 @@ public class SubmitContestCommandHandler
             Attempts = 0,
             Priority = 0,
             TriggeredByUserId = userId.Value,
-            TriggerType = "submit",
-            OptionsJson = optionsJson
+            TriggerType = "submit"
         };
 
         await _submissionRepo.AddAsync(submission, ct);

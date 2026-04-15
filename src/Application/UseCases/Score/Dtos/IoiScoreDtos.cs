@@ -3,6 +3,7 @@ namespace Application.UseCases.Score.Dtos;
 public sealed record IoiCaseDto(
     Guid? TestcaseId,
     int? Ordinal,
+    int Weight,
     string? Verdict,
     bool Passed,
     int? RuntimeMs,

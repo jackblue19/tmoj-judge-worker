@@ -26,7 +26,9 @@ public sealed class DispatchJudgeJobContract
     public int MemoryLimitKb { get; init; }
 
     public string CompareMode { get; init; } = "trim";
-    public bool StopOnFirstFail { get; init; } = true;
+
+    // Default: IOI (chấm hết test case). Contest ACM sẽ explicit đặt = true.
+    public bool StopOnFirstFail { get; init; } = false;
 
     public string SourceCode { get; init; } = null!;
 

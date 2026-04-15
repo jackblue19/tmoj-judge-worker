@@ -6,5 +6,8 @@ public sealed class JudgeExecutionOptionsContract
     public int MemoryLimitKb { get; init; }
 
     public string CompareMode { get; init; } = "trim";
-    public bool StopOnFirstFail { get; init; } = true;
+
+    // Default: IOI (chấm hết test case, cộng điểm theo Weight).
+    // Chỉ contest ACM mới đặt = true (dừng tại test đầu FAIL).
+    public bool StopOnFirstFail { get; init; } = false;
 }

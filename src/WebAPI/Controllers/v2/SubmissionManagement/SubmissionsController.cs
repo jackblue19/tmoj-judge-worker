@@ -96,12 +96,14 @@ public sealed class SubmissionsController : ControllerBase
         if ( memoryLimitKb <= 0 )
             memoryLimitKb = runtime.DefaultMemoryLimitKb;
 
+        // Standalone problem (public/private): LUÔN IOI → không bao giờ stop-on-first-fail.
+        // Chỉ contest mới có thể chấm ACM (xem SubmitContestCommandHandler).
         var executionOptions = new JudgeExecutionOptionsContract
         {
             TimeLimitMs = timeLimitMs ,
             MemoryLimitKb = memoryLimitKb ,
             CompareMode = string.IsNullOrWhiteSpace(req.CompareMode) ? "trim" : req.CompareMode!.Trim().ToLowerInvariant() ,
-            StopOnFirstFail = req.StopOnFirstFail ?? true
+            StopOnFirstFail = false
         };
 
         var submission = new Submission
@@ -260,7 +262,6 @@ public sealed class SubmitRequestV2
     public IFormFile? CodeFile { get; set; }
 
     public string? CompareMode { get; set; }
-    public bool? StopOnFirstFail { get; set; }
 }
 
 public sealed class SubmitResponseV2

@@ -8,9 +8,10 @@ namespace Application.UseCases.Score.Helpers;
 /// dữ liệu đã load sẵn từ handler.
 ///
 /// Quy ước tính điểm trong hệ thống:
-/// - Class semester slot (student submission): LUÔN IOI (% test case × Points của slot).
-/// - Public problem (user submission tự do): LUÔN IOI.
-/// - Contest: IOI hoặc ACM, đọc từ Contest.ContestType ("ioi" / "acm").
+/// - Mặc định MỌI problem (public & private, standalone submission) đều IOI.
+/// - Chỉ có Contest mới có thể chấm theo ACM, căn cứ vào Contest.ContestType == "acm".
+/// - ACM ↔ StopOnFirstFail = true (worker dừng ngay ở test case đầu FAIL).
+/// - IOI ↔ StopOnFirstFail = false (chấm hết mọi test case, cộng điểm theo Weight).
 /// </summary>
 public static class ScoringHelper
 {
@@ -20,38 +21,54 @@ public static class ScoringHelper
     private static readonly HashSet<string> WrongVerdicts = ["wa", "tle", "mle", "re"];
 
     /// <summary>
-    /// Tính điểm IOI cho 1 submission. Mỗi test case AC = 1 điểm.
+    /// Contest có dùng ACM hay không. Mọi giá trị khác "acm" (bao gồm null/"ioi"/"class") → IOI.
+    /// </summary>
+    public static bool IsAcmContest(Contest contest)
+        => string.Equals(contest.ContestType?.Trim(), "acm", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Tính điểm IOI cho 1 submission. Mỗi test case AC cộng Weight của chính nó;
+    /// test case chưa map được (legacy) coi như Weight = 1.
     /// </summary>
     public static (int TotalScore, int PassedCases, int TotalCases, List<IoiCaseDto> Cases) CalcIoiScore(
         IReadOnlyCollection<Result> results,
-        IReadOnlyDictionary<Guid, int> ordinalByTestcaseId)
+        IReadOnlyDictionary<Guid, (int Ordinal, int Weight)> testcaseInfo)
     {
         if (results.Count == 0)
             return (0, 0, 0, new List<IoiCaseDto>());
 
         var ordered = results
-            .Select(r => new
+            .Select(r =>
             {
-                Result = r,
-                Ordinal = r.TestcaseId.HasValue && ordinalByTestcaseId.TryGetValue(r.TestcaseId.Value, out var o)
-                    ? (int?)o
-                    : null
+                (int Ordinal, int Weight)? info = r.TestcaseId.HasValue && testcaseInfo.TryGetValue(r.TestcaseId.Value, out var hit)
+                    ? hit
+                    : null;
+                return new
+                {
+                    Result = r,
+                    Ordinal = info?.Ordinal,
+                    Weight = info?.Weight ?? 1
+                };
             })
             .OrderBy(x => x.Ordinal ?? int.MaxValue)
             .ToList();
 
         int passedCases = ordered.Count(x => x.Result.StatusCode == "ac");
+        int totalScore = ordered
+            .Where(x => x.Result.StatusCode == "ac")
+            .Sum(x => x.Weight);
 
         var cases = ordered.Select(x => new IoiCaseDto(
             TestcaseId: x.Result.TestcaseId,
             Ordinal: x.Ordinal,
+            Weight: x.Weight,
             Verdict: x.Result.StatusCode,
             Passed: x.Result.StatusCode == "ac",
             RuntimeMs: x.Result.RuntimeMs,
             MemoryKb: x.Result.MemoryKb,
             Type: x.Result.Type)).ToList();
 
-        return (passedCases, passedCases, ordered.Count, cases);
+        return (totalScore, passedCases, ordered.Count, cases);
     }
 
     /// <summary>

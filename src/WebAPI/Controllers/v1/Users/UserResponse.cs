@@ -1,4 +1,5 @@
 using System;
+using WebAPI.Controllers.v1.ClassManagement;
 
 namespace WebAPI.Controllers.v1.Users;
 
@@ -25,3 +26,21 @@ public record UserDto(
     string? AvatarUrl,
     bool emailVerified,
     string? Role);
+
+public record StudentProfileWithClassesResponse(
+    UserDto Student,
+    List<ClassInstanceInfo> Classes,
+    int TotalClasses);
+
+public record TeacherSubjectInfo(
+    Guid SubjectId,
+    string Code,
+    string Name,
+    string? Description,
+    int ClassCount);
+
+public record TeacherDetailResponse(
+    UserDto Teacher,
+    List<TeacherSubjectInfo> Subjects,
+    List<ClassInstanceInfo> Classes,
+    int TotalClasses);

@@ -148,7 +148,7 @@ public class ClassController : ControllerBase
 
                 var instances = instancesList
                     .Select(cs => new ClassInstanceInfo(
-                        cs.Id,
+                        cs.Id, c.ClassCode,
                         cs.Semester.SemesterId, cs.Semester.Code,
                         cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
                         cs.Semester.StartAt, cs.Semester.EndAt,
@@ -193,7 +193,7 @@ public class ClassController : ControllerBase
             var instances = c.ClassSemesters
                 .Where(cs => cs.Semester != null && cs.Subject != null)
                 .Select(cs => new ClassInstanceInfo(
-                    cs.Id,
+                    cs.Id, c.ClassCode,
                     cs.Semester.SemesterId, cs.Semester.Code,
                     cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
                     cs.Semester.StartAt, cs.Semester.EndAt,
@@ -277,7 +277,7 @@ public class ClassController : ControllerBase
 
                 var instances = instancesList
                     .Select(cs => new ClassInstanceInfo(
-                        cs.Id,
+                        cs.Id, c.ClassCode,
                         cs.Semester.SemesterId, cs.Semester.Code,
                         cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
                         cs.Semester.StartAt, cs.Semester.EndAt,
@@ -354,7 +354,7 @@ public class ClassController : ControllerBase
 
                 var instances = instancesList
                     .Select(cs => new ClassInstanceInfo(
-                        cs.Id,
+                        cs.Id, c.ClassCode,
                         cs.Semester.SemesterId, cs.Semester.Code,
                         cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
                         cs.Semester.StartAt, cs.Semester.EndAt,
@@ -1531,7 +1531,7 @@ public class ClassController : ControllerBase
                 .Select(u => new UserDto(
                     u.UserId, u.Email, u.FirstName, u.LastName,
                     u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
-                    u.AvatarUrl, u.EmailVerified,
+                    u.AvatarUrl, u.EmailVerified, u.Status,
                     u.Role != null ? u.Role.RoleCode : null))
                 .ToListAsync(ct);
 

@@ -107,6 +107,7 @@ public class UserController : ControllerBase
                     u.MemberCode,
                     u.AvatarUrl,
                     u.EmailVerified,
+                    u.Status,
                     u.Role != null ? u.Role.RoleCode : null
                 ))
                 .ToListAsync(ct);
@@ -155,6 +156,7 @@ public class UserController : ControllerBase
                     u.MemberCode,
                     u.AvatarUrl,
                     u.EmailVerified,
+                    u.Status,
                     u.Role != null ? u.Role.RoleCode : null
                 ))
                 .FirstOrDefaultAsync(ct);
@@ -225,37 +227,30 @@ public class UserController : ControllerBase
                 .Select(u => new UserDto(
                     u.UserId, u.Email, u.FirstName, u.LastName,
                     u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
-                    u.AvatarUrl, u.EmailVerified,
+                    u.AvatarUrl, u.EmailVerified, u.Status,
                     u.Role != null ? u.Role.RoleCode : null))
                 .FirstOrDefaultAsync(ct);
 
             if (student == null)
                 return NotFound(new { Message = "Student not found." });
 
-            var query = _db.ClassMembers.AsNoTracking()
-                .Include(m => m.ClassSemester).ThenInclude(cs => cs.Semester)
-                .Include(m => m.ClassSemester).ThenInclude(cs => cs.Subject)
-                .Include(m => m.ClassSemester).ThenInclude(cs => cs.Teacher)
-                .Include(m => m.ClassSemester).ThenInclude(cs => cs.ClassMembers)
+            var classQuery = _db.ClassMembers.AsNoTracking()
                 .Where(m => m.UserId == id && m.IsActive);
 
             if (semesterId.HasValue)
-                query = query.Where(m => m.ClassSemester.SemesterId == semesterId.Value);
+                classQuery = classQuery.Where(m => m.ClassSemester.SemesterId == semesterId.Value);
             if (subjectId.HasValue)
-                query = query.Where(m => m.ClassSemester.SubjectId == subjectId.Value);
+                classQuery = classQuery.Where(m => m.ClassSemester.SubjectId == subjectId.Value);
 
-            var memberships = await query.ToListAsync(ct);
-
-            var classes = memberships
-                .Where(m => m.ClassSemester != null && m.ClassSemester.Semester != null && m.ClassSemester.Subject != null)
+            var classes = await classQuery
                 .OrderByDescending(m => m.ClassSemester.CreatedAt)
                 .Select(m => new ClassInstanceInfo(
-                    m.ClassSemester.Id,
+                    m.ClassSemester.Id, m.ClassSemester.Class.ClassCode,
                     m.ClassSemester.Semester.SemesterId, m.ClassSemester.Semester.Code,
                     m.ClassSemester.Subject.SubjectId, m.ClassSemester.Subject.Code,
                     m.ClassSemester.Subject.Name, m.ClassSemester.Subject.Description,
                     m.ClassSemester.Semester.StartAt, m.ClassSemester.Semester.EndAt,
-                    null, null, m.ClassSemester.CreatedAt,
+                    (string?)null, (DateTime?)null, m.ClassSemester.CreatedAt,
                     m.ClassSemester.Teacher != null
                         ? new ClassTeacherInfo(
                             m.ClassSemester.Teacher.UserId,
@@ -264,7 +259,7 @@ public class UserController : ControllerBase
                             m.ClassSemester.Teacher.AvatarUrl)
                         : null,
                     m.ClassSemester.ClassMembers.Count(cm => cm.IsActive)))
-                .ToList();
+                .ToListAsync(ct);
 
             var result = new StudentProfileWithClassesResponse(student, classes, classes.Count);
             return Ok(ApiResponse<StudentProfileWithClassesResponse>.Ok(result, "Student profile fetched successfully"));
@@ -293,7 +288,7 @@ public class UserController : ControllerBase
                 .Select(u => new UserDto(
                     u.UserId, u.Email, u.FirstName, u.LastName,
                     u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
-                    u.AvatarUrl, u.EmailVerified,
+                    u.AvatarUrl, u.EmailVerified, u.Status,
                     u.Role != null ? u.Role.RoleCode : null))
                 .FirstOrDefaultAsync(ct);
 
@@ -301,6 +296,7 @@ public class UserController : ControllerBase
                 return NotFound(new { Message = "Teacher not found." });
 
             var query = _db.ClassSemesters.AsNoTracking()
+                .Include(cs => cs.Class)
                 .Include(cs => cs.Semester)
                 .Include(cs => cs.Subject)
                 .Include(cs => cs.Teacher)
@@ -315,10 +311,10 @@ public class UserController : ControllerBase
             var classSemesters = await query.ToListAsync(ct);
 
             var classes = classSemesters
-                .Where(cs => cs.Semester != null && cs.Subject != null)
+                .Where(cs => cs.Semester != null && cs.Subject != null && cs.Class != null)
                 .OrderByDescending(cs => cs.CreatedAt)
                 .Select(cs => new ClassInstanceInfo(
-                    cs.Id,
+                    cs.Id, cs.Class.ClassCode,
                     cs.Semester.SemesterId, cs.Semester.Code,
                     cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
                     cs.Semester.StartAt, cs.Semester.EndAt,
@@ -404,6 +400,7 @@ public class UserController : ControllerBase
                     u.MemberCode,
                     u.AvatarUrl,
                     u.EmailVerified,
+                    u.Status,
                     u.Role != null ? u.Role.RoleCode : null
                 ))
                 .ToListAsync(ct);
@@ -760,6 +757,89 @@ public class UserController : ControllerBase
         }
 
         return Ok(new { Message = $"Role {req.RoleCode} assigned." });
+    }
+
+    // ──────────────────────────────────────────
+    // PUT api/v1/user/{id}  →  Admin update user (cannot change Email, MemberCode, RollNumber)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin")]
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> AdminUpdateUser(Guid id, [FromBody] AdminUpdateUserRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id && u.DeletedAt == null, ct);
+            if (user == null) return NotFound(new { Message = "User not found." });
+
+            if (!string.IsNullOrWhiteSpace(req.FirstName))
+                user.FirstName = req.FirstName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.LastName))
+                user.LastName = req.LastName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Username))
+            {
+                var usernameNorm = req.Username.Trim().ToLowerInvariant();
+                var taken = await _db.Users.AnyAsync(u => u.Username == usernameNorm && u.UserId != id, ct);
+                if (taken) return Conflict(new { Message = "Username is already taken." });
+                user.Username = usernameNorm;
+            }
+            if (req.DisplayName != null)
+                user.DisplayName = req.DisplayName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Password))
+                user.Password = _passwordHasher.Hash(req.Password);
+            if (!string.IsNullOrWhiteSpace(req.RoleCode))
+            {
+                var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.Trim().ToLowerInvariant(), ct);
+                if (role == null) return BadRequest(new { Message = "Role not found." });
+                user.RoleId = role.RoleId;
+            }
+            if (req.Status.HasValue)
+                user.Status = req.Status.Value;
+
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(ApiResponse<object>.Ok(new { user.UserId }, "User updated successfully."));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating the user." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // PUT api/v1/user/me  →  User updates own profile (cannot change Email, Username, Role, RollNumber, MemberCode)
+    // ──────────────────────────────────────────
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateMyProfileRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId == Guid.Empty)
+                return Unauthorized(new { Message = "Unauthorized access." });
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.DeletedAt == null, ct);
+            if (user == null) return NotFound(new { Message = "User not found." });
+
+            if (!string.IsNullOrWhiteSpace(req.FirstName))
+                user.FirstName = req.FirstName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.LastName))
+                user.LastName = req.LastName.Trim();
+            if (req.DisplayName != null)
+                user.DisplayName = req.DisplayName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Password))
+                user.Password = _passwordHasher.Hash(req.Password);
+
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(ApiResponse<object>.Ok(new { user.UserId }, "Profile updated successfully."));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating your profile." });
+        }
     }
 
     private Guid GetUserId()

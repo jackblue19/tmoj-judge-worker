@@ -19,6 +19,7 @@ public record ClassSubjectInfo(
 
 public record ClassInstanceInfo(
     Guid ClassSemesterId ,
+    string ClassCode ,
     Guid SemesterId ,
     string SemesterCode ,
     Guid SubjectId ,

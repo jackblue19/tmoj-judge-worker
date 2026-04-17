@@ -9,18 +9,21 @@ namespace Application.UseCases.Contests.Commands;
 public class CreateTeamInviteCodeCommandHandler : IRequestHandler<CreateTeamInviteCodeCommand, string>
 {
     private readonly IReadRepository<ContestTeam, Guid> _ctRepo;
-    private readonly IWriteRepository<Team, Guid> _teamRepo;
+    private readonly IReadRepository<Team, Guid> _teamReadRepo;
+    private readonly IWriteRepository<Team, Guid> _teamWriteRepo;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
 
     public CreateTeamInviteCodeCommandHandler(
         IReadRepository<ContestTeam, Guid> ctRepo,
-        IWriteRepository<Team, Guid> teamRepo,
+        IReadRepository<Team, Guid> teamReadRepo,
+        IWriteRepository<Team, Guid> teamWriteRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
         _ctRepo = ctRepo;
-        _teamRepo = teamRepo;
+        _teamReadRepo = teamReadRepo;
+        _teamWriteRepo = teamWriteRepo;
         _currentUser = currentUser;
         _uow = uow;
     }
@@ -35,7 +38,7 @@ public class CreateTeamInviteCodeCommandHandler : IRequestHandler<CreateTeamInvi
         if (contestTeam == null)
             throw new Exception("NOT_IN_CONTEST_TEAM");
 
-        var teamEntity = await _teamRepo.GetByIdAsync(contestTeam.TeamId, ct);
+        var teamEntity = await _teamReadRepo.GetByIdAsync(contestTeam.TeamId, ct);
         if (teamEntity == null)
             throw new Exception("TEAM_NOT_FOUND");
 
@@ -47,7 +50,7 @@ public class CreateTeamInviteCodeCommandHandler : IRequestHandler<CreateTeamInvi
         teamEntity.InviteCode = inviteCode;
         teamEntity.UpdatedAt = DateTime.UtcNow;
 
-        _teamRepo.Update(teamEntity);
+        _teamWriteRepo.Update(teamEntity);
         await _uow.SaveChangesAsync(ct);
 
         return inviteCode;

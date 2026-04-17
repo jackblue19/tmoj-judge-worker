@@ -1,4 +1,4 @@
-using Application.UseCases.Contests.Commands;
+﻿using Application.UseCases.Contests.Commands;
 using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Queries;
 using Application.UseCases.Teams.Commands;
@@ -376,5 +376,100 @@ public class ContestsController : ControllerBase
             new GetTeamInviteCodeQuery { ContestId = contestId }, ct);
 
         return Ok(ApiResponse<string?>.Ok(result, "Fetched team invite code successfully"));
+    }
+
+    // =============================================
+    // CHANGE VISIBILITY
+    // =============================================
+    [HttpPut("{contestId:guid}/visibility")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> ChangeVisibility(
+        Guid contestId,
+        [FromBody] ChangeVisibilityCommand command,
+        CancellationToken ct)
+    {
+        command.ContestId = contestId;
+
+        var result = await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Visibility changed successfully"
+        ));
+    }
+
+    // =============================================
+    // ARCHIVE CONTEST
+    // =============================================
+    [HttpPost("{contestId:guid}/archive")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> ArchiveContest(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new ArchiveContestCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest archived successfully"
+        ));
+    }
+
+    // =============================================
+    // CREATE VIRTUAL CONTEST
+    // =============================================
+    [HttpPost("{contestId:guid}/virtual")]
+    [Authorize]
+    public async Task<IActionResult> CreateVirtualContest(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateVirtualContestCommand
+            {
+                SourceContestId = contestId
+            }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Virtual contest created successfully"
+        ));
+    }
+
+    // =============================================
+    // PUBLISH FINAL RANKING
+    // =============================================
+    [HttpPost("{contestId:guid}/ranking/publish")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> PublishRanking(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new PublishRankingCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Ranking published successfully"
+        ));
+    }
+
+    // =============================================
+    // RECALCULATE CONTEST RESULTS
+    // =============================================
+    [HttpPost("{contestId:guid}/recalculate")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> RecalculateContest(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new RecalculateContestCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Recalculation job enqueued successfully"
+        ));
     }
 }

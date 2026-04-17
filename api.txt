@@ -1,0 +1,444 @@
+### CONTEST APIs
+
+---
+
+#### 1. Create Contest
+- **Endpoint**: `POST /api/v1/contests`
+- **Auth**: `admin, manager`
+- **Request Body**:
+```json
+{
+    "title": "string",
+    "descriptionMd": "string (optional)",
+    "visibilityCode": "public/private/hidden",
+    "contestType": "icpc/ioi",
+    "allowTeams": true,
+    "startAt": "datetime",
+    "endAt": "datetime"
+}
+```
+- **Response**:
+```json
+{
+    "success": true,
+    "data": "contestId",
+    "message": "Contest created successfully"
+}
+```
+
+---
+
+#### 2. Get Contest List
+- **Endpoint**: `GET /api/v1/contests`
+- **Auth**: `None`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": [ ... ],
+    "message": "Fetched contests successfully"
+}
+```
+
+---
+
+#### 3. Get Contest Detail
+- **Endpoint**: `GET /api/v1/contests/{id}`
+- **Auth**: `None`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": { "id": "guid", "title": "string", ... },
+    "message": "Fetched contest detail successfully"
+}
+```
+
+---
+
+#### 4. Get My Contests
+- **Endpoint**: `GET /api/v1/contests/me?status=running`
+- **Auth**: `Required`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": [ ... ],
+    "message": "Fetched my contests successfully"
+}
+```
+
+---
+
+#### 5. Update Contest
+- **Endpoint**: `PUT /api/v1/contests/{id}`
+- **Auth**: `admin, manager`
+- **Request Body**:
+```json
+{
+    "title": "string",
+    "description": "string",
+    "startAt": "datetime",
+    "endAt": "datetime",
+    "contestType": "icpc/ioi",
+    "allowTeams": true,
+    "visibilityCode": "public/private/hidden"
+}
+```
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Contest updated successfully"
+}
+```
+
+---
+
+#### 6. Join Contest
+- **Endpoint**: `POST /api/v1/contests/{contestId}/join`
+- **Auth**: `Required`
+- **Request Body**:
+```json
+{
+    "contestId": "guid"
+}
+```
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Joined contest successfully"
+}
+```
+
+---
+
+#### 7. Register Contest
+- **Endpoint**: `POST /api/v1/contests/{contestId}/register`
+- **Auth**: `Required`
+- **Request Body**:
+```json
+{
+    "contestId": "guid"
+}
+```
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Registered successfully"
+}
+```
+
+---
+
+#### 8. Unregister Contest
+- **Endpoint**: `DELETE /api/v1/contests/{contestId}/unregister`
+- **Auth**: `Required`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Unregistered successfully"
+}
+```
+
+---
+
+#### 9. Get Scoreboard
+- **Endpoint**: `GET /api/v1/contests/{contestId}/scoreboard`
+- **Auth**: `None`
+- **Note**: Applies `is_frozen` logic — submissions after `FreezeAt` are hidden from scoreboard.
+- **Response**:
+```json
+{
+    "success": true,
+    "data": { ... },
+    "message": "Fetched scoreboard successfully"
+}
+```
+
+---
+
+#### 10. Add Problem to Contest
+- **Endpoint**: `POST /api/v1/contests/{contestId}/problems`
+- **Auth**: `admin, manager`
+- **Request Body**:
+```json
+{
+    "problemId": "guid",
+    "alias": "string (optional)",
+    "ordinal": 0,
+    "points": 100,
+    "maxScore": 100,
+    "timeLimitMs": 1000,
+    "memoryLimitKb": 256000
+}
+```
+- **Response**:
+```json
+{
+    "success": true,
+    "data": "contestProblemId",
+    "message": "Added problem to contest"
+}
+```
+
+---
+
+#### 11. Get Problems in Contest
+- **Endpoint**: `GET /api/v1/contests/{contestId}/problems`
+- **Auth**: `None`
+- **Note**: No freeze block — problems are always visible.
+- **Response**:
+```json
+{
+    "success": true,
+    "data": [ ... ],
+    "message": "Fetched contest problems successfully"
+}
+```
+
+---
+
+#### 12. Submit Problem (Contest)
+- **Endpoint**: `POST /api/v1/contests/{contestId}/submit`
+- **Auth**: `Required`
+- **Request Body**:
+```json
+{
+    "contestProblemId": "guid",
+    "code": "source code",
+    "language": "cpp/java/py3"
+}
+```
+- **Response (Success)**:
+```json
+{
+    "success": true,
+    "data": "submissionId",
+    "message": "Submitted successfully"
+}
+```
+- **Error**: `CONTEST_FROZEN_SUBMIT_BLOCKED`
+
+---
+
+#### 13. Publish Contest
+- **Endpoint**: `POST /api/v1/contests/{id}/publish`
+- **Auth**: `admin, manager`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": { "contestId": "guid", "status": "published", ... },
+    "message": "Contest has been successfully published"
+}
+```
+- **Error**: `CONTEST_ALREADY_PUBLISHED`, `CONTEST_ALREADY_STARTED`, `CONTEST_HAS_NO_PROBLEMS`
+
+---
+
+#### 14. Get My Team in Contest
+- **Endpoint**: `GET /api/v1/contests/{contestId}/my-team`
+- **Auth**: `Required`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": {
+        "teamName": "string",
+        "teamSize": 0
+    },
+    "message": "Fetched my team in contest"
+}
+```
+
+---
+
+#### 15. Freeze Scoreboard
+- **Endpoint**: `POST /api/v1/contests/{id}/freeze`
+- **Auth**: `admin, manager`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Scoreboard frozen successfully"
+}
+```
+- **Error**: `CONTEST_NOT_STARTED`, `ALREADY_FROZEN`
+
+---
+
+#### 16. Unfreeze Scoreboard
+- **Endpoint**: `POST /api/v1/contests/{id}/unfreeze`
+- **Auth**: `admin, manager`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Scoreboard unfrozen successfully"
+}
+```
+- **Error**: `NOT_FROZEN`
+
+---
+
+#### 17. Remix Contest
+- **Endpoint**: `POST /api/v1/contests/{id}/remix`
+- **Auth**: `admin, manager`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": "newContestId",
+    "message": "Contest remixed successfully"
+}
+```
+
+---
+
+#### 18. Join Team by Invite Code
+- **Endpoint**: `POST /api/v1/contests/{contestId}/teams/join-by-code`
+- **Auth**: `Required`
+- **Request Body**:
+```json
+{
+    "code": "string"
+}
+```
+- **Response**:
+```json
+{
+    "success": true,
+    "data": null,
+    "message": "Joined team successfully"
+}
+```
+
+---
+
+#### 19. Create Team Invite Code
+- **Endpoint**: `POST /api/v1/contests/{contestId}/teams/invite-code`
+- **Auth**: `Team Leader`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": "8-digit-code",
+    "message": "Invite code created successfully"
+}
+```
+
+---
+
+#### 20. Get Team Invite Code
+- **Endpoint**: `GET /api/v1/contests/{contestId}/teams/invite-code`
+- **Auth**: `Team Leader`
+- **Response**:
+```json
+{
+    "success": true,
+    "data": "8-digit-code",
+    "message": "Fetched team invite code successfully"
+}
+```
+
+---
+
+#### 21. Change Visibility
+- **Endpoint**: `PUT /api/v1/contests/{id}/visibility`
+- **Auth**: `admin, manager`
+- **Request Body**:
+```json
+{
+    "visibilityCode": "public/private/hidden"
+}
+```
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Visibility changed successfully"
+}
+```
+- **Error**: `INVALID_VISIBILITY`, `CANNOT_PUBLIC_WHILE_RUNNING`
+
+---
+
+#### 22. Archive Contest
+- **Endpoint**: `POST /api/v1/contests/{id}/archive`
+- **Auth**: `admin, manager`
+- **Note**: Sets visibility to `hidden` and `IsActive = false`. Contest must be ended.
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Contest archived successfully"
+}
+```
+- **Error**: `CONTEST_NOT_ENDED`, `ALREADY_ARCHIVED`
+
+---
+
+#### 23. Create Virtual Contest
+- **Endpoint**: `POST /api/v1/contests/{id}/virtual`
+- **Auth**: `Required`
+- **Note**: Clones the contest for practice. Always private, `IsVirtual = true`, timer starts immediately with same duration as source. Source contest must be ended.
+- **Response**:
+```json
+{
+    "success": true,
+    "data": "newContestId",
+    "message": "Virtual contest created successfully"
+}
+```
+- **Error**: `CONTEST_NOT_FOUND`, `CONTEST_NOT_ENDED`
+
+---
+
+#### 24. Publish Final Ranking
+- **Endpoint**: `POST /api/v1/contests/{id}/ranking/publish`
+- **Auth**: `admin, manager`
+- **Note**: Snapshots final scores/rankings into `contest_history`. Automatically unfreezes if frozen. Contest must be ended.
+- **Response**:
+```json
+{
+    "success": true,
+    "data": true,
+    "message": "Ranking published successfully"
+}
+```
+- **Error**: `CONTEST_NOT_ENDED`
+
+---
+
+#### 25. Recalculate Contest Results
+- **Endpoint**: `POST /api/v1/contests/{id}/recalculate`
+- **Auth**: `admin, manager`
+- **Note**: Enqueues a `ScoreRecalcJob` with `scope = "contest"`. Actual recalculation is handled by background worker.
+- **Response**:
+```json
+{
+    "success": true,
+    "data": "jobId",
+    "message": "Recalculation job enqueued successfully"
+}
+```
+- **Error**: `RECALC_ALREADY_PENDING`
+
+---
+
+#### 26. Health Check
+- **Endpoint**: `GET /api/v1/contests/ping`
+- **Auth**: `None`
+- **Response**: `"OK"`

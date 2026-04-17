@@ -1,6 +1,7 @@
-﻿using Application.UseCases.Contests.Commands;
+using Application.UseCases.Contests.Commands;
 using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Queries;
+using Application.UseCases.Teams.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -330,5 +331,50 @@ public class ContestsController : ControllerBase
             result,
             "Contest remixed successfully"
         ));
+    }
+
+    // =============================================
+    // TEAMS - JOIN BY INVITE CODE
+    // =============================================
+    [HttpPost("{contestId:guid}/teams/join-by-code")]
+    [Authorize]
+    public async Task<IActionResult> JoinTeamByCode(
+        Guid contestId,
+        [FromBody] JoinTeamByCodeCommand command,
+        CancellationToken ct)
+    {
+        await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<object?>.Ok(null, "Joined team successfully"));
+    }
+
+    // =============================================
+    // TEAMS - CREATE INVITE CODE
+    // =============================================
+    [HttpPost("{contestId:guid}/teams/invite-code")]
+    [Authorize]
+    public async Task<IActionResult> CreateTeamInviteCode(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateTeamInviteCodeCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<string>.Ok(result, "Invite code created successfully"));
+    }
+
+    // =============================================
+    // TEAMS - GET INVITE CODE
+    // =============================================
+    [HttpGet("{contestId:guid}/teams/invite-code")]
+    [Authorize]
+    public async Task<IActionResult> GetTeamInviteCode(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetTeamInviteCodeQuery { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<string?>.Ok(result, "Fetched team invite code successfully"));
     }
 }

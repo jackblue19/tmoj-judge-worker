@@ -1,0 +1,238 @@
+﻿using Application.UseCases.StudyPlans.Commands.AddProblemToPlan;
+using Application.UseCases.StudyPlans.Commands.CreateStudyPlan;
+using Application.UseCases.StudyPlans.Commands.EnrollStudyPlan;
+using Application.UseCases.StudyPlans.Dtos;
+using Application.UseCases.StudyPlans.Queries.GetNextStudyPlanItem;
+using Application.UseCases.StudyPlans.Queries.GetStudyPlanDetail;
+using Application.UseCases.StudyPlans.Queries.GetStudyPlanEnrollment;
+using Application.UseCases.StudyPlans.Queries.GetStudyPlanStats;
+using Application.UseCases.StudyPlans.Queries.GetUnlockedPlans;
+using Asp.Versioning;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WebAPI.Models.Common;
+
+namespace WebAPI.Controllers.v1.StudyPlans;
+
+[ApiController]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/study-plans")]
+public class StudyPlansController : ControllerBase
+{
+    private readonly IMediator _mediator;
+
+    public StudyPlansController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
+
+    // =========================
+    // CREATE PLAN
+    // =========================
+    [HttpPost]
+    [Authorize]
+    public async Task<IActionResult> Create(
+        [FromBody] CreateStudyPlanCommand command,
+        CancellationToken ct)
+    {
+        try
+        {
+            var id = await _mediator.Send(command, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                new { studyPlanId = id },
+                "Study plan created successfully"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // ADD PROBLEM
+    // =========================
+    [HttpPost("{planId:guid}/problems/{problemId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> AddProblem(
+        Guid planId,
+        Guid problemId,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new AddProblemToPlanCommand
+            {
+                StudyPlanId = planId,
+                ProblemId = problemId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                true,
+                "Problem added to study plan"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // ENROLL
+    // =========================
+    [HttpPost("{planId:guid}/enroll")]
+    [Authorize]
+    public async Task<IActionResult> Enroll(
+        Guid planId,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new EnrollStudyPlanCommand
+            {
+                StudyPlanId = planId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                true,
+                "Enrolled successfully"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // UNLOCKED LIST
+    // =========================
+    [HttpGet("creator/{creatorId:guid}/unlocked")]
+    [Authorize]
+    public async Task<IActionResult> GetUnlocked(
+        Guid creatorId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetUnlockedPlansQuery
+            {
+                CreatorId = creatorId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched unlocked plans"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // DETAIL
+    // =========================
+    [HttpGet("{id:guid}")]
+    [Authorize]
+    public async Task<IActionResult> GetDetail(
+        Guid id,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetStudyPlanDetailQuery
+            {
+                StudyPlanId = id
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched study plan detail"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // NEXT ITEM
+    // =========================
+    [HttpGet("{planId:guid}/next/{itemId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> GetNext(
+        Guid planId,
+        Guid itemId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetNextStudyPlanItemQuery
+            {
+                StudyPlanId = planId,
+                StudyPlanItemId = itemId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched next item"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // ENROLLMENT
+    // =========================
+    [HttpGet("{planId:guid}/enrollment")]
+    [Authorize]
+    public async Task<IActionResult> GetEnrollment(
+        Guid planId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetStudyPlanEnrollmentQuery
+            {
+                StudyPlanId = planId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched enrollment info"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // STATS
+    // =========================
+    [HttpGet("{planId:guid}/stats")]
+    [Authorize]
+    public async Task<IActionResult> GetStats(
+        Guid planId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetStudyPlanStatsQuery
+            {
+                StudyPlanId = planId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched stats"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+}

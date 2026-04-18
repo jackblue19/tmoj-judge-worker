@@ -57,7 +57,9 @@ public static class InfrastructureRegistration
         services.AddScoped<IUserProblemQueries, UserProblemQueries>();
         services.AddScoped<IWriteRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
         services.AddScoped<IReadRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
-
+        services.AddScoped<IStudyPlanApplicationService, StudyPlanApplicationService>();
+        services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
+        services.AddScoped<IGamificationRepository, GamificationRepository>();
         return services;
     }
 

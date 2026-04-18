@@ -26,6 +26,13 @@
   <ItemGroup>
     <Folder Include="UseCases\Contests\Validators\" />
     <Folder Include="UseCases\Editorials\Validators\" />
+    <Folder Include="UseCases\Gamification\Commands\" />
+    <Folder Include="UseCases\Gamification\Validators\" />
+    <Folder Include="UseCases\Gamification\Specs\" />
+    <Folder Include="UseCases\StudyPlans\Specs\" />
+    <Folder Include="UseCases\StudyPlans\Validators\" />
+    <Folder Include="UseCases\StudyProgress\Specs\" />
+    <Folder Include="UseCases\StudyProgress\Validators\" />
   </ItemGroup>
 
 </Project>

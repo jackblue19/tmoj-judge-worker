@@ -150,4 +150,7 @@ public partial class User
     public virtual ICollection<Wallet> Wallets { get; set; } = new List<Wallet>();
 
     public virtual ICollection<ContestHistory> Histories { get; set; } = new List<ContestHistory>();
+
+    public virtual ICollection<UserStudyItemProgress> UserStudyItemProgresses { get; set; }
+    = new List<UserStudyItemProgress>();
 }

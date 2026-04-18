@@ -33,15 +33,24 @@ public class GetContestsQueryHandler
             pageSize = 100;
 
         var status = request.Status?.Trim().ToLower();
+        if (status == "all") status = null;
+
         var visibility = request.VisibilityCode?.Trim().ToLower();
+        if (visibility == "all") visibility = null;
 
         var isPrivileged =
             _currentUser.IsAuthenticated &&
             (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
 
-        // Non-admins can only query public contests
-        if (!isPrivileged && !string.IsNullOrEmpty(visibility) && visibility != "public")
-            throw new UnauthorizedAccessException("NO_PERMISSION");
+        if (!isPrivileged)
+        {
+            // Non-admins can only query public contests
+            if (!string.IsNullOrEmpty(visibility) && visibility != "public")
+                throw new UnauthorizedAccessException("NO_PERMISSION");
+
+            // Force visibility filter for non-admins
+            visibility = "public";
+        }
 
         // Archived contests (IsActive=false) are visible only to admin/manager
         var includeArchived = isPrivileged;

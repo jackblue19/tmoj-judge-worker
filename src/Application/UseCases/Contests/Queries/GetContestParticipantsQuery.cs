@@ -3,7 +3,7 @@ using MediatR;
 
 namespace Application.UseCases.Contests.Queries;
 
-public class GetContestParticipantsQuery : IRequest<List<ContestParticipantTeamDto>>
+public class GetContestParticipantsQuery : IRequest<ContestParticipantsResultDto>
 {
     public Guid ContestId { get; set; }
 }

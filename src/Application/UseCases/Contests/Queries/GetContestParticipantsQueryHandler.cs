@@ -8,7 +8,7 @@ using MediatR;
 namespace Application.UseCases.Contests.Queries;
 
 public class GetContestParticipantsQueryHandler
-    : IRequestHandler<GetContestParticipantsQuery, List<ContestParticipantTeamDto>>
+    : IRequestHandler<GetContestParticipantsQuery, ContestParticipantsResultDto>
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
     private readonly IReadRepository<ContestTeam, Guid> _contestTeamRepo;
@@ -24,7 +24,7 @@ public class GetContestParticipantsQueryHandler
         _currentUser = currentUser;
     }
 
-    public async Task<List<ContestParticipantTeamDto>> Handle(
+    public async Task<ContestParticipantsResultDto> Handle(
         GetContestParticipantsQuery request,
         CancellationToken ct)
     {
@@ -40,7 +40,7 @@ public class GetContestParticipantsQueryHandler
         var teams = await _contestTeamRepo.ListAsync(
             new ContestTeamsWithMembersSpec(request.ContestId), ct);
 
-        return teams.Select(t => new ContestParticipantTeamDto
+        var teamDtos = teams.Select(t => new ContestParticipantTeamDto
         {
             TeamId = t.TeamId,
             TeamName = t.Team.TeamName,
@@ -61,5 +61,18 @@ public class GetContestParticipantsQueryHandler
                 RollNumber = tm.User.RollNumber
             }).ToList()
         }).ToList();
+
+        var totalUsers = teams
+            .SelectMany(t => t.Team.TeamMembers)
+            .Select(tm => tm.UserId)
+            .Distinct()
+            .Count();
+
+        return new ContestParticipantsResultDto
+        {
+            TotalTeams = teamDtos.Count,
+            TotalUsers = totalUsers,
+            Teams = teamDtos
+        };
     }
 }

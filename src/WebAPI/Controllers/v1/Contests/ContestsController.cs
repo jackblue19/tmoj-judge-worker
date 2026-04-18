@@ -349,36 +349,6 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
-    // TEAMS - CREATE INVITE CODE
-    // =============================================
-    [HttpPost("{contestId:guid}/teams/invite-code")]
-    [Authorize]
-    public async Task<IActionResult> CreateTeamInviteCode(
-        Guid contestId,
-        CancellationToken ct)
-    {
-        var result = await _mediator.Send(
-            new CreateTeamInviteCodeCommand { ContestId = contestId }, ct);
-
-        return Ok(ApiResponse<string>.Ok(result, "Invite code created successfully"));
-    }
-
-    // =============================================
-    // TEAMS - GET INVITE CODE
-    // =============================================
-    [HttpGet("{contestId:guid}/teams/invite-code")]
-    [Authorize]
-    public async Task<IActionResult> GetTeamInviteCode(
-        Guid contestId,
-        CancellationToken ct)
-    {
-        var result = await _mediator.Send(
-            new GetTeamInviteCodeQuery { ContestId = contestId }, ct);
-
-        return Ok(ApiResponse<string?>.Ok(result, "Fetched team invite code successfully"));
-    }
-
-    // =============================================
     // CHANGE VISIBILITY
     // =============================================
     [HttpPut("{contestId:guid}/visibility")]
@@ -548,24 +518,6 @@ public class ContestsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(
             result,
             "Joined contest successfully"
-        ));
-    }
-
-    // =============================================
-    // GET CONTEST INVITE CODE
-    // =============================================
-    [HttpGet("{id:guid}/invite-code")]
-    [Authorize(Roles = "admin,manager")]
-    public async Task<IActionResult> GetInviteCode(
-        Guid id,
-        CancellationToken ct)
-    {
-        var result = await _mediator.Send(
-            new GetContestInviteCodeQuery { ContestId = id }, ct);
-
-        return Ok(ApiResponse<string?>.Ok(
-            result,
-            "Fetched contest invite code successfully"
         ));
     }
 

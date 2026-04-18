@@ -30,13 +30,12 @@ public class ContestRepository : IContestRepository
     {
         var now = DateTime.UtcNow;
 
-        var visibility = string.IsNullOrEmpty(visibilityCode)
-            ? "public"
-            : visibilityCode.ToLower();
-
         var query = _db.Contests
             .AsNoTracking()
-            .Where(x => x.VisibilityCode == visibility);
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(visibilityCode))
+            query = query.Where(x => x.VisibilityCode == visibilityCode.ToLower());
 
         if (!includeArchived)
             query = query.Where(x => x.IsActive);

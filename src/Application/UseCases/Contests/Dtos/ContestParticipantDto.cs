@@ -1,5 +1,12 @@
 namespace Application.UseCases.Contests.Dtos;
 
+public class ContestParticipantsResultDto
+{
+    public int TotalTeams { get; set; }
+    public int TotalUsers { get; set; }
+    public List<ContestParticipantTeamDto> Teams { get; set; } = new();
+}
+
 public class ContestParticipantTeamDto
 {
     public Guid TeamId { get; set; }

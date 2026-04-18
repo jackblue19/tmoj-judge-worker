@@ -3,7 +3,7 @@ using MediatR;
 
 namespace Application.UseCases.Gamification.Queries.GetLeaderboard;
 
-public class GetLeaderboardQuery : IRequest<List<LeaderboardItemDto>>
+public class GetLeaderboardQuery : IRequest<LeaderboardResponseDto>
 {
-    public string Type { get; set; } = "exp"; // exp | streak | badge
+    public string Type { get; set; } = "exp";
 }

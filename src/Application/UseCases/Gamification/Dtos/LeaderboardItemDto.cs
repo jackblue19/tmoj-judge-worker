@@ -10,6 +10,8 @@ namespace Application.UseCases.Gamification.Dtos
     {
         public Guid UserId { get; set; }
         public string DisplayName { get; set; } = default!;
+
+        public int SolvedCount { get; set; }
         public string? AvatarUrl { get; set; }
 
         public int Value { get; set; } // exp / streak / badge count

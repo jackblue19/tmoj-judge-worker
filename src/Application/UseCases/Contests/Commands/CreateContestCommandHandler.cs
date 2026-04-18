@@ -59,6 +59,10 @@ public class CreateContestCommandHandler
             ContestType = request.ContestType,
             AllowTeams = request.AllowTeams,
 
+            InviteCode = string.Equals(request.VisibilityCode, "private", StringComparison.OrdinalIgnoreCase)
+                ? Guid.NewGuid().ToString("N")[..8].ToUpper()
+                : null,
+
             CreatedAt = DateTime.UtcNow,
             CreatedBy = _currentUser.UserId
         };

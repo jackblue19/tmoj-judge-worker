@@ -139,11 +139,8 @@ public class RegisterContestCommandHandler
                 userId
             };
 
-            if (allMembers.Count < 3)
-                throw new ArgumentException("TEAM_MIN_3_MEMBERS");
-
-            if (allMembers.Count > 5)
-                throw new ArgumentException("TEAM_MAX_5_MEMBERS");
+            if (allMembers.Count > 3)
+                throw new ArgumentException("TEAM_MAX_3_MEMBERS");
 
             // CHECK ALL MEMBERS EXIST
             var memberList = allMembers.ToList();

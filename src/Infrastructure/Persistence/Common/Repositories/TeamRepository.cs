@@ -139,7 +139,7 @@ public class TeamRepository : ITeamRepository
         var count = await _db.TeamMembers
             .CountAsync(x => x.TeamId == teamId);
 
-        return count >= 3 && count <= 5;
+        return count >= 1 && count <= 3;
     }
 
     // =========================

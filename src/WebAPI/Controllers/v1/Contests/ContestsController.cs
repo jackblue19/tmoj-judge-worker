@@ -472,4 +472,122 @@ public class ContestsController : ControllerBase
             "Recalculation job enqueued successfully"
         ));
     }
+
+    // =============================================
+    // EXTEND CONTEST TIME
+    // =============================================
+    [HttpPatch("{id:guid}/extend")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> ExtendContestTime(
+        Guid id,
+        [FromBody] ExtendContestTimeCommand command,
+        CancellationToken ct)
+    {
+        command.ContestId = id;
+
+        var result = await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest time extended successfully"
+        ));
+    }
+
+    // =============================================
+    // GET CONTEST PARTICIPANTS
+    // =============================================
+    [HttpGet("{id:guid}/participants")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> GetParticipants(
+        Guid id,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetContestParticipantsQuery { ContestId = id }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Fetched contest participants successfully"
+        ));
+    }
+
+    // =============================================
+    // REMOVE PROBLEM FROM CONTEST (HARD DELETE)
+    // =============================================
+    [HttpDelete("{contestId:guid}/problems/{contestProblemId:guid}")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> RemoveProblem(
+        Guid contestId,
+        Guid contestProblemId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new RemoveContestProblemCommand
+            {
+                ContestId = contestId,
+                ContestProblemId = contestProblemId
+            }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Problem removed from contest successfully"
+        ));
+    }
+
+    // =============================================
+    // JOIN CONTEST BY INVITE CODE
+    // =============================================
+    [HttpPost("join-by-code")]
+    [Authorize]
+    public async Task<IActionResult> JoinByCode(
+        [FromBody] JoinContestByCodeCommand command,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Joined contest successfully"
+        ));
+    }
+
+    // =============================================
+    // GET CONTEST INVITE CODE
+    // =============================================
+    [HttpGet("{id:guid}/invite-code")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> GetInviteCode(
+        Guid id,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetContestInviteCodeQuery { ContestId = id }, ct);
+
+        return Ok(ApiResponse<string?>.Ok(
+            result,
+            "Fetched contest invite code successfully"
+        ));
+    }
+
+    // =============================================
+    // TOGGLE EDITORIAL VISIBILITY
+    // =============================================
+    [HttpPatch("{contestId:guid}/problems/{contestProblemId:guid}/editorial-visibility")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> ToggleEditorialVisibility(
+        Guid contestId,
+        Guid contestProblemId,
+        [FromBody] ToggleEditorialVisibilityCommand command,
+        CancellationToken ct)
+    {
+        command.ContestId = contestId;
+        command.ContestProblemId = contestProblemId;
+
+        var result = await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Editorial visibility updated successfully"
+        ));
+    }
 }

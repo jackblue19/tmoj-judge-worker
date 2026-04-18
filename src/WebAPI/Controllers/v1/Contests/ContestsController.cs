@@ -507,7 +507,7 @@ public class ContestsController : ControllerBase
     // =============================================
     // DELETE CONTEST (HARD DELETE — ONLY BEFORE START)
     // =============================================
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("{id:guid}/hard-before-start")]
     [Authorize(Roles = "admin,manager")]
     public async Task<IActionResult> DeleteContest(
         Guid id,

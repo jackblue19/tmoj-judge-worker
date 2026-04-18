@@ -1,10 +1,10 @@
 ﻿using Application.UseCases.Contests.Commands;
 using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Queries;
+using Application.UseCases.Teams.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Contests;
@@ -64,6 +64,7 @@ public class ContestsController : ControllerBase
             "Fetched contest detail successfully"
         ));
     }
+
     // =============================================
     // GET MY CONTESTS
     // =============================================
@@ -92,34 +93,18 @@ public class ContestsController : ControllerBase
         [FromBody] UpdateContestCommand command,
         CancellationToken ct)
     {
-        try
-        {
-            Console.WriteLine("=== HIT UPDATE CONTEST ===");
+        command.ContestId = id;
 
-            command.ContestId = id;
+        var result = await _mediator.Send(command, ct);
 
-            var result = await _mediator.Send(command, ct);
-
-            return Ok(ApiResponse<object>.Ok(
-                result,
-                "Contest updated successfully"
-            ));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("=== UPDATE ERROR ===");
-            Console.WriteLine(ex.ToString());
-
-            return BadRequest(new
-            {
-                message = ex.Message,
-                inner = ex.InnerException?.Message,
-                stack = ex.StackTrace
-            });
-        }
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest updated successfully"
+        ));
     }
+
     // =============================================
-    // JOIN CONTEST (ONLY WHEN RUNNING)
+    // JOIN CONTEST
     // =============================================
     [HttpPost("{contestId:guid}/join")]
     [Authorize]
@@ -128,36 +113,18 @@ public class ContestsController : ControllerBase
         [FromBody] JoinContestCommand command,
         CancellationToken ct)
     {
-        try
-        {
-            Console.WriteLine("=== HIT JOIN CONTEST ===");
+        command.ContestId = contestId;
 
-            // bind route → command
-            command.ContestId = contestId;
+        var result = await _mediator.Send(command, ct);
 
-            var result = await _mediator.Send(command, ct);
-
-            return Ok(ApiResponse<object>.Ok(
-                result,
-                "Joined contest successfully"
-            ));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("=== JOIN ERROR ===");
-            Console.WriteLine(ex.ToString());
-
-            return BadRequest(new
-            {
-                message = ex.Message,
-                inner = ex.InnerException?.Message,
-                stack = ex.StackTrace
-            });
-        }
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Joined contest successfully"
+        ));
     }
 
     // =============================================
-    // REGISTER (BEFORE 8 HOURS)
+    // REGISTER
     // =============================================
     [HttpPost("{contestId:guid}/register")]
     [Authorize]
@@ -166,35 +133,18 @@ public class ContestsController : ControllerBase
         [FromBody] RegisterContestCommand command,
         CancellationToken ct)
     {
-        try
-        {
-            Console.WriteLine("=== HIT REGISTER CONTEST ===");
+        command.ContestId = contestId;
 
-            command.ContestId = contestId;
+        var result = await _mediator.Send(command, ct);
 
-            var result = await _mediator.Send(command, ct);
-
-            return Ok(ApiResponse<object>.Ok(
-                result,
-                "Registered successfully"
-            ));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("=== REGISTER ERROR ===");
-            Console.WriteLine(ex.ToString());
-
-            return BadRequest(new
-            {
-                message = ex.Message,
-                inner = ex.InnerException?.Message,
-                stack = ex.StackTrace
-            });
-        }
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Registered successfully"
+        ));
     }
 
     // =============================================
-    // UNREGISTER (BEFORE 4 HOURS)
+    // UNREGISTER
     // =============================================
     [HttpDelete("{contestId:guid}/unregister")]
     [Authorize]
@@ -202,48 +152,37 @@ public class ContestsController : ControllerBase
         Guid contestId,
         CancellationToken ct)
     {
-        try
-        {
-            Console.WriteLine("=== HIT UNREGISTER CONTEST ===");
-
-            var result = await _mediator.Send(
-                new UnregisterContestCommand
-                {
-                    ContestId = contestId
-                }, ct);
-
-            return Ok(ApiResponse<object>.Ok(
-                result,
-                "Unregistered successfully"
-            ));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("=== UNREGISTER ERROR ===");
-            Console.WriteLine(ex.ToString());
-
-            return BadRequest(new
+        var result = await _mediator.Send(
+            new UnregisterContestCommand
             {
-                message = ex.Message,
-                inner = ex.InnerException?.Message,
-                stack = ex.StackTrace
-            });
-        }
+                ContestId = contestId
+            }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Unregistered successfully"
+        ));
     }
 
     // =============================================
-    // GET LEADERBOARD
+    // SCOREBOARD (FREEZE APPLY HERE ONLY)
     // =============================================
-    [HttpGet("{contestId}/leaderboard")]
-    public async Task<IActionResult> GetLeaderboard(Guid contestId)
+    [HttpGet("{contestId:guid}/scoreboard")]
+    public async Task<IActionResult> GetScoreboard(
+        Guid contestId,
+        CancellationToken ct)
     {
         var result = await _mediator.Send(
             new GetContestLeaderboardQuery
             {
                 ContestId = contestId
-            });
+            },
+            ct);
 
-        return Ok(result);
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Fetched scoreboard successfully"
+        ));
     }
 
     // =============================================
@@ -264,7 +203,7 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
-    // GET PROBLEMS
+    // GET PROBLEMS (NO FREEZE BLOCK)
     // =============================================
     [HttpGet("{contestId}/problems")]
     public async Task<IActionResult> GetProblems(Guid contestId)
@@ -272,15 +211,14 @@ public class ContestsController : ControllerBase
         var result = await _mediator.Send(
             new GetContestProblemsQuery(contestId));
 
-        return Ok(new
-        {
-            data = result,
-            message = "Fetched contest problems successfully"
-        });
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Fetched contest problems successfully"
+        ));
     }
 
     // =============================================
-    // SUBMIT
+    // SUBMIT (🔥 KHÔNG BLOCK KHI FREEZE)
     // =============================================
     [HttpPost("{contestId}/submit")]
     [Authorize]
@@ -289,27 +227,14 @@ public class ContestsController : ControllerBase
         [FromBody] SubmitContestCommand command,
         CancellationToken ct)
     {
-        try
-        {
-            Console.WriteLine("=== HIT SUBMIT CONTEST ===");
+        command.ContestId = contestId;
 
-            command.ContestId = contestId;
+        var result = await _mediator.Send(command, ct);
 
-            var result = await _mediator.Send(command, ct);
-
-            return Ok(ApiResponse<object>.Ok(result, "Submitted successfully"));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("=== SUBMIT ERROR ===");
-
-            return BadRequest(new
-            {
-                message = ex.Message,
-                inner = ex.InnerException?.Message,
-                stack = ex.StackTrace
-            });
-        }
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Submitted successfully"
+        ));
     }
 
     // =============================================
@@ -322,12 +247,61 @@ public class ContestsController : ControllerBase
         var result = await _mediator.Send(
             new PublishContestCommand(id), ct);
 
-        return Ok(new
-        {
-            success = true,
-            data = result,
-            message = "Contest has been successfully published"
-        });
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest has been successfully published"
+        ));
+    }
+
+    // =============================================
+    // GET MY TEAM
+    // =============================================
+    [HttpGet("{contestId}/my-team")]
+    [Authorize]
+    public async Task<IActionResult> GetMyTeam(Guid contestId)
+    {
+        var result = await _mediator.Send(
+            new GetMyTeamInContestQuery
+            {
+                ContestId = contestId
+            });
+
+        return Ok(ApiResponse<object?>.Ok(
+            result,
+            "Fetched my team in contest"
+        ));
+    }
+
+    // =============================================
+    // FREEZE SCOREBOARD
+    // =============================================
+    [HttpPost("{id:guid}/freeze")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> Freeze(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new FreezeContestCommand { ContestId = id }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Scoreboard frozen successfully"
+        ));
+    }
+
+    // =============================================
+    // UNFREEZE SCOREBOARD
+    // =============================================
+    [HttpPost("{id:guid}/unfreeze")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> Unfreeze(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new UnfreezeContestCommand { ContestId = id }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Scoreboard unfrozen successfully"
+        ));
     }
 
     // =============================================
@@ -337,5 +311,165 @@ public class ContestsController : ControllerBase
     public IActionResult Ping()
     {
         return Ok("OK");
+    }
+    // =============================================
+    // REMIX CONTEST
+    // =============================================
+    [HttpPost("{id:guid}/remix")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> RemixContest(
+    Guid id,
+    CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new RemixContestCommand
+            {
+                SourceContestId = id   // 🔥 FIX
+            }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest remixed successfully"
+        ));
+    }
+
+    // =============================================
+    // TEAMS - JOIN BY INVITE CODE
+    // =============================================
+    [HttpPost("{contestId:guid}/teams/join-by-code")]
+    [Authorize]
+    public async Task<IActionResult> JoinTeamByCode(
+        Guid contestId,
+        [FromBody] JoinTeamByCodeCommand command,
+        CancellationToken ct)
+    {
+        await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<object?>.Ok(null, "Joined team successfully"));
+    }
+
+    // =============================================
+    // TEAMS - CREATE INVITE CODE
+    // =============================================
+    [HttpPost("{contestId:guid}/teams/invite-code")]
+    [Authorize]
+    public async Task<IActionResult> CreateTeamInviteCode(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateTeamInviteCodeCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<string>.Ok(result, "Invite code created successfully"));
+    }
+
+    // =============================================
+    // TEAMS - GET INVITE CODE
+    // =============================================
+    [HttpGet("{contestId:guid}/teams/invite-code")]
+    [Authorize]
+    public async Task<IActionResult> GetTeamInviteCode(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetTeamInviteCodeQuery { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<string?>.Ok(result, "Fetched team invite code successfully"));
+    }
+
+    // =============================================
+    // CHANGE VISIBILITY
+    // =============================================
+    [HttpPut("{contestId:guid}/visibility")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> ChangeVisibility(
+        Guid contestId,
+        [FromBody] ChangeVisibilityCommand command,
+        CancellationToken ct)
+    {
+        command.ContestId = contestId;
+
+        var result = await _mediator.Send(command, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Visibility changed successfully"
+        ));
+    }
+
+    // =============================================
+    // ARCHIVE CONTEST
+    // =============================================
+    [HttpPost("{contestId:guid}/archive")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> ArchiveContest(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new ArchiveContestCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest archived successfully"
+        ));
+    }
+
+    // =============================================
+    // CREATE VIRTUAL CONTEST
+    // =============================================
+    [HttpPost("{contestId:guid}/virtual")]
+    [Authorize]
+    public async Task<IActionResult> CreateVirtualContest(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateVirtualContestCommand
+            {
+                SourceContestId = contestId
+            }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Virtual contest created successfully"
+        ));
+    }
+
+    // =============================================
+    // PUBLISH FINAL RANKING
+    // =============================================
+    [HttpPost("{contestId:guid}/ranking/publish")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> PublishRanking(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new PublishRankingCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Ranking published successfully"
+        ));
+    }
+
+    // =============================================
+    // RECALCULATE CONTEST RESULTS
+    // =============================================
+    [HttpPost("{contestId:guid}/recalculate")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> RecalculateContest(
+        Guid contestId,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new RecalculateContestCommand { ContestId = contestId }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Recalculation job enqueued successfully"
+        ));
     }
 }

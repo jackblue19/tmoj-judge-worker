@@ -9,7 +9,10 @@ public class AllReportsSpec : Specification<ContentReport>
     {
         if (!string.IsNullOrEmpty(status))
         {
-            Query.Where(x => x.Status.ToLower() == status.ToLower());
+            Query.Where(x =>
+                x.Status != null &&
+                string.Equals(x.Status, status, StringComparison.OrdinalIgnoreCase)
+            );
         }
 
         Query.OrderByDescending(x => x.CreatedAt);

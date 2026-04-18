@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Contests.Specs;
 using Ardalis.Specification;
 using Domain.Abstractions;
@@ -55,11 +55,22 @@ public class SubmitContestCommandHandler
         if (contest == null)
             throw new Exception("Contest not found");
 
+        if (contest.VisibilityCode != "public")
+            throw new Exception("Contest is not public");
+
         if (now < contest.StartAt)
             throw new Exception("Contest has not started");
 
         if (now > contest.EndAt)
             throw new Exception("Contest has ended");
+
+        // ======================
+        // ✅ FREEZE CHECK
+        // ======================
+        if (contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value && (!contest.UnfreezeAt.HasValue || now < contest.UnfreezeAt.Value))
+        {
+            throw new Exception("CONTEST_FROZEN_SUBMIT_BLOCKED");
+        }
 
         // ======================
         // 2. CHECK CONTEST PROBLEM
@@ -79,7 +90,7 @@ public class SubmitContestCommandHandler
             throw new Exception("You have not joined this contest");
 
         // ======================
-        // 4. GET TESTSET (QUAN TRỌNG)
+        // 4. GET TESTSET
         // ======================
         var testset = await _testsetRepo.FirstOrDefaultAsync(
             new TestsetByProblemSpec(cp.ProblemId),
@@ -89,7 +100,7 @@ public class SubmitContestCommandHandler
             throw new Exception("No active testset found");
 
         // ======================
-        // 5. CREATE SUBMISSION + JUDGE JOB
+        // 5. CREATE SUBMISSION + JOB
         // ======================
         var submissionId = Guid.NewGuid();
         var judgeJobId = Guid.NewGuid();
@@ -97,25 +108,20 @@ public class SubmitContestCommandHandler
         var submission = new Submission
         {
             Id = submissionId,
-
             UserId = userId.Value,
             ProblemId = cp.ProblemId,
             ContestProblemId = cp.Id,
             TeamId = team.TeamId,
-
             SourceCode = request.Code,
 
-            // ✅ FIX chuẩn DB
             StatusCode = "queued",
             VerdictCode = null,
             SubmissionType = "contest",
 
             CodeSize = request.Code?.Length ?? 0,
             CodeHash = Guid.NewGuid().ToString(),
-
             CreatedAt = now,
 
-            // ✅ BẮT BUỘC
             TestsetId = cp.OverrideTestsetId ?? testset.Id
         };
 
@@ -123,31 +129,18 @@ public class SubmitContestCommandHandler
         {
             Id = judgeJobId,
             SubmissionId = submissionId,
-
             EnqueueAt = now,
             Status = "queued",
             Attempts = 0,
             Priority = 0,
-
             TriggeredByUserId = userId.Value,
             TriggerType = "submit"
         };
 
-        // ======================
-        // SAVE (DEBUG SAFE)
-        // ======================
-        try
-        {
-            await _submissionRepo.AddAsync(submission, ct);
-            await _judgeJobRepo.AddAsync(judgeJob, ct);
+        await _submissionRepo.AddAsync(submission, ct);
+        await _judgeJobRepo.AddAsync(judgeJob, ct);
 
-            await _uow.SaveChangesAsync(ct);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("🔥 DB ERROR: " + ex.InnerException?.Message);
-            throw;
-        }
+        await _uow.SaveChangesAsync(ct);
 
         return submissionId;
     }

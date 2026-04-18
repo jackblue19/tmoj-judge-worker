@@ -65,12 +65,12 @@ public sealed class ScoreIoiProblemQueryHandler
                 .Distinct()
                 .ToList();
 
-            var ordinalMap = testcaseIds.Count == 0
-                ? new Dictionary<Guid, int>()
+            var testcaseInfo = testcaseIds.Count == 0
+                ? new Dictionary<Guid, (int Ordinal, int Weight)>()
                 : (await _testcaseRepo.ListAsync(new TestcasesByIdsSpec(testcaseIds), ct))
-                    .ToDictionary(t => t.Id, t => t.Ordinal);
+                    .ToDictionary(t => t.Id, t => (t.Ordinal, t.Weight));
 
-            var score = ScoringHelper.CalcIoiScore(results, ordinalMap);
+            var score = ScoringHelper.CalcIoiScore(results, testcaseInfo);
 
             entries.Add(new IoiSubmissionEntryDto(
                 SubmissionId: s.Id,

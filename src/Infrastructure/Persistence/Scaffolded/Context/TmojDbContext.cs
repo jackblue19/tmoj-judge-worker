@@ -1939,7 +1939,6 @@ public partial class TmojDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("study_plans_pkey");
 
             entity.ToTable("study_plans");
-
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
@@ -1947,14 +1946,23 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValueSql("now()")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
-            entity.Property(e => e.CreatorId).HasColumnName("creator_id");
-            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.CreatorId)
+                .HasColumnName("creator_id");
+            entity.Property(e => e.Description)
+                .HasColumnName("description");
+            entity.Property(e => e.IsPaid)
+                .HasColumnName("is_paid")
+                .HasDefaultValue(false);
+            entity.Property(e => e.Price)
+                .HasColumnName("price")
+                .HasColumnType("integer");
             entity.Property(e => e.IsPublic)
                 .HasDefaultValue(true)
                 .HasColumnName("is_public");
-            entity.Property(e => e.Title).HasColumnName("title");
-
-            entity.HasOne(d => d.Creator).WithMany(p => p.StudyPlans)
+            entity.Property(e => e.Title)
+                .HasColumnName("title");
+            entity.HasOne(d => d.Creator)
+                .WithMany(p => p.StudyPlans)
                 .HasForeignKey(d => d.CreatorId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("study_plans_creator_id_fkey");
@@ -2299,9 +2307,9 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("users");
 
-            entity.HasIndex(e => e.Email , "users_email_key").IsUnique();
+            entity.HasIndex(e => e.Email, "users_email_key").IsUnique();
 
-            entity.HasIndex(e => e.Username , "users_username_key").IsUnique();
+            entity.HasIndex(e => e.Username, "users_username_key").IsUnique();
 
             entity.Property(e => e.UserId)
                 .HasDefaultValueSql("gen_random_uuid()")
@@ -2348,6 +2356,47 @@ public partial class TmojDbContext : DbContext
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .HasForeignKey(d => d.RoleId)
                 .HasConstraintName("users_role_id_fkey");
+
+        });
+        modelBuilder.Entity<UserStudyItemProgress>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("user_study_item_progress_pkey");
+
+            entity.ToTable("user_study_item_progress");
+
+            entity.Property(e => e.Id)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("id");
+
+            entity.Property(e => e.UserId)
+                .HasColumnName("user_id");
+
+            entity.Property(e => e.StudyPlanItemId)
+                .HasColumnName("study_plan_item_id");
+
+            entity.Property(e => e.IsCompleted)
+                .HasDefaultValue(false)
+                .HasColumnName("is_completed");
+
+            entity.Property(e => e.CompletedAt)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("completed_at");
+
+            // =========================
+            // RELATIONSHIPS
+            // =========================
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.UserStudyItemProgresses)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("user_study_item_progress_user_id_fkey");
+
+            entity.HasOne(d => d.StudyPlanItem)
+                .WithMany(p => p.UserStudyItemProgresses)
+                .HasForeignKey(d => d.StudyPlanItemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("user_study_item_progress_study_plan_item_id_fkey");
         });
 
         modelBuilder.Entity<UserBadge>(entity =>

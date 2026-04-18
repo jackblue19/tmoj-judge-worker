@@ -2,7 +2,6 @@
 using Application.Common.Models;
 using Application.UseCases.Contests.Dtos;
 using MediatR;
-using Application.Common.Helpers;
 
 namespace Application.UseCases.Contests.Queries;
 
@@ -20,10 +19,24 @@ public class GetContestsQueryHandler
         GetContestsQuery request,
         CancellationToken ct)
     {
+        // =========================
+        // NORMALIZE INPUT
+        // =========================
+        var page = request.Page <= 0 ? 1 : request.Page;
+        var pageSize = request.PageSize <= 0 ? 10 : request.PageSize;
+
+        if (pageSize > 100)
+            pageSize = 100;
+
+        var status = request.Status?.Trim().ToLower();
+
+        // =========================
+        // CALL REPO
+        // =========================
         return await _repo.GetContestsAsync(
-            request.Status,
-            request.Page,
-            request.PageSize
+            status,
+            page,
+            pageSize
         );
     }
 }

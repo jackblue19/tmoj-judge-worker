@@ -98,10 +98,11 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
             CancellationToken ct)
         {
             await _mediator.Send(new DeleteDiscussionCommand(id), ct);
+
             return Ok(ApiResponse<object>.Ok(true, "Discussion deleted successfully"));
         }
 
-        // POST vote discussion (mock, chỉ 1 lần / user)
+        // POST vote discussion
         [HttpPost("/api/v{version:apiVersion}/discussions/{id:guid}/vote")]
         [Authorize]
         public async Task<IActionResult> VoteDiscussion(
@@ -120,8 +121,9 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
             await _mediator.Send(
                 new VoteDiscussionCommand(id, dto.VoteType), ct);
 
-            return Ok(ApiResponse<object>.Ok(null, action));
+            return Ok(ApiResponse<object?>.Ok(null, action));
         }
+
         // PUT update discussion
         [HttpPut("/api/v{version:apiVersion}/discussions/{id:guid}")]
         [Authorize]
@@ -139,7 +141,7 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
             await _mediator.Send(
                 new UpdateDiscussionCommand(id, dto.Title, dto.Content), ct);
 
-            return Ok(ApiResponse<object>.Ok(null, "Discussion updated successfully"));
+            return Ok(ApiResponse<object?>.Ok(null, "Discussion updated successfully"));
         }
     }
 }

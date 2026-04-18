@@ -24,3 +24,15 @@ public sealed class AllResultsBySubmissionSpec : Specification<Result>
         Query.Where(r => r.SubmissionId == submissionId);
     }
 }
+
+/// <summary>
+/// Batch-load Result (có TestcaseId) cho nhiều submission — tránh N+1 khi tính
+/// leaderboard IOI cho toàn contest.
+/// </summary>
+public sealed class ResultsBySubmissionIdsSpec : Specification<Result>
+{
+    public ResultsBySubmissionIdsSpec(IReadOnlyCollection<Guid> submissionIds)
+    {
+        Query.Where(r => submissionIds.Contains(r.SubmissionId) && r.TestcaseId != null);
+    }
+}

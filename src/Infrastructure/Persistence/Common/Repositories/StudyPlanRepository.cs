@@ -1,0 +1,179 @@
+﻿using Application.Common.Interfaces;
+using Domain.Entities;
+using Infrastructure.Persistence.Scaffolded.Context;
+using Microsoft.EntityFrameworkCore;
+
+namespace Infrastructure.Persistence.Common.Repositories;
+
+public class StudyPlanRepository : IStudyPlanRepository
+{
+    private readonly TmojDbContext _db;
+
+    public StudyPlanRepository(TmojDbContext db)
+    {
+        _db = db;
+    }
+
+    // =========================
+    // PLAN
+    // =========================
+    public async Task<Guid> CreateAsync(StudyPlan entity)
+    {
+        await _db.Set<StudyPlan>().AddAsync(entity);
+        return entity.Id;
+    }
+
+    public async Task<StudyPlan?> GetByIdAsync(Guid id)
+    {
+        return await _db.Set<StudyPlan>()
+            .Include(x => x.StudyPlanItems)
+            .FirstOrDefaultAsync(x => x.Id == id);
+    }
+
+    public async Task<List<StudyPlan>> GetByCreatorAsync(Guid creatorId)
+    {
+        return await _db.Set<StudyPlan>()
+            .Where(x => x.CreatorId == creatorId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync();
+    }
+
+    // =========================
+    // ITEMS
+    // =========================
+    public async Task AddItemAsync(StudyPlanItem entity)
+    {
+        await _db.Set<StudyPlanItem>().AddAsync(entity);
+    }
+
+    public async Task<List<StudyPlanItem>> GetItemsByPlanIdAsync(Guid studyPlanId)
+    {
+        return await _db.Set<StudyPlanItem>()
+            .Where(x => x.StudyPlanId == studyPlanId)
+            .OrderBy(x => x.OrderIndex)
+            .ToListAsync();
+    }
+
+    // =========================
+    // ITEM PROGRESS
+    // =========================
+    public async Task<UserStudyItemProgress?> GetItemProgressAsync(Guid userId, Guid studyPlanItemId)
+    {
+        return await _db.Set<UserStudyItemProgress>()
+            .FirstOrDefaultAsync(x =>
+                x.UserId == userId &&
+                x.StudyPlanItemId == studyPlanItemId);
+    }
+
+    public async Task<List<UserStudyItemProgress>> GetItemProgressByPlanAsync(Guid userId, Guid studyPlanId)
+    {
+        return await _db.Set<UserStudyItemProgress>()
+            .Where(x => x.UserId == userId)
+            .Where(x =>
+                _db.Set<StudyPlanItem>()
+                    .Any(i =>
+                        i.Id == x.StudyPlanItemId &&
+                        i.StudyPlanId == studyPlanId
+                    )
+            )
+            .ToListAsync();
+    }
+
+    public async Task CreateItemProgressAsync(UserStudyItemProgress entity)
+    {
+        await _db.Set<UserStudyItemProgress>().AddAsync(entity);
+    }
+
+    // =========================
+    // ENROLL CHECK
+    // =========================
+    public async Task<bool> IsUserEnrolledAsync(Guid userId, Guid studyPlanId)
+    {
+        return await (
+            from p in _db.Set<UserStudyItemProgress>()
+            join i in _db.Set<StudyPlanItem>()
+                on p.StudyPlanItemId equals i.Id
+            where p.UserId == userId
+                  && i.StudyPlanId == studyPlanId
+            select p.Id
+        ).AnyAsync();
+    }
+
+    // =========================
+    // COMPLETION CHECK (OPTIMIZED - NO LIST IN MEMORY)
+    // =========================
+    public async Task<bool> IsStudyPlanCompletedAsync(Guid userId, Guid studyPlanId)
+    {
+        var totalItems = await _db.Set<StudyPlanItem>()
+            .CountAsync(x => x.StudyPlanId == studyPlanId);
+
+        if (totalItems == 0)
+            return false;
+
+        var completedItems = await (
+            from p in _db.Set<UserStudyItemProgress>()
+            join i in _db.Set<StudyPlanItem>()
+                on p.StudyPlanItemId equals i.Id
+            where p.UserId == userId
+                  && i.StudyPlanId == studyPlanId
+                  && p.IsCompleted == true
+            select p.StudyPlanItemId
+        )
+        .Distinct()
+        .CountAsync();
+
+        return completedItems == totalItems;
+    }
+    // =========================
+    // SAVE
+    // =========================
+    public async Task SaveChangesAsync()
+    {
+        await _db.SaveChangesAsync();
+    }
+
+    // =========================
+    // GET ALL ITEM PROGRESS BY USER (FOR DASHBOARD, ETC.)
+    // =========================
+
+    public async Task<List<UserStudyItemProgress>> GetAllItemProgressByUserAsync(Guid userId)
+    {
+        return await _db.Set<UserStudyItemProgress>()
+            .Include(x => x.StudyPlanItem)
+                .ThenInclude(i => i.StudyPlan)
+            .Where(x => x.UserId == userId)
+            .ToListAsync();
+    }
+    // =========================
+    // DELETE ITEM PROGRESS RANGE (FOR UNENROLL OR RESET PROGRESS)
+    // =========================
+
+    public Task DeleteItemProgressRangeAsync(List<UserStudyItemProgress> entities)
+    {
+        _db.Set<UserStudyItemProgress>().RemoveRange(entities);
+        return Task.CompletedTask;
+    }
+    // =========================
+    // GET ITEM BY ID (FOR PROGRESS UPDATE, ETC.)
+    // =========================
+    public async Task<StudyPlanItem?> GetItemByIdAsync(Guid itemId)
+    {
+        return await _db.Set<StudyPlanItem>()
+            .FirstOrDefaultAsync(x => x.Id == itemId);
+    }
+
+    // =========================
+    // GET ALL PROGRESS BY PLAN (FOR ANALYTICS, ETC.)
+    // =========================
+    public async Task<List<UserStudyItemProgress>> GetAllProgressByPlanAsync(Guid studyPlanId)
+    {
+        var itemIds = await _db.Set<StudyPlanItem>()
+            .Where(x => x.StudyPlanId == studyPlanId)
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        return await _db.Set<UserStudyItemProgress>()
+            .Where(x => itemIds.Contains(x.StudyPlanItemId))
+            .ToListAsync();
+    }
+}

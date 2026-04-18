@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using WebAPI.Controllers.v1.ClassManagement;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Users;
@@ -106,6 +107,7 @@ public class UserController : ControllerBase
                     u.MemberCode,
                     u.AvatarUrl,
                     u.EmailVerified,
+                    u.Status,
                     u.Role != null ? u.Role.RoleCode : null
                 ))
                 .ToListAsync(ct);
@@ -154,6 +156,7 @@ public class UserController : ControllerBase
                     u.MemberCode,
                     u.AvatarUrl,
                     u.EmailVerified,
+                    u.Status,
                     u.Role != null ? u.Role.RoleCode : null
                 ))
                 .FirstOrDefaultAsync(ct);
@@ -203,6 +206,143 @@ public class UserController : ControllerBase
         catch ( Exception )
         {
             return StatusCode(500 , new { Message = "An error occurred while fetching the user profile. Please try again later." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/user/students/{id}  →  Student profile with joined classes (filter by semester/subject)
+    // ──────────────────────────────────────────
+    [HttpGet("students/{id:guid}")]
+    public async Task<IActionResult> GetStudentDetail(
+        Guid id,
+        [FromQuery] Guid? semesterId,
+        [FromQuery] Guid? subjectId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var student = await _db.Users.AsNoTracking()
+                .Include(u => u.Role)
+                .Where(u => u.UserId == id && u.DeletedAt == null)
+                .Select(u => new UserDto(
+                    u.UserId, u.Email, u.FirstName, u.LastName,
+                    u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
+                    u.AvatarUrl, u.EmailVerified, u.Status,
+                    u.Role != null ? u.Role.RoleCode : null))
+                .FirstOrDefaultAsync(ct);
+
+            if (student == null)
+                return NotFound(new { Message = "Student not found." });
+
+            var classQuery = _db.ClassMembers.AsNoTracking()
+                .Where(m => m.UserId == id && m.IsActive);
+
+            if (semesterId.HasValue)
+                classQuery = classQuery.Where(m => m.ClassSemester.SemesterId == semesterId.Value);
+            if (subjectId.HasValue)
+                classQuery = classQuery.Where(m => m.ClassSemester.SubjectId == subjectId.Value);
+
+            var classes = await classQuery
+                .OrderByDescending(m => m.ClassSemester.CreatedAt)
+                .Select(m => new ClassInstanceInfo(
+                    m.ClassSemester.Id, m.ClassSemester.Class.ClassCode,
+                    m.ClassSemester.Semester.SemesterId, m.ClassSemester.Semester.Code,
+                    m.ClassSemester.Subject.SubjectId, m.ClassSemester.Subject.Code,
+                    m.ClassSemester.Subject.Name, m.ClassSemester.Subject.Description,
+                    m.ClassSemester.Semester.StartAt, m.ClassSemester.Semester.EndAt,
+                    (string?)null, (DateTime?)null, m.ClassSemester.CreatedAt,
+                    m.ClassSemester.Teacher != null
+                        ? new ClassTeacherInfo(
+                            m.ClassSemester.Teacher.UserId,
+                            m.ClassSemester.Teacher.DisplayName,
+                            m.ClassSemester.Teacher.Email,
+                            m.ClassSemester.Teacher.AvatarUrl)
+                        : null,
+                    m.ClassSemester.ClassMembers.Count(cm => cm.IsActive)))
+                .ToListAsync(ct);
+
+            var result = new StudentProfileWithClassesResponse(student, classes, classes.Count);
+            return Ok(ApiResponse<StudentProfileWithClassesResponse>.Ok(result, "Student profile fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching the student profile." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/user/teachers/{id}  →  Teacher detail with subjects and taught classes (filter by semester/subject)
+    // ──────────────────────────────────────────
+    [HttpGet("teachers/{id:guid}")]
+    public async Task<IActionResult> GetTeacherDetail(
+        Guid id,
+        [FromQuery] Guid? semesterId,
+        [FromQuery] Guid? subjectId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var teacher = await _db.Users.AsNoTracking()
+                .Include(u => u.Role)
+                .Where(u => u.UserId == id && u.DeletedAt == null)
+                .Select(u => new UserDto(
+                    u.UserId, u.Email, u.FirstName, u.LastName,
+                    u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
+                    u.AvatarUrl, u.EmailVerified, u.Status,
+                    u.Role != null ? u.Role.RoleCode : null))
+                .FirstOrDefaultAsync(ct);
+
+            if (teacher == null)
+                return NotFound(new { Message = "Teacher not found." });
+
+            var query = _db.ClassSemesters.AsNoTracking()
+                .Include(cs => cs.Class)
+                .Include(cs => cs.Semester)
+                .Include(cs => cs.Subject)
+                .Include(cs => cs.Teacher)
+                .Include(cs => cs.ClassMembers)
+                .Where(cs => cs.TeacherId == id);
+
+            if (semesterId.HasValue)
+                query = query.Where(cs => cs.SemesterId == semesterId.Value);
+            if (subjectId.HasValue)
+                query = query.Where(cs => cs.SubjectId == subjectId.Value);
+
+            var classSemesters = await query.ToListAsync(ct);
+
+            var classes = classSemesters
+                .Where(cs => cs.Semester != null && cs.Subject != null && cs.Class != null)
+                .OrderByDescending(cs => cs.CreatedAt)
+                .Select(cs => new ClassInstanceInfo(
+                    cs.Id, cs.Class.ClassCode,
+                    cs.Semester.SemesterId, cs.Semester.Code,
+                    cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
+                    cs.Semester.StartAt, cs.Semester.EndAt,
+                    null, null, cs.CreatedAt,
+                    cs.Teacher != null
+                        ? new ClassTeacherInfo(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl)
+                        : null,
+                    cs.ClassMembers.Count(m => m.IsActive)))
+                .ToList();
+
+            var subjects = classSemesters
+                .Where(cs => cs.Subject != null)
+                .GroupBy(cs => cs.Subject.SubjectId)
+                .Select(g => new TeacherSubjectInfo(
+                    g.Key,
+                    g.First().Subject.Code,
+                    g.First().Subject.Name,
+                    g.First().Subject.Description,
+                    g.Count()))
+                .OrderBy(s => s.Code)
+                .ToList();
+
+            var result = new TeacherDetailResponse(teacher, subjects, classes, classes.Count);
+            return Ok(ApiResponse<TeacherDetailResponse>.Ok(result, "Teacher detail fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching the teacher detail." });
         }
     }
 
@@ -256,10 +396,11 @@ public class UserController : ControllerBase
                     u.LastName,
                     u.DisplayName,
                     u.Username,
-                    u.AvatarUrl,
                     u.RollNumber,
                     u.MemberCode,
+                    u.AvatarUrl,
                     u.EmailVerified,
+                    u.Status,
                     u.Role != null ? u.Role.RoleCode : null
                 ))
                 .ToListAsync(ct);
@@ -616,6 +757,89 @@ public class UserController : ControllerBase
         }
 
         return Ok(new { Message = $"Role {req.RoleCode} assigned." });
+    }
+
+    // ──────────────────────────────────────────
+    // PUT api/v1/user/{id}  →  Admin update user (cannot change Email, MemberCode, RollNumber)
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin")]
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> AdminUpdateUser(Guid id, [FromBody] AdminUpdateUserRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id && u.DeletedAt == null, ct);
+            if (user == null) return NotFound(new { Message = "User not found." });
+
+            if (!string.IsNullOrWhiteSpace(req.FirstName))
+                user.FirstName = req.FirstName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.LastName))
+                user.LastName = req.LastName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Username))
+            {
+                var usernameNorm = req.Username.Trim().ToLowerInvariant();
+                var taken = await _db.Users.AnyAsync(u => u.Username == usernameNorm && u.UserId != id, ct);
+                if (taken) return Conflict(new { Message = "Username is already taken." });
+                user.Username = usernameNorm;
+            }
+            if (req.DisplayName != null)
+                user.DisplayName = req.DisplayName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Password))
+                user.Password = _passwordHasher.Hash(req.Password);
+            if (!string.IsNullOrWhiteSpace(req.RoleCode))
+            {
+                var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.Trim().ToLowerInvariant(), ct);
+                if (role == null) return BadRequest(new { Message = "Role not found." });
+                user.RoleId = role.RoleId;
+            }
+            if (req.Status.HasValue)
+                user.Status = req.Status.Value;
+
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(ApiResponse<object>.Ok(new { user.UserId }, "User updated successfully."));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating the user." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // PUT api/v1/user/me  →  User updates own profile (cannot change Email, Username, Role, RollNumber, MemberCode)
+    // ──────────────────────────────────────────
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateMyProfileRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId == Guid.Empty)
+                return Unauthorized(new { Message = "Unauthorized access." });
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.DeletedAt == null, ct);
+            if (user == null) return NotFound(new { Message = "User not found." });
+
+            if (!string.IsNullOrWhiteSpace(req.FirstName))
+                user.FirstName = req.FirstName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.LastName))
+                user.LastName = req.LastName.Trim();
+            if (req.DisplayName != null)
+                user.DisplayName = req.DisplayName.Trim();
+            if (!string.IsNullOrWhiteSpace(req.Password))
+                user.Password = _passwordHasher.Hash(req.Password);
+
+            user.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return Ok(ApiResponse<object>.Ok(new { user.UserId }, "Profile updated successfully."));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while updating your profile." });
+        }
     }
 
     private Guid GetUserId()

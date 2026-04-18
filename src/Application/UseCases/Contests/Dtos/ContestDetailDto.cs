@@ -1,8 +1,4 @@
-﻿using Application.Common.Helpers;
-
-namespace Application.UseCases.Contests.Dtos;
-
-
+﻿namespace Application.UseCases.Contests.Dtos;
 
 public class ContestDetailDto
 {
@@ -16,14 +12,25 @@ public class ContestDetailDto
     public bool AllowTeams { get; set; }
 
     public string Status { get; set; } = "";
-    public string Phase { get; set; } = ""; // ✅ NEW
+    public string Phase { get; set; } = "";
 
     public bool IsPublished { get; set; }
 
-    public bool CanJoin { get; set; } // ✅ NEW
-    public bool IsRegistered { get; set; } // ✅ NEW
+    // =========================
+    // 🔥 FREEZE FEATURE
+    // =========================
+    public bool IsFrozen { get; set; }
+    public DateTime? FreezeAt { get; set; }
 
-    public bool HasLeaderboard { get; set; } // ✅ NEW
+    // =========================
+    // 🔥 VIEW CONTROL FLAGS (FIX MISSING ERROR)
+    // =========================
+    public bool CanViewProblems { get; set; }
+    public bool CanViewDetail { get; set; }
+
+    public bool CanJoin { get; set; }
+    public bool IsRegistered { get; set; }
+    public bool HasLeaderboard { get; set; }
 
     public DateTime StartAt { get; set; }
     public DateTime EndAt { get; set; }

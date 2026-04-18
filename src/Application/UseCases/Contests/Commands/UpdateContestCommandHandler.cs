@@ -31,6 +31,7 @@ public class UpdateContestCommandHandler
             throw new UnauthorizedAccessException("UNAUTHORIZED");
 
         var userId = _currentUser.UserId!.Value;
+        var now = DateTime.UtcNow;
 
         Console.WriteLine("=== UPDATE CONTEST START ===");
         Console.WriteLine($"UserId: {userId}");
@@ -55,36 +56,62 @@ public class UpdateContestCommandHandler
         if (!isOwner && !isAdmin)
             throw new UnauthorizedAccessException("NO_PERMISSION");
 
-        Console.WriteLine($"isOwner={isOwner}, isAdmin={isAdmin}");
+        var hasStarted = contest.StartAt <= now;
+
+        Console.WriteLine($"isOwner={isOwner}, isAdmin={isAdmin}, hasStarted={hasStarted}");
 
         // =========================
-        // 3. CHECK TIME
+        // 3. UPDATE CORE (ONLY BEFORE START)
         // =========================
-        if (contest.StartAt <= DateTime.UtcNow)
-            throw new Exception("CANNOT_UPDATE_AFTER_START");
+        if (!hasStarted)
+        {
+            if (string.IsNullOrWhiteSpace(request.Title))
+                throw new Exception("TITLE_REQUIRED");
+
+            if (request.StartAt >= request.EndAt)
+                throw new Exception("INVALID_TIME_RANGE");
+
+            contest.Title = request.Title;
+            contest.DescriptionMd = request.Description;
+
+            contest.StartAt = DateTime.SpecifyKind(request.StartAt, DateTimeKind.Utc);
+            contest.EndAt = DateTime.SpecifyKind(request.EndAt, DateTimeKind.Utc);
+
+            contest.ContestType = request.ContestType;
+            contest.AllowTeams = request.AllowTeams;
+        }
+        else
+        {
+            Console.WriteLine("⚠️ Contest started → skip core update");
+        }
 
         // =========================
-        // 4. VALIDATION
+        // 4. VISIBILITY (ALWAYS ALLOW WITH RULE)
         // =========================
-        if (string.IsNullOrWhiteSpace(request.Title))
-            throw new Exception("TITLE_REQUIRED");
+        if (!string.IsNullOrWhiteSpace(request.VisibilityCode))
+        {
+            var newVisibility = request.VisibilityCode.ToLower();
+            var currentVisibility = contest.VisibilityCode?.ToLower() ?? "private";
 
-        if (request.StartAt >= request.EndAt)
-            throw new Exception("INVALID_TIME_RANGE");
+            var valid = new[] { "public", "private", "hidden" };
+
+            if (!valid.Contains(newVisibility))
+                throw new Exception("INVALID_VISIBILITY");
+
+            // 🔥 RULE: không cho hidden -> public khi đang running
+            if (hasStarted &&
+                currentVisibility == "hidden" &&
+                newVisibility == "public")
+            {
+                throw new Exception("CANNOT_PUBLIC_WHILE_RUNNING");
+            }
+
+            contest.VisibilityCode = newVisibility;
+        }
 
         // =========================
-        // 5. UPDATE
+        // 5. SAVE
         // =========================
-        contest.Title = request.Title;
-        contest.DescriptionMd = request.Description;
-
-        contest.StartAt = DateTime.SpecifyKind(request.StartAt, DateTimeKind.Utc);
-        contest.EndAt = DateTime.SpecifyKind(request.EndAt, DateTimeKind.Utc);
-
-        contest.VisibilityCode = request.VisibilityCode;
-        contest.ContestType = request.ContestType;
-        contest.AllowTeams = request.AllowTeams;
-
         contest.UpdatedAt = DateTime.UtcNow;
         contest.UpdatedBy = userId;
 

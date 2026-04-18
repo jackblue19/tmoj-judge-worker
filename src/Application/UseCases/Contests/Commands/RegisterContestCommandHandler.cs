@@ -55,22 +55,22 @@ public class RegisterContestCommandHandler
         // ======================
         var isActive = await _userRepo.IsUserActiveAsync(userId);
         if (!isActive)
-            throw new Exception("Account is locked");
+            throw new ArgumentException("ACCOUNT_LOCKED");
 
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct)
-            ?? throw new Exception("Contest not found");
+            ?? throw new KeyNotFoundException("CONTEST_NOT_FOUND");
 
         if (contest.VisibilityCode != "public")
-            throw new Exception("Contest is not public");
+            throw new ArgumentException("CONTEST_NOT_PUBLIC");
 
         if (contest.EndAt < DateTime.UtcNow)
-            throw new Exception("Contest ended");
+            throw new ArgumentException("CONTEST_ENDED");
 
         if (!_statusService.CanRegister(contest.StartAt))
-            throw new Exception("Registration closed");
+            throw new ArgumentException("REGISTRATION_CLOSED");
 
         if (!contest.AllowTeams && request.IsTeam)
-            throw new Exception("Contest does not allow team mode");
+            throw new ArgumentException("TEAM_MODE_NOT_ALLOWED");
 
         Guid teamId;
 
@@ -87,7 +87,7 @@ public class RegisterContestCommandHandler
                 var conflictUser = await _userRepo
                     .GetUserDisplayByIdsAsync(new List<Guid> { userId });
 
-                throw new Exception(
+                throw new InvalidOperationException(
                     $"TIME_CONFLICT_USERS:{JsonSerializer.Serialize(conflictUser)}"
                 );
             }
@@ -131,7 +131,7 @@ public class RegisterContestCommandHandler
         else
         {
             if (string.IsNullOrWhiteSpace(request.TeamName))
-                throw new Exception("Team name required");
+                throw new ArgumentException("TEAM_NAME_REQUIRED");
 
             // 🔥 FIX DUPLICATE + AUTO ADD LEADER
             var allMembers = new HashSet<Guid>(request.MemberIds ?? new List<Guid>())
@@ -140,15 +140,26 @@ public class RegisterContestCommandHandler
             };
 
             if (allMembers.Count < 3)
-                throw new Exception("Team must have at least 3 members");
+                throw new ArgumentException("TEAM_MIN_3_MEMBERS");
 
             if (allMembers.Count > 5)
-                throw new Exception("Max 5 members");
+                throw new ArgumentException("TEAM_MAX_5_MEMBERS");
+
+            // CHECK ALL MEMBERS EXIST
+            var memberList = allMembers.ToList();
+            var foundMembers = await _userRepo.GetUserDisplayByIdsAsync(memberList);
+            if (foundMembers.Count != memberList.Count)
+            {
+                var foundIds = foundMembers.Select(u => u.UserId).ToHashSet();
+                var missing = memberList.Where(id => !foundIds.Contains(id)).ToList();
+                throw new ArgumentException(
+                    $"MEMBERS_NOT_FOUND:{JsonSerializer.Serialize(missing)}");
+            }
 
             // CHECK LOCK USERS
-            var lockedUsers = await _userRepo.GetLockedUsersAsync(allMembers.ToList());
+            var lockedUsers = await _userRepo.GetLockedUsersAsync(memberList);
             if (lockedUsers.Any())
-                throw new Exception("Some members are locked");
+                throw new ArgumentException("SOME_MEMBERS_LOCKED");
 
             // TIME CONFLICT CHECK
             var conflictedUsers = new List<Guid>();
@@ -167,7 +178,7 @@ public class RegisterContestCommandHandler
                 var conflictUsers = await _userRepo
                     .GetUserDisplayByIdsAsync(conflictedUsers);
 
-                throw new Exception(
+                throw new InvalidOperationException(
                     $"TIME_CONFLICT_USERS:{JsonSerializer.Serialize(conflictUsers)}"
                 );
             }
@@ -207,7 +218,7 @@ public class RegisterContestCommandHandler
             .IsTeamJoinedAsync(request.ContestId, teamId);
 
         if (joined)
-            throw new Exception("Already joined");
+            throw new InvalidOperationException("ALREADY_JOINED");
 
         // ======================
         // INSERT CONTEST TEAM

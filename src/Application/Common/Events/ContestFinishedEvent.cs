@@ -2,4 +2,6 @@
 
 namespace Application.Common.Events;
 
-public record ContestFinishedEvent(Guid ContestId) : INotification;
+public record ContestFinishedEvent(
+    Guid ContestId
+) : INotification;

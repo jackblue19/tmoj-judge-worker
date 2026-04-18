@@ -8,6 +8,7 @@ public interface IStudyPlanRepository
     // =========================
     // PLAN
     // =========================
+    Task<List<StudyPlan>> GetAllAsync();
     Task<Guid> CreateAsync(StudyPlan entity);
     Task<StudyPlan?> GetByIdAsync(Guid id);
     Task<List<StudyPlan>> GetByCreatorAsync(Guid creatorId);

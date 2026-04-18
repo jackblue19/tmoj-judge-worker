@@ -1,54 +1,74 @@
 ﻿using Application.Common.Events;
 using Application.Common.Interfaces;
+using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Gamification.EventsHandlers;
+namespace Application.UseCases.Gamification.EventHandlers;
 
 public class ContestFinishedEventHandler
     : INotificationHandler<ContestFinishedEvent>
 {
-    private readonly IContestRepository _contestRepository;
     private readonly IGamificationRepository _repo;
 
     public ContestFinishedEventHandler(
-        IContestRepository contestRepository,
         IGamificationRepository repo)
     {
-        _contestRepository = contestRepository;
         _repo = repo;
     }
 
-    public async Task Handle(ContestFinishedEvent notification, CancellationToken ct)
+    public async Task Handle(
+        ContestFinishedEvent request,
+        CancellationToken ct)
     {
-        var contestId = notification.ContestId;
+        // =========================
+        // 1. GET RANKING
+        // =========================
+        var ranking = await _repo.GetContestRankingAsync(request.ContestId);
 
-        var scoreboard = await _contestRepository.GetScoreboardAsync(contestId);
+        if (ranking.Count == 0)
+            return;
 
-        foreach (var item in scoreboard)
+        // =========================
+        // 2. GET RULES
+        // =========================
+        var rules = await _repo.GetActiveRulesAsync();
+
+        // =========================
+        // 3. APPLY RULES
+        // =========================
+        foreach (var rule in rules)
         {
-            // TOP 1 badge
-            if (item.Rank == 1)
-            {
-                await _repo.AddUserBadgeAsync(new Domain.Entities.UserBadge
-                {
-                    UserId = item.TeamId,
-                    BadgeId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                    AwardedAt = DateTime.UtcNow
-                });
-            }
+            if (rule.RuleType != "contest_rank")
+                continue;
 
-            // TOP 3 badge
-            if (item.Rank <= 3)
+            foreach (var (userId, rank) in ranking)
             {
-                await _repo.AddUserBadgeAsync(new Domain.Entities.UserBadge
+                if (rank <= rule.TargetValue)
                 {
-                    UserId = item.TeamId,
-                    BadgeId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
-                    AwardedAt = DateTime.UtcNow
-                });
+                    var userBadges = await _repo.GetUserBadgesAsync(userId);
+
+                    var alreadyOwned = userBadges
+                        .Any(x => x.BadgeId == rule.BadgeId);
+
+                    if (!alreadyOwned)
+                    {
+                        await _repo.AddUserBadgeAsync(new UserBadge
+                        {
+                            UserBadgesId = Guid.NewGuid(),
+                            UserId = userId,
+                            BadgeId = rule.BadgeId,
+                            AwardedAt = DateTime.UtcNow,
+                            ContextType = "contest",
+                            SourceId = request.ContestId
+                        });
+                    }
+                }
             }
         }
 
+        // =========================
+        // 4. SAVE
+        // =========================
         await _repo.SaveChangesAsync();
     }
 }

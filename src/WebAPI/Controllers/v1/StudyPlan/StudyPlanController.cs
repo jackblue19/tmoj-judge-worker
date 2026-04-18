@@ -5,6 +5,7 @@ using Application.UseCases.StudyPlans.Dtos;
 using Application.UseCases.StudyPlans.Queries.GetNextStudyPlanItem;
 using Application.UseCases.StudyPlans.Queries.GetStudyPlanDetail;
 using Application.UseCases.StudyPlans.Queries.GetStudyPlanEnrollment;
+using Application.UseCases.StudyPlans.Queries.GetStudyPlans;
 using Application.UseCases.StudyPlans.Queries.GetStudyPlanStats;
 using Application.UseCases.StudyPlans.Queries.GetUnlockedPlans;
 using Asp.Versioning;
@@ -229,6 +230,31 @@ public class StudyPlansController : ControllerBase
             return Ok(ApiResponse<object>.Ok(
                 result,
                 "Fetched stats"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+    // =========================
+    // LIST STUDY PLANS
+    // =========================
+    [HttpGet]
+    [Authorize]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] Guid? creatorId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetStudyPlansQuery
+            {
+                CreatorId = creatorId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Fetched study plans"));
         }
         catch (Exception ex)
         {

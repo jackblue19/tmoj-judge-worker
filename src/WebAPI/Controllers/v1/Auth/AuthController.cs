@@ -19,7 +19,7 @@ using Serilog.Core;
 using Microsoft.Extensions.Configuration;
 using Application.Abstractions.Outbound.Services;
 using MediatR;
-using Application.UseCases.Gamification.EventsHandlers;
+using Application.UseCases.Gamification.EventHandlers;
 using Application.Common.Events;
 namespace WebAPI.Controllers.v1.Auth;
 

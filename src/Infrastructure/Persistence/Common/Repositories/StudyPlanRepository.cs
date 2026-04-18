@@ -176,4 +176,12 @@ public class StudyPlanRepository : IStudyPlanRepository
             .Where(x => itemIds.Contains(x.StudyPlanItemId))
             .ToListAsync();
     }
+
+    public async Task<List<StudyPlan>> GetAllAsync()
+    {
+        return await _db.Set<StudyPlan>()
+            .Include(x => x.StudyPlanItems)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync();
+    }
 }

@@ -11,6 +11,8 @@ public class ContestDetailDto
     public string ContestType { get; set; } = "";
     public bool AllowTeams { get; set; }
 
+    public string? InviteCode { get; set; }
+
     public string Status { get; set; } = "";
     public string Phase { get; set; } = "";
 

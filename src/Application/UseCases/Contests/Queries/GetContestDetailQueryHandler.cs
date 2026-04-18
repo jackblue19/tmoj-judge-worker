@@ -37,15 +37,16 @@ public class GetContestDetailQueryHandler
         if (contest == null)
             throw new KeyNotFoundException("CONTEST_NOT_FOUND");
 
-        if (!contest.IsActive)
-        {
-            var isPrivileged =
-                _currentUser.IsAuthenticated &&
-                (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
+        var isPrivileged =
+            _currentUser.IsAuthenticated &&
+            (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
 
-            if (!isPrivileged)
-                throw new KeyNotFoundException("CONTEST_NOT_FOUND");
-        }
+        var isCreator =
+            _currentUser.IsAuthenticated &&
+            contest.CreatedBy == _currentUser.UserId;
+
+        if (!contest.IsActive && !isPrivileged)
+            throw new KeyNotFoundException("CONTEST_NOT_FOUND");
 
         var isFrozen = FreezeContestPatch.IsFrozen(contest);
 
@@ -74,6 +75,8 @@ public class GetContestDetailQueryHandler
             Visibility = contest.VisibilityCode ?? "private",
             ContestType = contest.ContestType ?? "icpc",
             AllowTeams = contest.AllowTeams,
+
+            InviteCode = (isPrivileged || isCreator) ? contest.InviteCode : null,
 
             Status = status,
             Phase = phase,

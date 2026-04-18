@@ -259,6 +259,7 @@ public class ContestRepository : IContestRepository
                 LeaderId = ct.Team.LeaderId,
                 TeamSize = ct.Team.TeamSize,
                 MemberCount = ct.Team.TeamMembers.Count(),
+                InviteCode = ct.Team.IsPersonal ? null : ct.Team.InviteCode,
                 JoinedAt = ct.JoinAt,
                 Rank = ct.Rank,
                 Score = ct.Score,

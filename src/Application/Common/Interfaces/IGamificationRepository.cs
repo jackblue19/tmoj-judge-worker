@@ -34,6 +34,7 @@ public interface IGamificationRepository
     Task UpdateBadgeRuleAsync(BadgeRule rule);
 
     Task<bool> IsFirstAcceptedAsync(Guid userId, Guid problemId, Guid submissionId);
+    Task<List<(Guid UserId, int Rank)>> GetContestRankingAsync(Guid contestId);
     // =========================
     // RULES
     // =========================

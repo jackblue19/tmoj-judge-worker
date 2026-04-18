@@ -250,4 +250,32 @@ public class GamificationRepository : IGamificationRepository
                 x.VerdictCode == "ac" &&
                 x.Id != submissionId);
     }
+
+    public async Task<List<(Guid UserId, int Rank)>> GetContestRankingAsync(Guid contestId)
+    {
+        var ranking = await _db.Submissions
+            .AsNoTracking()
+            .Include(x => x.ContestProblem)
+            .Where(x =>
+                x.ContestProblemId != null &&
+                x.ContestProblem!.ContestId == contestId &&
+                x.VerdictCode == "ac")
+            .GroupBy(x => x.UserId)
+            .Select(g => new
+            {
+                UserId = g.Key,
+                Score = g.Select(x => x.ProblemId).Distinct().Count()
+            })
+            .OrderByDescending(x => x.Score)
+            .ToListAsync();
+
+        var result = new List<(Guid, int)>();
+
+        for (int i = 0; i < ranking.Count; i++)
+        {
+            result.Add((ranking[i].UserId, i + 1));
+        }
+
+        return result;
+    }
 }

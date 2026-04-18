@@ -7,7 +7,7 @@ using Application.UseCases.Gamification.Commands.CreateBadgeRule;
 using Application.UseCases.Gamification.Commands.UpdateBadgeRule;
 using Application.UseCases.Gamification.Commands.DeleteBadgeRule;
 
-using Application.UseCases.Gamification.EventsHandlers;
+using Application.UseCases.Gamification.EventHandlers;
 using Application.UseCases.Gamification.Queries.GetLeaderboard;
 using Application.UseCases.Gamification.Queries.GetMyBadgeProgress;
 using Application.UseCases.Gamification.Queries.GetMyBadges;

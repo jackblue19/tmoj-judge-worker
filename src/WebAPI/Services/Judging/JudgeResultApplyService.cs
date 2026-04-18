@@ -164,12 +164,13 @@ public sealed class JudgeResultApplyService
         if (submission.VerdictCode == "ac")
         {
             await _mediator.Publish(
-                new ProblemSolvedEvent(submission.UserId, submission.ProblemId ),
+                new ProblemSolvedEvent(
+                    submission.UserId,
+                    submission.ProblemId,
+                    submission.Id // ✅ ADD THIS
+                ),
                 ct);
         }
-
-
-
         await UpsertRunMetricAsync(submission.Id , req , ct);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);

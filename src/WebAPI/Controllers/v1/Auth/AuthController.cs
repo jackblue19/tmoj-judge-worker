@@ -18,7 +18,9 @@ using System.Runtime.CompilerServices;
 using Serilog.Core;
 using Microsoft.Extensions.Configuration;
 using Application.Abstractions.Outbound.Services;
-
+using MediatR;
+using Application.UseCases.Gamification.EventsHandlers;
+using Application.Common.Events;
 namespace WebAPI.Controllers.v1.Auth;
 
 
@@ -37,6 +39,9 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly IConfiguration _config;
     private readonly IEmailService _emailService;
+    private readonly IMediator _mediator;
+
+
 
     public AuthController(
         ITokenService tokenService ,
@@ -48,7 +53,9 @@ public class AuthController : ControllerBase
         ILogger<AuthController> logger ,
         TmojDbContext db ,
         IConfiguration config ,
-        IEmailService emailService)
+        IEmailService emailService,
+        IMediator mediator)
+
     {
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
@@ -60,6 +67,7 @@ public class AuthController : ControllerBase
         _logger = logger;
         _config = config;
         _emailService = emailService;
+        _mediator = mediator;
     }
 
     // [AllowAnonymous]
@@ -290,7 +298,8 @@ public class AuthController : ControllerBase
                 return BadRequest(new { Message = "Your account has been locked." });
             }
 
-            var authResponse = await CreateAuthResponseAsync(user , ct);
+            var authResponse = await CreateAuthResponseAsync(user, ct);
+            await _mediator.Publish(new DailyLoginEvent(user.UserId), ct);
 
             return Ok(ApiResponse<AuthResponse>.Ok(authResponse , "Login successful"));
         }
@@ -393,7 +402,8 @@ public class AuthController : ControllerBase
                 }
             }
 
-            var authResponse = await CreateAuthResponseAsync(user , ct);
+            var authResponse = await CreateAuthResponseAsync(user, ct);
+            await _mediator.Publish(new DailyLoginEvent(user.UserId), ct);
 
             return Ok(ApiResponse<AuthResponse>.Ok(authResponse , "Login with Google successful"));
         }
@@ -515,7 +525,8 @@ public class AuthController : ControllerBase
                 }
             }
 
-            var authResponse = await CreateAuthResponseAsync(user , ct);
+            var authResponse = await CreateAuthResponseAsync(user, ct);
+             await _mediator.Publish(new DailyLoginEvent(user.UserId), ct);
             return Ok(ApiResponse<AuthResponse>.Ok(authResponse , "Login with GitHub successful"));
         }
         catch ( Exception )

@@ -14,8 +14,26 @@ public interface IGamificationRepository
     // BADGES
     // =========================
     Task<List<UserBadge>> GetUserBadgesAsync(Guid userId);
+
+    Task<Guid> CreateBadgeAsync(Badge badge);
+    Task<bool> ExistsBadgeCodeAsync(string badgeCode);
+
+    Task<Badge?> GetBadgeByIdAsync(Guid badgeId);
+    Task UpdateBadgeAsync(Badge badge);
+
+    Task<bool> IsBadgeUsedAsync(Guid badgeId);
+    Task DeleteBadgeAsync(Badge badge);
+
     Task AddUserBadgeAsync(UserBadge badge);
 
+    Task CreateBadgeRuleAsync(BadgeRule rule);
+    Task<List<BadgeRule>> GetAllBadgeRulesAsync();
+
+    Task<BadgeRule?> GetBadgeRuleByIdAsync(Guid id);
+    Task DisableBadgeRuleAsync(Guid id);
+    Task UpdateBadgeRuleAsync(BadgeRule rule);
+
+    Task<bool> IsFirstAcceptedAsync(Guid userId, Guid problemId, Guid submissionId);
     // =========================
     // RULES
     // =========================

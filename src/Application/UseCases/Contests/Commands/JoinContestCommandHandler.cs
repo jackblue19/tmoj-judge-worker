@@ -85,7 +85,7 @@ public class JoinContestCommandHandler
             .IsTeamValidForContestAsync(team.Id);
 
         if (!isValid)
-            throw new Exception("Team must have 3-5 members");
+            throw new ArgumentException("TEAM_MAX_3_MEMBERS");
 
         // =========================
         // MEMBER IDS

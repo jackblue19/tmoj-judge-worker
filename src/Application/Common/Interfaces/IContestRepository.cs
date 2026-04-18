@@ -11,6 +11,8 @@ public interface IContestRepository
     // =============================================
     Task<PagedResult<ContestDto>> GetContestsAsync(
         string? status,
+        string? visibilityCode,
+        bool includeArchived,
         int page,
         int pageSize);
 

@@ -1,12 +1,11 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.Gamification.Dtos;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace Application.UseCases.Gamification.Queries.GetLeaderboard;
 
 public class GetLeaderboardHandler
-    : IRequestHandler<GetLeaderboardQuery, List<LeaderboardItemDto>>
+    : IRequestHandler<GetLeaderboardQuery, LeaderboardResponseDto>
 {
     private readonly IGamificationRepository _repo;
     private readonly IUserRepository _userRepo;
@@ -19,7 +18,7 @@ public class GetLeaderboardHandler
         _userRepo = userRepo;
     }
 
-    public async Task<List<LeaderboardItemDto>> Handle(
+    public async Task<LeaderboardResponseDto> Handle(
         GetLeaderboardQuery request,
         CancellationToken cancellationToken)
     {
@@ -29,22 +28,37 @@ public class GetLeaderboardHandler
 
         var users = await _userRepo.GetUsersByIdsAsync(userIds);
 
-        var result = data
+        var userDict = users.ToDictionary(x => x.UserId);
+
+        var items = data
             .Select((x, index) =>
             {
-                var user = users.FirstOrDefault(u => u.UserId == x.UserId);
+                userDict.TryGetValue(x.UserId, out var user);
 
                 return new LeaderboardItemDto
                 {
                     UserId = x.UserId,
                     DisplayName = user?.DisplayName ?? "Unknown",
                     AvatarUrl = user?.AvatarUrl,
+
                     Value = x.Value,
+
+                    SolvedCount = request.Type == "exp" || request.Type == "solved"
+                        ? x.Value
+                        : 0,
+
                     Rank = index + 1
                 };
             })
             .ToList();
 
-        return result;
+        return new LeaderboardResponseDto
+        {
+            Type = request.Type,
+            Total = items.Count,
+            Top = items.Count,
+            Items = items,
+            Me = null // sau này add JWT thì fill
+        };
     }
 }

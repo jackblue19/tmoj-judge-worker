@@ -35,6 +35,8 @@ public partial class ContestProblem
 
     public bool IsActive { get; set; }
 
+    public bool ShowEditorial { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public Guid? CreatedBy { get; set; }

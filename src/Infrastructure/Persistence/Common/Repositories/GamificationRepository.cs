@@ -1,4 +1,5 @@
 ﻿using Application.Common.Interfaces;
+using Application.UseCases.Gamification.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,7 @@ public class GamificationRepository : IGamificationRepository
     public async Task<UserStreak?> GetUserStreakAsync(Guid userId)
     {
         return await _db.Set<UserStreak>()
+            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.UserId == userId);
     }
 
@@ -46,6 +48,7 @@ public class GamificationRepository : IGamificationRepository
     public async Task<List<UserBadge>> GetUserBadgesAsync(Guid userId)
     {
         return await _db.Set<UserBadge>()
+            .AsNoTracking()
             .Include(x => x.Badge)
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.AwardedAt)
@@ -57,22 +60,103 @@ public class GamificationRepository : IGamificationRepository
         await _db.Set<UserBadge>().AddAsync(badge);
     }
 
+    public async Task<bool> ExistsBadgeCodeAsync(string badgeCode)
+    {
+        return await _db.Set<Badge>()
+            .AnyAsync(x => x.BadgeCode == badgeCode);
+    }
+
+    public async Task<Guid> CreateBadgeAsync(Badge badge)
+    {
+        await _db.Set<Badge>().AddAsync(badge);
+        await _db.SaveChangesAsync();
+
+        return badge.BadgeId;
+    }
+
+    public async Task<Badge?> GetBadgeByIdAsync(Guid badgeId)
+    {
+        return await _db.Set<Badge>()
+            .FirstOrDefaultAsync(x => x.BadgeId == badgeId);
+    }
+
+    public Task UpdateBadgeAsync(Badge badge)
+    {
+        _db.Set<Badge>().Update(badge);
+        return Task.CompletedTask;
+    }
+
+    public async Task<bool> IsBadgeUsedAsync(Guid badgeId)
+    {
+        return await _db.Set<UserBadge>()
+            .AnyAsync(x => x.BadgeId == badgeId);
+    }
+
+    public Task DeleteBadgeAsync(Badge badge)
+    {
+        _db.Set<Badge>().Remove(badge);
+        return Task.CompletedTask;
+    }
+
     // =========================
-    // RULES
+    // 🔥 BADGE RULES (NEW)
+    // =========================
+    public async Task CreateBadgeRuleAsync(BadgeRule rule)
+    {
+        await _db.Set<BadgeRule>().AddAsync(rule);
+    }
+
+    public async Task<List<BadgeRule>> GetAllBadgeRulesAsync()
+    {
+        return await _db.Set<BadgeRule>()
+            .AsNoTracking()
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync();
+    }
+
+    public async Task<BadgeRule?> GetBadgeRuleByIdAsync(Guid id)
+    {
+        return await _db.Set<BadgeRule>()
+            .FirstOrDefaultAsync(x => x.BadgeRulesId == id);
+    }
+
+    public Task UpdateBadgeRuleAsync(BadgeRule rule)
+    {
+        _db.Set<BadgeRule>().Update(rule);
+        return Task.CompletedTask;
+    }
+
+    // disable = set IsActive = false (soft delete)
+    public async Task DisableBadgeRuleAsync(Guid id)
+    {
+        var rule = await _db.Set<BadgeRule>()
+            .FirstOrDefaultAsync(x => x.BadgeRulesId == id);
+
+        if (rule != null)
+        {
+            rule.IsActive = false;
+            rule.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    // =========================
+    // RULES (ACTIVE ONLY)
     // =========================
     public async Task<List<BadgeRule>> GetActiveRulesAsync()
     {
         return await _db.Set<BadgeRule>()
+            .AsNoTracking()
             .Where(x => x.IsActive)
             .ToListAsync();
     }
 
     // =========================
-    // PROGRESS (DERIVED)
+    // PROGRESS
     // =========================
     public async Task<int> GetSolvedProblemCountAsync(Guid userId)
     {
         return await _db.Set<UserProblemStat>()
+            .AsNoTracking()
             .CountAsync(x => x.UserId == userId && x.Solved);
     }
 
@@ -82,6 +166,7 @@ public class GamificationRepository : IGamificationRepository
     public async Task<List<UserBadge>> GetUserBadgeHistoryAsync(Guid userId)
     {
         return await _db.Set<UserBadge>()
+            .AsNoTracking()
             .Include(x => x.Badge)
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.AwardedAt)
@@ -89,46 +174,60 @@ public class GamificationRepository : IGamificationRepository
     }
 
     // =========================
-    // LEADERBOARD
+    // 🔥 LEADERBOARD (FIX EF)
     // =========================
     public async Task<List<(Guid UserId, int Value)>> GetLeaderboardAsync(string type, int top = 50)
     {
+        type = type?.ToLower() ?? "exp";
+
+        List<LeaderboardRawDto> raw;
+
         if (type == "streak")
         {
-            return await _db.Set<UserStreak>()
+            raw = await _db.Set<UserStreak>()
+                .AsNoTracking()
                 .OrderByDescending(x => x.CurrentStreak)
                 .Take(top)
-                .Select(x => new ValueTuple<Guid, int>(
-                    x.UserId,
-                    x.CurrentStreak ?? 0
-                ))
+                .Select(x => new LeaderboardRawDto
+                {
+                    UserId = x.UserId,
+                    Value = x.CurrentStreak ?? 0
+                })
                 .ToListAsync();
         }
-
-        if (type == "badge")
+        else if (type == "badge")
         {
-            return await _db.Set<UserBadge>()
+            raw = await _db.Set<UserBadge>()
+                .AsNoTracking()
                 .GroupBy(x => x.UserId)
-                .Select(g => new ValueTuple<Guid, int>(
-                    g.Key,
-                    g.Count()
-                ))
-                .OrderByDescending(x => x.Item2)
+                .Select(g => new LeaderboardRawDto
+                {
+                    UserId = g.Key,
+                    Value = g.Count()
+                })
+                .OrderByDescending(x => x.Value)
+                .Take(top)
+                .ToListAsync();
+        }
+        else
+        {
+            raw = await _db.Set<UserProblemStat>()
+                .AsNoTracking()
+                .Where(x => x.Solved)
+                .GroupBy(x => x.UserId)
+                .Select(g => new LeaderboardRawDto
+                {
+                    UserId = g.Key,
+                    Value = g.Count()
+                })
+                .OrderByDescending(x => x.Value)
                 .Take(top)
                 .ToListAsync();
         }
 
-        // default: exp = solved problems
-        return await _db.Set<UserProblemStat>()
-            .Where(x => x.Solved)
-            .GroupBy(x => x.UserId)
-            .Select(g => new ValueTuple<Guid, int>(
-                g.Key,
-                g.Count()
-            ))
-            .OrderByDescending(x => x.Item2)
-            .Take(top)
-            .ToListAsync();
+        return raw
+            .Select(x => (x.UserId, x.Value))
+            .ToList();
     }
 
     // =========================
@@ -137,5 +236,18 @@ public class GamificationRepository : IGamificationRepository
     public async Task SaveChangesAsync()
     {
         await _db.SaveChangesAsync();
+    }
+
+    public async Task<bool> IsFirstAcceptedAsync(
+    Guid userId,
+    Guid problemId,
+    Guid submissionId)
+    {
+        return !await _db.Submissions
+            .AnyAsync(x =>
+                x.UserId == userId &&
+                x.ProblemId == problemId &&
+                x.VerdictCode == "ac" &&
+                x.Id != submissionId);
     }
 }

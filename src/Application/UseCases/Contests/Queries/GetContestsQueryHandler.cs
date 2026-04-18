@@ -9,10 +9,14 @@ public class GetContestsQueryHandler
     : IRequestHandler<GetContestsQuery, PagedResult<ContestDto>>
 {
     private readonly IContestRepository _repo;
+    private readonly ICurrentUserService _currentUser;
 
-    public GetContestsQueryHandler(IContestRepository repo)
+    public GetContestsQueryHandler(
+        IContestRepository repo,
+        ICurrentUserService currentUser)
     {
         _repo = repo;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<ContestDto>> Handle(
@@ -29,12 +33,35 @@ public class GetContestsQueryHandler
             pageSize = 100;
 
         var status = request.Status?.Trim().ToLower();
+        if (status == "all") status = null;
+
+        var visibility = request.VisibilityCode?.Trim().ToLower();
+        if (visibility == "all") visibility = null;
+
+        var isPrivileged =
+            _currentUser.IsAuthenticated &&
+            (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
+
+        if (!isPrivileged)
+        {
+            // Non-admins can only query public contests
+            if (!string.IsNullOrEmpty(visibility) && visibility != "public")
+                throw new UnauthorizedAccessException("NO_PERMISSION");
+
+            // Force visibility filter for non-admins
+            visibility = "public";
+        }
+
+        // Archived contests (IsActive=false) are visible only to admin/manager
+        var includeArchived = isPrivileged;
 
         // =========================
         // CALL REPO
         // =========================
         return await _repo.GetContestsAsync(
             status,
+            visibility,
+            includeArchived,
             page,
             pageSize
         );

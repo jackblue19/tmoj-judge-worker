@@ -39,20 +39,20 @@ public class ArchiveContestCommandHandler
 
         var userId = _currentUser.UserId!.Value;
 
-        var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
-
-        if (contest == null)
-            throw new Exception("CONTEST_NOT_FOUND");
+        var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct)
+            ?? throw new KeyNotFoundException("CONTEST_NOT_FOUND");
 
         var now = DateTime.UtcNow;
 
+        if (contest.VisibilityCode != "private")
+            throw new InvalidOperationException("ONLY_PRIVATE_CAN_BE_ARCHIVED");
+
         if (contest.EndAt > now)
-            throw new Exception("CONTEST_NOT_ENDED");
+            throw new InvalidOperationException("CONTEST_NOT_ENDED");
 
-        if (contest.VisibilityCode == "hidden" && !contest.IsActive)
-            throw new Exception("ALREADY_ARCHIVED");
+        if (!contest.IsActive)
+            throw new InvalidOperationException("ALREADY_ARCHIVED");
 
-        contest.VisibilityCode = "hidden";
         contest.IsActive = false;
         contest.UpdatedAt = now;
         contest.UpdatedBy = userId;

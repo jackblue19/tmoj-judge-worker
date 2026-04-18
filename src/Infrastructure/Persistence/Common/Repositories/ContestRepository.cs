@@ -23,6 +23,8 @@ public class ContestRepository : IContestRepository
     // =============================================
     public async Task<PagedResult<ContestDto>> GetContestsAsync(
         string? status,
+        string? visibilityCode,
+        bool includeArchived,
         int page,
         int pageSize)
     {
@@ -30,7 +32,13 @@ public class ContestRepository : IContestRepository
 
         var query = _db.Contests
             .AsNoTracking()
-            .Where(x => x.VisibilityCode == "public");
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(visibilityCode))
+            query = query.Where(x => x.VisibilityCode == visibilityCode.ToLower());
+
+        if (!includeArchived)
+            query = query.Where(x => x.IsActive);
 
         if (!string.IsNullOrEmpty(status))
         {
@@ -251,6 +259,7 @@ public class ContestRepository : IContestRepository
                 LeaderId = ct.Team.LeaderId,
                 TeamSize = ct.Team.TeamSize,
                 MemberCount = ct.Team.TeamMembers.Count(),
+                InviteCode = ct.Team.IsPersonal ? null : ct.Team.InviteCode,
                 JoinedAt = ct.JoinAt,
                 Rank = ct.Rank,
                 Score = ct.Score,

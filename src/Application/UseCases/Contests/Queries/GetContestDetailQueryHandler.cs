@@ -14,13 +14,16 @@ public class GetContestDetailQueryHandler
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
     private readonly IContestStatusService _statusService;
+    private readonly ICurrentUserService _currentUser;
 
     public GetContestDetailQueryHandler(
         IReadRepository<Contest, Guid> contestRepo,
-        IContestStatusService statusService)
+        IContestStatusService statusService,
+        ICurrentUserService currentUser)
     {
         _contestRepo = contestRepo;
         _statusService = statusService;
+        _currentUser = currentUser;
     }
 
     public async Task<ContestDetailDto> Handle(
@@ -32,7 +35,18 @@ public class GetContestDetailQueryHandler
             ct);
 
         if (contest == null)
-            throw new Exception("CONTEST_NOT_FOUND");
+            throw new KeyNotFoundException("CONTEST_NOT_FOUND");
+
+        var isPrivileged =
+            _currentUser.IsAuthenticated &&
+            (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
+
+        var isCreator =
+            _currentUser.IsAuthenticated &&
+            contest.CreatedBy == _currentUser.UserId;
+
+        if (!contest.IsActive && !isPrivileged)
+            throw new KeyNotFoundException("CONTEST_NOT_FOUND");
 
         var isFrozen = FreezeContestPatch.IsFrozen(contest);
 
@@ -61,6 +75,8 @@ public class GetContestDetailQueryHandler
             Visibility = contest.VisibilityCode ?? "private",
             ContestType = contest.ContestType ?? "icpc",
             AllowTeams = contest.AllowTeams,
+
+            InviteCode = (isPrivileged || isCreator) ? contest.InviteCode : null,
 
             Status = status,
             Phase = phase,

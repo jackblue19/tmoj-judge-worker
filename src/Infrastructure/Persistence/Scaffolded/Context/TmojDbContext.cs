@@ -851,6 +851,9 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
+            entity.Property(e => e.ShowEditorial)
+                .HasDefaultValue(false)
+                .HasColumnName("show_editorial");
             entity.Property(e => e.MaxScore).HasColumnName("max_score");
             entity.Property(e => e.MemoryLimitKb).HasColumnName("memory_limit_kb");
             entity.Property(e => e.Ordinal).HasColumnName("ordinal");

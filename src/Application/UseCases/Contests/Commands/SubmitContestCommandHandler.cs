@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Contests.Specs;
 using Ardalis.Specification;
 using Domain.Abstractions;
@@ -65,10 +65,12 @@ public class SubmitContestCommandHandler
             throw new Exception("Contest has ended");
 
         // ======================
-        // ✅ FREEZE FIX
+        // ✅ FREEZE CHECK
         // ======================
-        // KHÔNG block submit khi freeze
-        // Freeze chỉ ảnh hưởng scoreboard
+        if (contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value && (!contest.UnfreezeAt.HasValue || now < contest.UnfreezeAt.Value))
+        {
+            throw new Exception("CONTEST_FROZEN_SUBMIT_BLOCKED");
+        }
 
         // ======================
         // 2. CHECK CONTEST PROBLEM

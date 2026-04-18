@@ -25,6 +25,7 @@ public record UserDto(
     string? MemberCode,
     string? AvatarUrl,
     bool emailVerified,
+    bool Status,
     string? Role);
 
 public record StudentProfileWithClassesResponse(

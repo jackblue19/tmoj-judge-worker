@@ -15,6 +15,8 @@ public class MyTeamInContestDto
 
     public int MemberCount { get; set; }
 
+    public string? InviteCode { get; set; }
+
     public DateTime JoinedAt { get; set; }
 
     public int? Rank { get; set; }

@@ -33,6 +33,7 @@ public interface IGamificationRepository
     Task DisableBadgeRuleAsync(Guid id);
     Task UpdateBadgeRuleAsync(BadgeRule rule);
 
+    Task<bool> IsFirstAcceptedAsync(Guid userId, Guid problemId, Guid submissionId);
     // =========================
     // RULES
     // =========================

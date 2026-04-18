@@ -237,4 +237,17 @@ public class GamificationRepository : IGamificationRepository
     {
         await _db.SaveChangesAsync();
     }
+
+    public async Task<bool> IsFirstAcceptedAsync(
+    Guid userId,
+    Guid problemId,
+    Guid submissionId)
+    {
+        return !await _db.Submissions
+            .AnyAsync(x =>
+                x.UserId == userId &&
+                x.ProblemId == problemId &&
+                x.VerdictCode == "ac" &&
+                x.Id != submissionId);
+    }
 }

@@ -7,7 +7,7 @@ using Application.UseCases.Gamification.Commands.CreateBadgeRule;
 using Application.UseCases.Gamification.Commands.UpdateBadgeRule;
 using Application.UseCases.Gamification.Commands.DeleteBadgeRule;
 
-using Application.UseCases.Gamification.Events;
+using Application.UseCases.Gamification.EventsHandlers;
 using Application.UseCases.Gamification.Queries.GetLeaderboard;
 using Application.UseCases.Gamification.Queries.GetMyBadgeProgress;
 using Application.UseCases.Gamification.Queries.GetMyBadges;
@@ -15,6 +15,8 @@ using Application.UseCases.Gamification.Queries.GetMyGamification;
 using Application.UseCases.Gamification.Queries.GetMyRewardHistory;
 using Application.UseCases.Gamification.Queries.GetMyStreak;
 using Application.UseCases.Gamification.Queries.GetBadgeRules;
+using Application.UseCases.Gamification.Queries.GetContestRanking;
+
 
 using Asp.Versioning;
 using MediatR;
@@ -213,22 +215,5 @@ public class GamificationController : ControllerBase
         return Ok(new { message = "Rule disabled successfully" });
     }
 
-    // =====================================================
-    // DEBUG
-    // =====================================================
-
-    [HttpPost("test/ac")]
-    public async Task<IActionResult> TestAc(Guid userId, Guid problemId)
-    {
-        await _mediator.Publish(
-            new SubmissionAcceptedEvent(userId, problemId)
-        );
-
-        return Ok(new
-        {
-            message = "AC event triggered",
-            userId,
-            problemId
-        });
-    }
+    
 }

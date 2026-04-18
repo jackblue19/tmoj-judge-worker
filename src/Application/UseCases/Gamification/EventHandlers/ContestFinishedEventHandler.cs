@@ -2,7 +2,7 @@
 using Application.Common.Interfaces;
 using MediatR;
 
-namespace Application.UseCases.Gamification.Events;
+namespace Application.UseCases.Gamification.EventsHandlers;
 
 public class ContestFinishedEventHandler
     : INotificationHandler<ContestFinishedEvent>

@@ -505,6 +505,24 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
+    // DELETE CONTEST (HARD DELETE — ONLY BEFORE START)
+    // =============================================
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> DeleteContest(
+        Guid id,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new DeleteContestCommand { ContestId = id }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest deleted successfully"
+        ));
+    }
+
+    // =============================================
     // JOIN CONTEST BY INVITE CODE
     // =============================================
     [HttpPost("join-by-code")]

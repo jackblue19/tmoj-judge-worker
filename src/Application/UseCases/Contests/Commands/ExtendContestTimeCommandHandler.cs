@@ -6,21 +6,21 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.UseCases.Contests.Commands;
 
-public class ArchiveContestCommandHandler
-    : IRequestHandler<ArchiveContestCommand, bool>
+public class ExtendContestTimeCommandHandler
+    : IRequestHandler<ExtendContestTimeCommand, bool>
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
     private readonly IWriteRepository<Contest, Guid> _writeRepo;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
-    private readonly ILogger<ArchiveContestCommandHandler> _logger;
+    private readonly ILogger<ExtendContestTimeCommandHandler> _logger;
 
-    public ArchiveContestCommandHandler(
+    public ExtendContestTimeCommandHandler(
         IReadRepository<Contest, Guid> contestRepo,
         IWriteRepository<Contest, Guid> writeRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow,
-        ILogger<ArchiveContestCommandHandler> logger)
+        ILogger<ExtendContestTimeCommandHandler> logger)
     {
         _contestRepo = contestRepo;
         _writeRepo = writeRepo;
@@ -29,7 +29,7 @@ public class ArchiveContestCommandHandler
         _logger = logger;
     }
 
-    public async Task<bool> Handle(ArchiveContestCommand request, CancellationToken ct)
+    public async Task<bool> Handle(ExtendContestTimeCommand request, CancellationToken ct)
     {
         if (!_currentUser.IsAuthenticated)
             throw new UnauthorizedAccessException("UNAUTHORIZED");
@@ -44,16 +44,18 @@ public class ArchiveContestCommandHandler
 
         var now = DateTime.UtcNow;
 
-        if (contest.VisibilityCode != "private")
-            throw new InvalidOperationException("ONLY_PRIVATE_CAN_BE_ARCHIVED");
+        if (contest.StartAt > now)
+            throw new InvalidOperationException("CONTEST_NOT_STARTED");
 
-        if (contest.EndAt > now)
-            throw new InvalidOperationException("CONTEST_NOT_ENDED");
+        if (contest.EndAt <= now)
+            throw new InvalidOperationException("CONTEST_ALREADY_ENDED");
 
-        if (!contest.IsActive)
-            throw new InvalidOperationException("ALREADY_ARCHIVED");
+        var newEnd = DateTime.SpecifyKind(request.NewEndAt, DateTimeKind.Utc);
 
-        contest.IsActive = false;
+        if (newEnd <= contest.EndAt)
+            throw new ArgumentException("NEW_END_MUST_BE_LATER");
+
+        contest.EndAt = newEnd;
         contest.UpdatedAt = now;
         contest.UpdatedBy = userId;
 
@@ -61,8 +63,8 @@ public class ArchiveContestCommandHandler
         await _uow.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "Contest archived | ContestId={ContestId} | By={UserId}",
-            contest.Id, userId);
+            "Contest time extended | ContestId={ContestId} | NewEnd={NewEnd} | By={UserId}",
+            contest.Id, newEnd, userId);
 
         return true;
     }

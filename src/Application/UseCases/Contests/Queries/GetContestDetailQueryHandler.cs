@@ -14,13 +14,16 @@ public class GetContestDetailQueryHandler
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
     private readonly IContestStatusService _statusService;
+    private readonly ICurrentUserService _currentUser;
 
     public GetContestDetailQueryHandler(
         IReadRepository<Contest, Guid> contestRepo,
-        IContestStatusService statusService)
+        IContestStatusService statusService,
+        ICurrentUserService currentUser)
     {
         _contestRepo = contestRepo;
         _statusService = statusService;
+        _currentUser = currentUser;
     }
 
     public async Task<ContestDetailDto> Handle(
@@ -32,7 +35,17 @@ public class GetContestDetailQueryHandler
             ct);
 
         if (contest == null)
-            throw new Exception("CONTEST_NOT_FOUND");
+            throw new KeyNotFoundException("CONTEST_NOT_FOUND");
+
+        if (!contest.IsActive)
+        {
+            var isPrivileged =
+                _currentUser.IsAuthenticated &&
+                (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
+
+            if (!isPrivileged)
+                throw new KeyNotFoundException("CONTEST_NOT_FOUND");
+        }
 
         var isFrozen = FreezeContestPatch.IsFrozen(contest);
 

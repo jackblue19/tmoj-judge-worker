@@ -107,6 +107,11 @@ public class UpdateContestCommandHandler
             }
 
             contest.VisibilityCode = newVisibility;
+
+            if (newVisibility == "private" && string.IsNullOrEmpty(contest.InviteCode))
+            {
+                contest.InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper();
+            }
         }
 
         // =========================

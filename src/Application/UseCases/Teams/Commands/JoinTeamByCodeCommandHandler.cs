@@ -75,8 +75,8 @@ public class JoinTeamByCodeCommandHandler
         // =========================
         var count = await _repo.GetTeamMemberCountAsync(team.Id);
 
-        if (count >= 5)
-            throw new Exception("Team full");
+        if (count >= 3)
+            throw new InvalidOperationException("TEAM_FULL");
 
         // =========================
         // 🔥 5. CHECK CONTEST WINDOW

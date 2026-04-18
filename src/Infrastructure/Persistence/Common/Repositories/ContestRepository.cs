@@ -23,14 +23,23 @@ public class ContestRepository : IContestRepository
     // =============================================
     public async Task<PagedResult<ContestDto>> GetContestsAsync(
         string? status,
+        string? visibilityCode,
+        bool includeArchived,
         int page,
         int pageSize)
     {
         var now = DateTime.UtcNow;
 
+        var visibility = string.IsNullOrEmpty(visibilityCode)
+            ? "public"
+            : visibilityCode.ToLower();
+
         var query = _db.Contests
             .AsNoTracking()
-            .Where(x => x.VisibilityCode == "public");
+            .Where(x => x.VisibilityCode == visibility);
+
+        if (!includeArchived)
+            query = query.Where(x => x.IsActive);
 
         if (!string.IsNullOrEmpty(status))
         {

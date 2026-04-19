@@ -305,6 +305,18 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
+    // GET CONTEST STATUS (polling friendly)
+    // =============================================
+    [HttpGet("{id:guid}/status")]
+    public async Task<IActionResult> GetStatus(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetContestStatusQuery { ContestId = id }, ct);
+
+        return Ok(ApiResponse<object>.Ok(result, "Fetched contest status successfully"));
+    }
+
+    // =============================================
     // HEALTH CHECK
     // =============================================
     [HttpGet("ping")]

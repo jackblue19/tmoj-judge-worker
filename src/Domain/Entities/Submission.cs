@@ -36,6 +36,8 @@ public partial class Submission
 
     public bool IsDeleted { get; set; }
 
+    public bool IsLate { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public Guid? TeamId { get; set; }

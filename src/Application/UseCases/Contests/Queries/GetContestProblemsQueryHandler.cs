@@ -41,13 +41,11 @@ public class GetContestProblemsQueryHandler
 
         var problems = data
             .Where(x => x.IsActive)
+            .Where(x => x.AccessMode != "hidden")
             .OrderBy(x => x.DisplayIndex ?? x.Ordinal ?? 999)
             .ThenBy(x => x.Alias)
             .ToList();
 
-        // =========================
-        // RETURN (NO FREEZE MASK)
-        // =========================
         return problems.Select(x => new ContestProblemDto
         {
             Id = x.Id,
@@ -65,7 +63,8 @@ public class GetContestProblemsQueryHandler
             TimeLimitMs = x.TimeLimitMs,
             MemoryLimitKb = x.MemoryLimitKb,
 
-            // status UI tự xử lý, backend không cần fake
+            AccessMode = x.AccessMode,
+
             Status = "not_started"
         }).ToList();
     }

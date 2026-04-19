@@ -61,16 +61,12 @@ public class SubmitContestCommandHandler
         if (now < contest.StartAt)
             throw new Exception("Contest has not started");
 
+        // Rule 5: submission hợp lệ dựa vào submitted_at <= end_at.
         if (now > contest.EndAt)
-            throw new Exception("Contest has ended");
+            throw new Exception("CONTEST_ENDED");
 
-        // ======================
-        // ✅ FREEZE CHECK
-        // ======================
-        if (contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value && (!contest.UnfreezeAt.HasValue || now < contest.UnfreezeAt.Value))
-        {
-            throw new Exception("CONTEST_FROZEN_SUBMIT_BLOCKED");
-        }
+        // Rule 1/8: FREEZE KHÔNG chặn submit.
+        // Freeze chỉ đóng băng scoreboard public — contestant vẫn submit/judge/xem verdict cá nhân.
 
         // ======================
         // 2. CHECK CONTEST PROBLEM
@@ -78,6 +74,13 @@ public class SubmitContestCommandHandler
         var cp = await _cpRepo.GetByIdAsync(request.ContestProblemId, ct);
         if (cp == null || cp.ContestId != request.ContestId)
             throw new Exception("Contest problem not found");
+
+        // Rule 2.3/10: problem access mode.
+        if (cp.AccessMode == "read_only")
+            throw new Exception("CONTEST_PROBLEM_READ_ONLY");
+
+        if (cp.AccessMode == "hidden")
+            throw new Exception("CONTEST_PROBLEM_HIDDEN");
 
         // ======================
         // 3. CHECK TEAM

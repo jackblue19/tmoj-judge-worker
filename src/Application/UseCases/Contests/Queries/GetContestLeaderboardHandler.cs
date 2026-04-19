@@ -1,4 +1,5 @@
-﻿using Application.UseCases.Contests.Dtos;
+﻿using Application.Common.Interfaces;
+using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
@@ -14,17 +15,20 @@ public class GetContestLeaderboardHandler
     private readonly IReadRepository<Submission, Guid> _submissionRepo;
     private readonly IReadRepository<ContestProblem, Guid> _cpRepo;
     private readonly IReadRepository<Contest, Guid> _contestRepo;
+    private readonly ICurrentUserService _currentUser;
 
     public GetContestLeaderboardHandler(
         IReadRepository<ContestTeam, Guid> contestTeamRepo,
         IReadRepository<Submission, Guid> submissionRepo,
         IReadRepository<ContestProblem, Guid> cpRepo,
-        IReadRepository<Contest, Guid> contestRepo)
+        IReadRepository<Contest, Guid> contestRepo,
+        ICurrentUserService currentUser)
     {
         _contestTeamRepo = contestTeamRepo;
         _submissionRepo = submissionRepo;
         _cpRepo = cpRepo;
         _contestRepo = contestRepo;
+        _currentUser = currentUser;
     }
 
     public async Task<GetContestLeaderboardResponse> Handle(
@@ -47,7 +51,12 @@ public class GetContestLeaderboardHandler
         // ======================
         // FREEZE STATE
         // ======================
-        var isFrozen = FreezeContestPatch.IsFrozen(contest);
+        // Rule 4.4/9: admin/manager luôn thấy scoreboard thật (bypass freeze).
+        var isPrivileged =
+            _currentUser.IsAuthenticated &&
+            (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
+
+        var isFrozen = !isPrivileged && FreezeContestPatch.IsFrozen(contest);
         var freezeTime = contest.FreezeAt;
 
         // ======================

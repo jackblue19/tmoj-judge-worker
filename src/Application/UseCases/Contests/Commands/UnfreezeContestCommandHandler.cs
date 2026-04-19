@@ -58,11 +58,11 @@ public class UnfreezeContestCommandHandler
         if (!contest.FreezeAt.HasValue || now < contest.FreezeAt.Value)
             throw new Exception("NOT_FROZEN");
 
-        // =========================
-        // UNFREEZE
-        // =========================
-        // 👉 đẩy FreezeAt về tương lai để "tắt freeze"
-        contest.FreezeAt = contest.EndAt.AddYears(10);
+        if (contest.UnfreezeAt.HasValue && now >= contest.UnfreezeAt.Value)
+            throw new Exception("ALREADY_UNFROZEN");
+
+        // Đánh dấu mốc unfreeze — FreezeContestPatch.IsFrozen sẽ dùng cả 2 cờ.
+        contest.UnfreezeAt = now;
 
         contest.UpdatedAt = now;
         contest.UpdatedBy = userId;

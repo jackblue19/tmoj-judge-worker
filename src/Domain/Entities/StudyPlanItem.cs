@@ -16,4 +16,7 @@ public partial class StudyPlanItem
     public virtual Problem Problem { get; set; } = null!;
 
     public virtual StudyPlan StudyPlan { get; set; } = null!;
+
+    public virtual ICollection<UserStudyItemProgress> UserStudyItemProgresses { get; set; }
+    = new List<UserStudyItemProgress>();
 }

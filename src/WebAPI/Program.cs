@@ -25,7 +25,9 @@ var builder = WebApplication.CreateBuilder(args);
 //  database
 builder.Services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
 builder.Services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
+builder.Services.AddScoped<IGamificationRepository, GamificationRepository>();
 builder.Services.AddScoped<ITeamRepository, TeamRepository>();
+builder.Services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {
@@ -106,6 +108,8 @@ builder.Services.AddScoped<SubmissionRealtimeNotifier>();
 //builder.WebHost.UseUrls("http://+:8080"); //  comment cái này là test local được deploy thì mở ra
 
 builder.Services.AddApplication();
+
+
 
 builder.Services.AddHttpLogging(o =>
 {

@@ -1,22 +1,28 @@
-﻿using Contracts.Submissions.Judging;
+﻿using Application.Common.Events;
+using Contracts.Submissions.Judging;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using WebAPI.Models.Submissions;
-
+using MediatR;
+using Application.UseCases.Gamification.EventHandlers;
 namespace WebAPI.Services.Judging;
 
 public sealed class JudgeResultApplyService
 {
     private readonly TmojDbContext _db;
     private readonly SubmissionRealtimeNotifier _notifier;
+    private readonly IMediator _mediator;
 
     public JudgeResultApplyService(
         TmojDbContext db ,
-        SubmissionRealtimeNotifier notifier)
+        SubmissionRealtimeNotifier notifier,
+        IMediator mediator)
+
     {
         _db = db;
         _notifier = notifier;
+        _mediator = mediator;
     }
 
     public async Task ApplyAsync(JudgeJobCompletedContract req , CancellationToken ct)
@@ -76,7 +82,7 @@ public sealed class JudgeResultApplyService
             return;
         }
 
-        if ( !req.Compile.Ok )
+        if (!req.Compile.Ok)
         {
             submission.StatusCode = "done";
             submission.VerdictCode = ResultStatusMapper.NormalizeVerdict(req.Summary.Verdict);
@@ -87,34 +93,38 @@ public sealed class JudgeResultApplyService
 
             _db.Results.Add(new Result
             {
-                Id = Guid.NewGuid() ,
-                SubmissionId = submission.Id ,
-                JudgeRunId = judgeRun.Id ,
-                TestcaseId = null ,
-                StatusCode = ResultStatusMapper.NormalizeVerdict(req.Summary.Verdict) ,
-                RuntimeMs = req.Summary.TimeMs ,
-                MemoryKb = req.Summary.MemoryKb ,
-                Input = null ,
-                ExpectedOutput = null ,
-                ActualOutput = null ,
-                StdoutBlobId = null ,
-                StderrBlobId = null ,
-                CheckerMessage = BuildCompileCheckerMessage(req.Summary.Verdict) ,
-                ExitCode = req.Compile.ExitCode ,
-                Signal = null ,
-                CreatedAt = DateTime.UtcNow ,
-                OutputUrl = null ,
-                Type = "compile" ,
-                Message = BuildCompileMessage(req.Summary.Verdict) ,
+                Id = Guid.NewGuid(),
+                SubmissionId = submission.Id,
+                JudgeRunId = judgeRun.Id,
+                TestcaseId = null,
+                StatusCode = ResultStatusMapper.NormalizeVerdict(req.Summary.Verdict),
+                RuntimeMs = req.Summary.TimeMs,
+                MemoryKb = req.Summary.MemoryKb,
+                Input = null,
+                ExpectedOutput = null,
+                ActualOutput = null,
+                StdoutBlobId = null,
+                StderrBlobId = null,
+                CheckerMessage = BuildCompileCheckerMessage(req.Summary.Verdict),
+                ExitCode = req.Compile.ExitCode,
+                Signal = null,
+                CreatedAt = DateTime.UtcNow,
+                OutputUrl = null,
+                Type = "compile",
+                Message = BuildCompileMessage(req.Summary.Verdict),
                 Note = $"{req.Compile.Stderr}\n{req.Compile.Stdout}".Trim()
             });
 
-            await UpsertRunMetricAsync(submission.Id , req , ct);
+            await UpsertRunMetricAsync(submission.Id, req, ct);
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            await NotifyAsync(submission , ct);
+            await NotifyAsync(submission, ct);
+
+
             return;
+
+
         }
 
         var resultEntities = req.Cases.Select(x => new Result
@@ -148,6 +158,19 @@ public sealed class JudgeResultApplyService
         submission.StatusCode = "done";
         submission.JudgedAt ??= DateTime.UtcNow;
 
+        // =========================
+        // TRIGGER PROBLEM SOLVED EVENT (AC only)
+        // =========================
+        if (submission.VerdictCode == "ac")
+        {
+            await _mediator.Publish(
+                new ProblemSolvedEvent(
+                    submission.UserId,
+                    submission.ProblemId,
+                    submission.Id // ✅ ADD THIS
+                ),
+                ct);
+        }
         await UpsertRunMetricAsync(submission.Id , req , ct);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);

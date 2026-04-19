@@ -257,7 +257,9 @@ public class ClassSlotController : ControllerBase
                 // Lấy submission kèm số test case pass/total để tính %
                 var subs = problemIds.Count > 0
                     ? await _db.Submissions.AsNoTracking()
-                        .Where(s => s.UserId == m.UserId && problemIds.Contains(s.ProblemId))
+                        .Where(s => s.UserId == m.UserId
+                                    && s.ClassSlotId == slotId
+                                    && problemIds.Contains(s.ProblemId))
                         .Select(s => new
                         {
                             s.Id,
@@ -344,7 +346,9 @@ public class ClassSlotController : ControllerBase
             var submissions = problemIds.Count > 0
                 ? await _db.Submissions.AsNoTracking()
                     .Include(s => s.Problem)
-                    .Where(s => s.UserId == userId && problemIds.Contains(s.ProblemId))
+                    .Where(s => s.UserId == userId
+                                && s.ClassSlotId == slotId
+                                && problemIds.Contains(s.ProblemId))
                     .OrderByDescending(s => s.CreatedAt)
                     .ToListAsync(ct)
                 : new List<Submission>();

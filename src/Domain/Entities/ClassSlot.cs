@@ -46,4 +46,6 @@ public partial class ClassSlot
     public virtual User? CreatedByNavigation { get; set; }
 
     public virtual User? UpdatedByNavigation { get; set; }
+
+    public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
 }

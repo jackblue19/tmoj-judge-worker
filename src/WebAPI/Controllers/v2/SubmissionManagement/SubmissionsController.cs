@@ -82,6 +82,33 @@ public sealed class SubmissionsController : ControllerBase
         if ( !hasAnyCase )
             return Problem(statusCode: 400 , title: "Testset has no testcases.");
 
+        // Nếu submit trong context class slot: validate slot + enrollment + problem thuộc slot.
+        if ( req.ClassSlotId is Guid classSlotId )
+        {
+            var slot = await _db.ClassSlots
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == classSlotId , ct);
+
+            if ( slot is null )
+                return Problem(statusCode: 404 , title: "Class slot not found.");
+
+            var isMember = await _db.ClassMembers
+                .AsNoTracking()
+                .AnyAsync(x => x.ClassSemesterId == slot.ClassSemesterId
+                               && x.UserId == userId
+                               && x.IsActive , ct);
+
+            if ( !isMember )
+                return Problem(statusCode: 403 , title: "You are not a member of this class.");
+
+            var problemInSlot = await _db.ClassSlotProblems
+                .AsNoTracking()
+                .AnyAsync(x => x.SlotId == classSlotId && x.ProblemId == problemId , ct);
+
+            if ( !problemInSlot )
+                return Problem(statusCode: 400 , title: "Problem does not belong to this class slot.");
+        }
+
         var codeBytes = Encoding.UTF8.GetBytes(sourceCode);
         var codeHash = Convert.ToHexString(SHA256.HashData(codeBytes)).ToLowerInvariant();
 
@@ -126,6 +153,7 @@ public sealed class SubmissionsController : ControllerBase
             CreatedAt = DateTime.UtcNow ,
             TeamId = null ,
             ContestProblemId = null ,
+            ClassSlotId = req.ClassSlotId ,
             TestcaseId = null ,
             CustomInput = null ,
             Type = "practice" ,
@@ -262,6 +290,8 @@ public sealed class SubmitRequestV2
     public IFormFile? CodeFile { get; set; }
 
     public string? CompareMode { get; set; }
+
+    public Guid? ClassSlotId { get; set; }
 }
 
 public sealed class SubmitResponseV2

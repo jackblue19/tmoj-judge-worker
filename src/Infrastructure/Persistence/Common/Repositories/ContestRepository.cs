@@ -35,7 +35,10 @@ public class ContestRepository : IContestRepository
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(visibilityCode))
-            query = query.Where(x => x.VisibilityCode == visibilityCode.ToLower());
+        {
+            var wanted = visibilityCode.ToLower();
+            query = query.Where(x => x.VisibilityCode.ToLower() == wanted);
+        }
 
         if (!includeArchived)
             query = query.Where(x => x.IsActive);

@@ -15,6 +15,8 @@ public class SubmitContestCommandHandler
     private readonly IReadRepository<ContestProblem, Guid> _cpRepo;
     private readonly IReadRepository<ContestTeam, Guid> _ctRepo;
     private readonly IReadRepository<Testset, Guid> _testsetRepo;
+    private readonly IReadRepository<ClassSlot, Guid> _classSlotRepo;
+    private readonly IReadRepository<ClassMember, Guid> _classMemberRepo;
     private readonly IWriteRepository<Submission, Guid> _submissionRepo;
     private readonly IWriteRepository<JudgeJob, Guid> _judgeJobRepo;
     private readonly ICurrentUserService _currentUser;
@@ -25,6 +27,8 @@ public class SubmitContestCommandHandler
         IReadRepository<ContestProblem, Guid> cpRepo,
         IReadRepository<ContestTeam, Guid> ctRepo,
         IReadRepository<Testset, Guid> testsetRepo,
+        IReadRepository<ClassSlot, Guid> classSlotRepo,
+        IReadRepository<ClassMember, Guid> classMemberRepo,
         IWriteRepository<Submission, Guid> submissionRepo,
         IWriteRepository<JudgeJob, Guid> judgeJobRepo,
         ICurrentUserService currentUser,
@@ -34,6 +38,8 @@ public class SubmitContestCommandHandler
         _cpRepo = cpRepo;
         _ctRepo = ctRepo;
         _testsetRepo = testsetRepo;
+        _classSlotRepo = classSlotRepo;
+        _classMemberRepo = classMemberRepo;
         _submissionRepo = submissionRepo;
         _judgeJobRepo = judgeJobRepo;
         _currentUser = currentUser;
@@ -55,7 +61,8 @@ public class SubmitContestCommandHandler
         if (contest == null)
             throw new Exception("Contest not found");
 
-        if (contest.VisibilityCode != "public")
+        // Private contest chỉ submit được khi đi qua class slot (slot.ContestId == contest.Id).
+        if (contest.VisibilityCode != "public" && request.ClassSlotId is null)
             throw new Exception("Contest is not public");
 
         if (now < contest.StartAt)
@@ -81,6 +88,26 @@ public class SubmitContestCommandHandler
 
         if (cp.AccessMode == "hidden")
             throw new Exception("CONTEST_PROBLEM_HIDDEN");
+
+        // ======================
+        // 2b. CHECK CLASS SLOT (nếu submit qua class slot)
+        // ======================
+        if (request.ClassSlotId is Guid classSlotId)
+        {
+            var slot = await _classSlotRepo.GetByIdAsync(classSlotId, ct);
+            if (slot is null)
+                throw new Exception("Class slot not found");
+
+            if (slot.ContestId != request.ContestId)
+                throw new Exception("Class slot does not host this contest");
+
+            var isMember = await _classMemberRepo.AnyAsync(
+                new ClassMemberByUserSpec(slot.ClassSemesterId, userId.Value),
+                ct);
+
+            if (!isMember)
+                throw new Exception("You are not a member of this class");
+        }
 
         // ======================
         // 3. CHECK TEAM
@@ -114,6 +141,7 @@ public class SubmitContestCommandHandler
             UserId = userId.Value,
             ProblemId = cp.ProblemId,
             ContestProblemId = cp.Id,
+            ClassSlotId = request.ClassSlotId,
             TeamId = team.TeamId,
             SourceCode = request.Code,
 

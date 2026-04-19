@@ -2042,6 +2042,7 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValue(0)
                 .HasColumnName("code_size");
             entity.Property(e => e.ContestProblemId).HasColumnName("contest_problem_id");
+            entity.Property(e => e.ClassSlotId).HasColumnName("class_slot_id");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
@@ -2087,6 +2088,11 @@ public partial class TmojDbContext : DbContext
                 .HasForeignKey(d => d.ContestProblemId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("submissions_contest_problem_id_fkey");
+
+            entity.HasOne(d => d.ClassSlot).WithMany(p => p.Submissions)
+                .HasForeignKey(d => d.ClassSlotId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("submissions_class_slot_id_fkey");
 
             entity.HasOne(d => d.Problem).WithMany(p => p.Submissions)
                 .HasForeignKey(d => d.ProblemId)

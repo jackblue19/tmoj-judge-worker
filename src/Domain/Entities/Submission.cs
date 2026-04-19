@@ -44,6 +44,8 @@ public partial class Submission
 
     public Guid? ContestProblemId { get; set; }
 
+    public Guid? ClassSlotId { get; set; }
+
     public Guid? TestcaseId { get; set; }
 
     public string? CustomInput { get; set; }
@@ -65,6 +67,8 @@ public partial class Submission
     public virtual ArtifactBlob? CodeArtifact { get; set; }
 
     public virtual ContestProblem? ContestProblem { get; set; }
+
+    public virtual ClassSlot? ClassSlot { get; set; }
 
     public virtual ICollection<ContestScoreboard> ContestScoreboardBestSubmissions { get; set; } = new List<ContestScoreboard>();
 

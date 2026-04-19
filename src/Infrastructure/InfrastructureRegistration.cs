@@ -60,6 +60,7 @@ public static class InfrastructureRegistration
         services.AddScoped<IStudyPlanApplicationService, StudyPlanApplicationService>();
         services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
         services.AddScoped<IGamificationRepository, GamificationRepository>();
+        services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         return services;
     }
 

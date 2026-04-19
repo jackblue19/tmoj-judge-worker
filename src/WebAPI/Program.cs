@@ -28,6 +28,7 @@ builder.Services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionReposi
 builder.Services.AddScoped<IGamificationRepository, GamificationRepository>();
 builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
+builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {

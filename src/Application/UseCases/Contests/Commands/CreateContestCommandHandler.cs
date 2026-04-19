@@ -41,6 +41,11 @@ public class CreateContestCommandHandler
         if (request.StartAt >= request.EndAt)
             throw new Exception("Start time must be before end time");
 
+        var visibility = (request.VisibilityCode ?? "private").Trim().ToLower();
+        var valid = new[] { "public", "private", "hidden" };
+        if (!valid.Contains(visibility))
+            throw new ArgumentException("INVALID_VISIBILITY");
+
         // ===============================
         // CREATE CONTEST
         // ===============================
@@ -55,11 +60,12 @@ public class CreateContestCommandHandler
             StartAt = DateTime.SpecifyKind(request.StartAt, DateTimeKind.Utc),
             EndAt = DateTime.SpecifyKind(request.EndAt, DateTimeKind.Utc),
 
-            VisibilityCode = request.VisibilityCode,
+            VisibilityCode = visibility,
             ContestType = request.ContestType,
             AllowTeams = request.AllowTeams,
+            IsActive = true,
 
-            InviteCode = string.Equals(request.VisibilityCode, "private", StringComparison.OrdinalIgnoreCase)
+            InviteCode = visibility == "private"
                 ? Guid.NewGuid().ToString("N")[..8].ToUpper()
                 : null,
 

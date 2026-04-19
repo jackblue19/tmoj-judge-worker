@@ -305,6 +305,18 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
+    // GET CONTEST STATUS (polling friendly)
+    // =============================================
+    [HttpGet("{id:guid}/status")]
+    public async Task<IActionResult> GetStatus(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new GetContestStatusQuery { ContestId = id }, ct);
+
+        return Ok(ApiResponse<object>.Ok(result, "Fetched contest status successfully"));
+    }
+
+    // =============================================
     // HEALTH CHECK
     // =============================================
     [HttpGet("ping")]
@@ -346,36 +358,6 @@ public class ContestsController : ControllerBase
         await _mediator.Send(command, ct);
 
         return Ok(ApiResponse<object?>.Ok(null, "Joined team successfully"));
-    }
-
-    // =============================================
-    // TEAMS - CREATE INVITE CODE
-    // =============================================
-    [HttpPost("{contestId:guid}/teams/invite-code")]
-    [Authorize]
-    public async Task<IActionResult> CreateTeamInviteCode(
-        Guid contestId,
-        CancellationToken ct)
-    {
-        var result = await _mediator.Send(
-            new CreateTeamInviteCodeCommand { ContestId = contestId }, ct);
-
-        return Ok(ApiResponse<string>.Ok(result, "Invite code created successfully"));
-    }
-
-    // =============================================
-    // TEAMS - GET INVITE CODE
-    // =============================================
-    [HttpGet("{contestId:guid}/teams/invite-code")]
-    [Authorize]
-    public async Task<IActionResult> GetTeamInviteCode(
-        Guid contestId,
-        CancellationToken ct)
-    {
-        var result = await _mediator.Send(
-            new GetTeamInviteCodeQuery { ContestId = contestId }, ct);
-
-        return Ok(ApiResponse<string?>.Ok(result, "Fetched team invite code successfully"));
     }
 
     // =============================================
@@ -535,6 +517,24 @@ public class ContestsController : ControllerBase
     }
 
     // =============================================
+    // DELETE CONTEST (HARD DELETE — ONLY BEFORE START)
+    // =============================================
+    [HttpDelete("{id:guid}/hard-before-start")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> DeleteContest(
+        Guid id,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new DeleteContestCommand { ContestId = id }, ct);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Contest deleted successfully"
+        ));
+    }
+
+    // =============================================
     // JOIN CONTEST BY INVITE CODE
     // =============================================
     [HttpPost("join-by-code")]
@@ -548,24 +548,6 @@ public class ContestsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(
             result,
             "Joined contest successfully"
-        ));
-    }
-
-    // =============================================
-    // GET CONTEST INVITE CODE
-    // =============================================
-    [HttpGet("{id:guid}/invite-code")]
-    [Authorize(Roles = "admin,manager")]
-    public async Task<IActionResult> GetInviteCode(
-        Guid id,
-        CancellationToken ct)
-    {
-        var result = await _mediator.Send(
-            new GetContestInviteCodeQuery { ContestId = id }, ct);
-
-        return Ok(ApiResponse<string?>.Ok(
-            result,
-            "Fetched contest invite code successfully"
         ));
     }
 

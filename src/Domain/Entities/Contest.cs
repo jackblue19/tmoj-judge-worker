@@ -27,6 +27,12 @@ public partial class Contest
 
     public DateTime? UnfreezeAt { get; set; }
 
+    public string Status { get; set; } = "draft";
+
+    public string ScoreboardMode { get; set; } = "live";
+
+    public DateTime? FinalizedAt { get; set; }
+
     public Guid? RemixOfContestId { get; set; }
 
     public bool IsVirtual { get; set; }

@@ -36,11 +36,15 @@ public partial class Submission
 
     public bool IsDeleted { get; set; }
 
+    public bool IsLate { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public Guid? TeamId { get; set; }
 
     public Guid? ContestProblemId { get; set; }
+
+    public Guid? ClassSlotId { get; set; }
 
     public Guid? TestcaseId { get; set; }
 
@@ -63,6 +67,8 @@ public partial class Submission
     public virtual ArtifactBlob? CodeArtifact { get; set; }
 
     public virtual ContestProblem? ContestProblem { get; set; }
+
+    public virtual ClassSlot? ClassSlot { get; set; }
 
     public virtual ICollection<ContestScoreboard> ContestScoreboardBestSubmissions { get; set; } = new List<ContestScoreboard>();
 

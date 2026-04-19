@@ -30,13 +30,15 @@ public class ContestRepository : IContestRepository
     {
         var now = DateTime.UtcNow;
 
-        var visibility = string.IsNullOrEmpty(visibilityCode)
-            ? "public"
-            : visibilityCode.ToLower();
-
         var query = _db.Contests
             .AsNoTracking()
-            .Where(x => x.VisibilityCode == visibility);
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(visibilityCode))
+        {
+            var wanted = visibilityCode.ToLower();
+            query = query.Where(x => x.VisibilityCode.ToLower() == wanted);
+        }
 
         if (!includeArchived)
             query = query.Where(x => x.IsActive);
@@ -115,11 +117,8 @@ public class ContestRepository : IContestRepository
 
         if (contest == null) return null;
 
-        // =========================
-        // ❌ STRICT FREEZE - BLOCK VIEW DETAIL
-        // =========================
-        if (contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value)
-            throw new Exception("CONTEST_FROZEN_VIEW_BLOCKED");
+        // Rule 4.4: Frozen KHÔNG ẩn problem. Contestant vẫn xem được detail.
+        // Ẩn/khóa problem chỉ thuộc state closed/finalized (xử lý ở layer trên).
 
         var problems = contest.ContestProblems!
             .Where(p => p.IsActive)
@@ -260,6 +259,7 @@ public class ContestRepository : IContestRepository
                 LeaderId = ct.Team.LeaderId,
                 TeamSize = ct.Team.TeamSize,
                 MemberCount = ct.Team.TeamMembers.Count(),
+                InviteCode = ct.Team.IsPersonal ? null : ct.Team.InviteCode,
                 JoinedAt = ct.JoinAt,
                 Rank = ct.Rank,
                 Score = ct.Score,

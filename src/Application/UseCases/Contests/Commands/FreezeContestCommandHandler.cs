@@ -46,14 +46,19 @@ public class FreezeContestCommandHandler
 
         var now = DateTime.UtcNow;
 
-        // chỉ cần contest đã bắt đầu
+        // Rule 3: start_at < freeze_at < end_at
         if (contest.StartAt > now)
             throw new Exception("CONTEST_NOT_STARTED");
 
-        if (contest.FreezeAt != null)
+        if (contest.EndAt <= now)
+            throw new Exception("CONTEST_ALREADY_ENDED");
+
+        if (contest.FreezeAt.HasValue &&
+            (!contest.UnfreezeAt.HasValue || now < contest.UnfreezeAt.Value))
             throw new Exception("ALREADY_FROZEN");
 
         contest.FreezeAt = now;
+        contest.UnfreezeAt = null;
         contest.UpdatedAt = now;
         contest.UpdatedBy = userId;
 

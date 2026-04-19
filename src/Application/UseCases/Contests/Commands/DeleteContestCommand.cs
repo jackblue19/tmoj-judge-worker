@@ -2,7 +2,7 @@ using MediatR;
 
 namespace Application.UseCases.Contests.Commands;
 
-public class CreateTeamInviteCodeCommand : IRequest<string>
+public class DeleteContestCommand : IRequest<bool>
 {
     public Guid ContestId { get; set; }
 }

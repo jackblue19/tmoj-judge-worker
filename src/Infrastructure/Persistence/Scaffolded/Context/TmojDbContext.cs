@@ -734,7 +734,14 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.DescriptionMd).HasColumnName("description_md");
             entity.Property(e => e.EndAt).HasColumnName("end_at");
             entity.Property(e => e.FreezeAt).HasColumnName("freeze_at");
+            entity.Property(e => e.FinalizedAt).HasColumnName("finalized_at");
             entity.Property(e => e.InviteCode).HasColumnName("invite_code");
+            entity.Property(e => e.Status)
+                .HasDefaultValue("draft")
+                .HasColumnName("status");
+            entity.Property(e => e.ScoreboardMode)
+                .HasDefaultValue("live")
+                .HasColumnName("scoreboard_mode");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
@@ -854,6 +861,9 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.ShowEditorial)
                 .HasDefaultValue(false)
                 .HasColumnName("show_editorial");
+            entity.Property(e => e.AccessMode)
+                .HasDefaultValue("visible")
+                .HasColumnName("access_mode");
             entity.Property(e => e.MaxScore).HasColumnName("max_score");
             entity.Property(e => e.MemoryLimitKb).HasColumnName("memory_limit_kb");
             entity.Property(e => e.Ordinal).HasColumnName("ordinal");
@@ -2032,6 +2042,7 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValue(0)
                 .HasColumnName("code_size");
             entity.Property(e => e.ContestProblemId).HasColumnName("contest_problem_id");
+            entity.Property(e => e.ClassSlotId).HasColumnName("class_slot_id");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
@@ -2043,6 +2054,9 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.IsDeleted)
                 .HasDefaultValue(false)
                 .HasColumnName("is_deleted");
+            entity.Property(e => e.IsLate)
+                .HasDefaultValue(false)
+                .HasColumnName("is_late");
             entity.Property(e => e.JudgedAt).HasColumnName("judged_at");
             entity.Property(e => e.MemoryKb).HasColumnName("memory_kb");
             entity.Property(e => e.ProblemId).HasColumnName("problem_id");
@@ -2074,6 +2088,11 @@ public partial class TmojDbContext : DbContext
                 .HasForeignKey(d => d.ContestProblemId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("submissions_contest_problem_id_fkey");
+
+            entity.HasOne(d => d.ClassSlot).WithMany(p => p.Submissions)
+                .HasForeignKey(d => d.ClassSlotId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("submissions_class_slot_id_fkey");
 
             entity.HasOne(d => d.Problem).WithMany(p => p.Submissions)
                 .HasForeignKey(d => d.ProblemId)

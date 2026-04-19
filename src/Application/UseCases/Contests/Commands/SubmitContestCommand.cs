@@ -9,4 +9,6 @@ public class SubmitContestCommand : IRequest<Guid>
 
     public string Code { get; set; } = string.Empty;
     public string Language { get; set; } = "cpp";
+
+    public Guid? ClassSlotId { get; set; }
 }

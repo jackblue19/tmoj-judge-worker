@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Application.UseCases.Favorite.Dtos;
 
 namespace Application.UseCases.Favorite.Dtos
 {
-    public class ToggleFavoriteProblemResponseDto
+    public class ToggleFavoriteContestResponseDto
     {
-        public Guid ProblemId { get; set; }
+        public Guid ContestId { get; set; }
         public bool IsFavorited { get; set; }
         public string Action { get; set; } = default!;
 

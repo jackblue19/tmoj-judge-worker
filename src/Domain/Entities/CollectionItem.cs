@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace Domain.Entities;
+﻿using Domain.Entities;
 
 public partial class CollectionItem
 {
@@ -13,11 +10,11 @@ public partial class CollectionItem
 
     public Guid? ContestId { get; set; }
 
+    public int OrderIndex { get; set; } 
+
     public DateTime CreatedAt { get; set; }
 
     public virtual Collection Collection { get; set; } = null!;
-
     public virtual Contest? Contest { get; set; }
-
     public virtual Problem? Problem { get; set; }
 }

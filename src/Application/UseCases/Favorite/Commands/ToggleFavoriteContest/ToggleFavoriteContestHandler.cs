@@ -3,45 +3,45 @@ using Application.UseCases.Favorite.Dtos;
 using Domain.Entities;
 using MediatR;
 
-namespace Application.UseCases.Favorite.Commands.ToggleFavoriteProblem;
+namespace Application.UseCases.Favorite.Commands.ToggleFavoriteContest;
 
-public class ToggleFavoriteProblemHandler
-    : IRequestHandler<ToggleFavoriteProblemCommand, ToggleFavoriteProblemResponseDto>
+public class ToggleFavoriteContestHandler
+    : IRequestHandler<ToggleFavoriteContestCommand, ToggleFavoriteContestResponseDto>
 {
     private readonly IFavoriteRepository _repo;
 
-    public ToggleFavoriteProblemHandler(IFavoriteRepository repo)
+    public ToggleFavoriteContestHandler(IFavoriteRepository repo)
     {
         _repo = repo;
     }
 
-    public async Task<ToggleFavoriteProblemResponseDto> Handle(
-      ToggleFavoriteProblemCommand request,
-      CancellationToken ct)
+    public async Task<ToggleFavoriteContestResponseDto> Handle(
+    ToggleFavoriteContestCommand request,
+    CancellationToken ct)
     {
-        Console.WriteLine("🔥 ToggleFavoriteProblem START");
+        Console.WriteLine("🔥 ToggleFavoriteContest START");
 
         var userId = request.UserId;
-        var problemId = request.ProblemId;
+        var contestId = request.ContestId;
 
         if (userId == Guid.Empty)
-            return Fail(problemId, "INVALID_USER", "UserId không hợp lệ");
+            return Fail(contestId, "INVALID_USER", "UserId không hợp lệ");
 
-        if (problemId == Guid.Empty)
-            return Fail(problemId, "INVALID_PROBLEM", "ProblemId không hợp lệ");
+        if (contestId == Guid.Empty)
+            return Fail(contestId, "INVALID_CONTEST", "ContestId không hợp lệ");
 
-        var problem = await _repo.GetProblemByIdAsync(problemId);
+        var contest = await _repo.GetContestByIdAsync(contestId);
 
-        if (problem == null)
-            return Fail(problemId, "NOT_FOUND", "Bài toán không tồn tại");
+        if (contest == null)
+            return Fail(contestId, "NOT_FOUND", "Contest không tồn tại");
 
-        if (!problem.IsActive)
-            return Fail(problemId, "INACTIVE", "Bài toán đã bị vô hiệu hóa");
+        if (!contest.IsActive)
+            return Fail(contestId, "INACTIVE", "Contest đã bị vô hiệu hóa");
 
-        if (problem.VisibilityCode == "private" && problem.CreatedBy != userId)
-            return Fail(problemId, "FORBIDDEN", "Bạn không có quyền bookmark bài này");
+        if (contest.VisibilityCode == "private" && contest.CreatedBy != userId)
+            return Fail(contestId, "FORBIDDEN", "Bạn không có quyền bookmark contest này");
 
-        var collection = await _repo.GetUserCollectionByTypeAsync(userId, "problem_favorite");
+        var collection = await _repo.GetUserCollectionByTypeAsync(userId, "contest_favorite");
 
         if (collection == null)
         {
@@ -51,8 +51,8 @@ public class ToggleFavoriteProblemHandler
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
-                Name = "Favorite Problems",
-                Type = "problem_favorite",
+                Type = "contest_favorite",
+                Name = "Favorite Contests",
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -60,7 +60,7 @@ public class ToggleFavoriteProblemHandler
             await _repo.SaveChangesAsync();
         }
 
-        var item = await _repo.GetCollectionItemAsync(collection.Id, problemId, null);
+        var item = await _repo.GetCollectionItemAsync(collection.Id, null, contestId);
 
         if (item != null)
         {
@@ -69,9 +69,9 @@ public class ToggleFavoriteProblemHandler
             await _repo.RemoveItemAsync(item.Id);
             await _repo.SaveChangesAsync();
 
-            return new ToggleFavoriteProblemResponseDto
+            return new ToggleFavoriteContestResponseDto
             {
-                ProblemId = problemId,
+                ContestId = contestId,
                 IsFavorited = false,
                 Action = "removed",
                 IsSuccess = true,
@@ -85,16 +85,16 @@ public class ToggleFavoriteProblemHandler
         {
             Id = Guid.NewGuid(),
             CollectionId = collection.Id,
-            ProblemId = problemId,
+            ContestId = contestId,
             CreatedAt = DateTime.UtcNow
         };
 
         await _repo.AddItemAsync(newItem);
         await _repo.SaveChangesAsync();
 
-        return new ToggleFavoriteProblemResponseDto
+        return new ToggleFavoriteContestResponseDto
         {
-            ProblemId = problemId,
+            ContestId = contestId,
             IsFavorited = true,
             Action = "added",
             IsSuccess = true,
@@ -105,13 +105,13 @@ public class ToggleFavoriteProblemHandler
     // =========================
     // HELPERS
     // =========================
-    private ToggleFavoriteProblemResponseDto Fail(Guid id, string code, string msg)
+    private ToggleFavoriteContestResponseDto Fail(Guid id, string code, string msg)
     {
         Console.WriteLine($"❌ {code} - {msg}");
 
-        return new ToggleFavoriteProblemResponseDto
+        return new ToggleFavoriteContestResponseDto
         {
-            ProblemId = id,
+            ContestId = id,
             IsSuccess = false,
             ErrorCode = code,
             ErrorMessage = msg,

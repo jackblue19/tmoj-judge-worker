@@ -37,6 +37,8 @@ public partial class ContestProblem
 
     public bool ShowEditorial { get; set; }
 
+    public string AccessMode { get; set; } = "visible";
+
     public DateTime CreatedAt { get; set; }
 
     public Guid? CreatedBy { get; set; }

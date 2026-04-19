@@ -15,4 +15,7 @@ public class ContestProblemDto
 
     public string Title { get; set; } = default!;
     public string Status { get; set; } = "not_started";
+
+    // visible / read_only / hidden — rule 2.3
+    public string AccessMode { get; set; } = "visible";
 }

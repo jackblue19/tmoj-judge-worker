@@ -4,21 +4,18 @@ namespace Application.Common.Policies;
 
 public static class FreezeContestPatch
 {
+    // Freeze chỉ ảnh hưởng scoreboard public.
+    // KHÔNG chặn submit, KHÔNG chặn view — contestant vẫn thao tác bình thường.
     public static bool IsFrozen(Contest contest)
     {
-        return contest.FreezeAt.HasValue
-            && DateTime.UtcNow >= contest.FreezeAt.Value;
-    }
+        var now = DateTime.UtcNow;
 
-    public static void EnsureViewAllowed(Contest contest)
-    {
-        if (IsFrozen(contest))
-            throw new Exception("CONTEST_FROZEN_VIEW_BLOCKED");
-    }
+        if (!contest.FreezeAt.HasValue || now < contest.FreezeAt.Value)
+            return false;
 
-    public static void EnsureSubmitAllowed(Contest contest)
-    {
-        if (IsFrozen(contest))
-            throw new Exception("CONTEST_FROZEN_SUBMIT_BLOCKED");
+        if (contest.UnfreezeAt.HasValue && now >= contest.UnfreezeAt.Value)
+            return false;
+
+        return true;
     }
 }

@@ -35,7 +35,10 @@ public class ContestRepository : IContestRepository
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(visibilityCode))
-            query = query.Where(x => x.VisibilityCode == visibilityCode.ToLower());
+        {
+            var wanted = visibilityCode.ToLower();
+            query = query.Where(x => x.VisibilityCode.ToLower() == wanted);
+        }
 
         if (!includeArchived)
             query = query.Where(x => x.IsActive);
@@ -114,11 +117,8 @@ public class ContestRepository : IContestRepository
 
         if (contest == null) return null;
 
-        // =========================
-        // ❌ STRICT FREEZE - BLOCK VIEW DETAIL
-        // =========================
-        if (contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value)
-            throw new Exception("CONTEST_FROZEN_VIEW_BLOCKED");
+        // Rule 4.4: Frozen KHÔNG ẩn problem. Contestant vẫn xem được detail.
+        // Ẩn/khóa problem chỉ thuộc state closed/finalized (xử lý ở layer trên).
 
         var problems = contest.ContestProblems!
             .Where(p => p.IsActive)

@@ -5,6 +5,7 @@ using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+
 namespace Infrastructure.Persistence.Common.Repositories;
 
 public class FavoriteRepository : IFavoriteRepository
@@ -315,5 +316,26 @@ public class FavoriteRepository : IFavoriteRepository
             .ToListAsync();
 
         return (items, total);
+    }
+
+    public async Task<HashSet<Guid>> GetSolvedProblemIdsAsync(
+     Guid userId,
+     List<Guid> problemIds)
+    {
+        if (problemIds == null || problemIds.Count == 0)
+            return new HashSet<Guid>();
+
+        var list = await _db.Set<Submission>()
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId &&
+                !x.IsDeleted &&
+                problemIds.Contains(x.ProblemId) &&
+                x.StatusCode == "accepted")
+            .Select(x => x.ProblemId)
+            .Distinct()
+            .ToListAsync();
+
+        return list.ToHashSet();
     }
 }

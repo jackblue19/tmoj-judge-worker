@@ -623,7 +623,7 @@ public class FavoritesController : ControllerBase
     [Authorize]
     public async Task<IActionResult> CopyCollection(Guid id)
     {
-        Console.WriteLine("🔥 API CopyCollection called");
+        Console.WriteLine(" API CopyCollection called");
 
         try
         {
@@ -656,7 +656,7 @@ public class FavoritesController : ControllerBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR CopyCollection: {ex.Message}");
+            Console.WriteLine($" ERROR CopyCollection: {ex.Message}");
 
             return StatusCode(500, new
             {

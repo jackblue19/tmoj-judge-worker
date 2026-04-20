@@ -30,35 +30,30 @@ public class GetCollectionDetailHandler
         if (collectionId == Guid.Empty)
             throw new Exception("CollectionId invalid");
 
-        Console.WriteLine($"👉 UserId: {userId}");
-        Console.WriteLine($"👉 CollectionId: {collectionId}");
-
         // =========================
         // GET COLLECTION
         // =========================
         var collection = await _repo.GetCollectionByIdAsync(collectionId);
 
         if (collection == null)
-        {
-            Console.WriteLine("❌ Collection not found");
             throw new Exception("Collection not found");
-        }
 
         // =========================
-        // 🔐 CHECK PERMISSION
+        // PERMISSION
         // =========================
         if (!collection.IsVisibility && collection.UserId != userId)
-        {
-            Console.WriteLine("❌ Access denied");
             throw new Exception("You do not have permission to view this collection");
-        }
 
         // =========================
-        // GET ITEMS (JOIN)
+        // GET ITEMS
         // =========================
         var items = await _repo.GetCollectionItemsDetailAsync(collectionId);
 
-        Console.WriteLine($"👉 Found {items.Count} items");
+        // =========================
+        // ✅ COUNT LOGIC
+        // =========================
+        var problemCount = items.Count(x => x.ProblemId != null);
+        var contestCount = items.Count(x => x.ContestId != null);
 
         var result = new CollectionDetailDto
         {
@@ -67,6 +62,12 @@ public class GetCollectionDetailHandler
             Description = collection.Description,
             Type = collection.Type,
             IsVisibility = collection.IsVisibility,
+
+            // ✅ NEW
+            TotalItems = items.Count,
+            ProblemCount = problemCount,
+            ContestCount = contestCount,
+
             Items = items.Select(x => new CollectionItemDto
             {
                 Id = x.Id,
@@ -80,7 +81,7 @@ public class GetCollectionDetailHandler
             }).ToList()
         };
 
-        Console.WriteLine("🔥 GetCollectionDetail END");
+        Console.WriteLine($"✅ Total: {items.Count} | Problems: {problemCount} | Contests: {contestCount}");
 
         return result;
     }

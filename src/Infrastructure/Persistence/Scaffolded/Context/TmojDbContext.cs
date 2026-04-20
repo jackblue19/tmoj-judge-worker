@@ -633,6 +633,10 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.ProblemId).HasColumnName("problem_id");
 
+            entity.Property(e => e.OrderIndex)
+                   .HasColumnName("order_index")
+                   .HasDefaultValue(0);
+
             entity.HasOne(d => d.Collection).WithMany(p => p.CollectionItems)
                 .HasForeignKey(d => d.CollectionId)
                 .HasConstraintName("fk_ci_collection");

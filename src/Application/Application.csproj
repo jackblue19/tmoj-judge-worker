@@ -26,6 +26,7 @@
   <ItemGroup>
     <Folder Include="UseCases\Contests\Validators\" />
     <Folder Include="UseCases\Editorials\Validators\" />
+    <Folder Include="UseCases\Favorite\Specs\" />
     <Folder Include="UseCases\Gamification\Validators\" />
     <Folder Include="UseCases\Gamification\Specs\" />
     <Folder Include="UseCases\StudyPlans\Specs\" />

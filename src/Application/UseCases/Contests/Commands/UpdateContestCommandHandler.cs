@@ -107,11 +107,12 @@ public class UpdateContestCommandHandler
             }
 
             contest.VisibilityCode = newVisibility;
+        }
 
-            if (newVisibility == "private" && string.IsNullOrEmpty(contest.InviteCode))
-            {
-                contest.InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper();
-            }
+        // Đảm bảo contest luôn có invite code (kể cả public). Bổ sung nếu thiếu.
+        if (string.IsNullOrEmpty(contest.InviteCode))
+        {
+            contest.InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper();
         }
 
         // =========================

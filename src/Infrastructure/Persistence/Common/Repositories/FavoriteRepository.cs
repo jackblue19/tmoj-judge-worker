@@ -21,12 +21,12 @@ public class FavoriteRepository : IFavoriteRepository
     }
 
     // =========================
-    // GET COLLECTION
+    // GET COLLECTION (TRACKED)
     // =========================
     public async Task<Collection?> GetUserCollectionByTypeAsync(Guid userId, string type)
     {
         return await _db.Set<Collection>()
-            .AsNoTracking()
+            // ❌ REMOVE AsNoTracking
             .FirstOrDefaultAsync(x =>
                 x.UserId == userId &&
                 x.Type == type);
@@ -35,14 +35,14 @@ public class FavoriteRepository : IFavoriteRepository
     public async Task<Collection?> GetCollectionByIdAsync(Guid id)
     {
         return await _db.Set<Collection>()
-            .AsNoTracking()
+            // ❌ REMOVE AsNoTracking
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
     public async Task<List<Collection>> GetCollectionsByUserAsync(Guid userId)
     {
         return await _db.Set<Collection>()
-            .AsNoTracking()
+            .AsNoTracking() // ✅ read-only
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
@@ -63,7 +63,7 @@ public class FavoriteRepository : IFavoriteRepository
     }
 
     // =========================
-    // SAFE QUERY (FIX LỖI CHÍNH)
+    // QUERY FAVORITES (READ ONLY)
     // =========================
     public IQueryable<Problem> QueryFavoriteProblems(Guid collectionId)
     {
@@ -78,7 +78,7 @@ public class FavoriteRepository : IFavoriteRepository
                 p => p.Id,
                 (ci, p) => p
             )
-            .Distinct(); // 🔥 tránh duplicate
+            .Distinct();
     }
 
     public IQueryable<Contest> QueryFavoriteContests(Guid collectionId)
@@ -140,7 +140,7 @@ public class FavoriteRepository : IFavoriteRepository
     }
 
     // =========================
-    // GET ENTITY
+    // GET ENTITY (READ ONLY)
     // =========================
     public async Task<Problem?> GetProblemByIdAsync(Guid problemId)
     {
@@ -167,25 +167,36 @@ public class FavoriteRepository : IFavoriteRepository
                 x.ProblemId == problemId &&
                 x.ContestId == contestId);
     }
+
     public async Task<List<CollectionItem>> GetCollectionItemsByCollectionId(Guid collectionId)
     {
         return await _db.Set<CollectionItem>()
+            // ✅ TRACKED (important for reorder)
             .Where(x => x.CollectionId == collectionId)
             .ToListAsync();
     }
+
+    // =========================
+    // PUBLIC COLLECTIONS
+    // =========================
     public IQueryable<Collection> QueryPublicCollections()
     {
         return _db.Set<Collection>()
             .AsNoTracking()
-            .Where(x => x.IsVisibility == true); // public
+            .Where(x => x.IsVisibility == true);
     }
 
     public async Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
-    int page,
-    int pageSize)
+        int page,
+        int pageSize)
     {
         var query = _db.Set<Collection>()
             .AsNoTracking()
+            .Include(x => x.User) // ✅ FIX NULL USER
+            .Include(x => x.CollectionItems)
+                .ThenInclude(ci => ci.Problem)
+            .Include(x => x.CollectionItems)
+                .ThenInclude(ci => ci.Contest)
             .Where(x => x.IsVisibility == true);
 
         var total = await query.CountAsync();
@@ -201,7 +212,7 @@ public class FavoriteRepository : IFavoriteRepository
                 Description = c.Description,
 
                 OwnerId = c.UserId,
-                OwnerName = c.User.Username, // ⚠️ cần navigation User
+                OwnerName = c.User.Username,
 
                 TotalItems = c.CollectionItems.Count,
 
@@ -211,10 +222,8 @@ public class FavoriteRepository : IFavoriteRepository
                     .Select(ci => new PreviewItemDto
                     {
                         ItemId = ci.Id,
-
                         ProblemId = ci.ProblemId,
                         ProblemTitle = ci.Problem != null ? ci.Problem.Title : null,
-
                         ContestId = ci.ContestId,
                         ContestTitle = ci.Contest != null ? ci.Contest.Title : null
                     }).ToList()
@@ -275,11 +284,12 @@ public class FavoriteRepository : IFavoriteRepository
     // =========================
     public async Task SaveChangesAsync()
     {
-        await _db.SaveChangesAsync();
+        var affected = await _db.SaveChangesAsync();
+        _logger.LogInformation("🔥 SaveChanges affected rows: {count}", affected);
     }
 
     // =========================
-    // LEGACY (OPTIONAL)
+    // LEGACY
     // =========================
     public async Task<(List<Problem> Items, int Total)> GetFavoriteProblemsAsync(
         Guid userId,

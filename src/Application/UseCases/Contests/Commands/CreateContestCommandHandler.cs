@@ -65,9 +65,8 @@ public class CreateContestCommandHandler
             AllowTeams = request.AllowTeams,
             IsActive = true,
 
-            InviteCode = visibility == "private"
-                ? Guid.NewGuid().ToString("N")[..8].ToUpper()
-                : null,
+            // Mọi contest đều gen invite code — public contest cũng join được bằng code.
+            InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper(),
 
             CreatedAt = DateTime.UtcNow,
             CreatedBy = _currentUser.UserId

@@ -50,11 +50,25 @@ public class GetCollectionDetailHandler
         var items = await _repo.GetCollectionItemsDetailAsync(collectionId);
 
         // =========================
-        // ✅ COUNT LOGIC
+        // COUNT
         // =========================
-        var problemCount = items.Count(x => x.ProblemId != null);
+        var problemIds = items
+            .Where(x => x.ProblemId != null)
+            .Select(x => x.ProblemId!.Value)
+            .ToList();
+
+        var problemCount = problemIds.Count;
         var contestCount = items.Count(x => x.ContestId != null);
 
+        // =========================
+        // SOLVED
+        // =========================
+        var solvedSet = await _repo.GetSolvedProblemIdsAsync(userId, problemIds);
+        var solvedCount = solvedSet.Count;
+
+        // =========================
+        // MAP
+        // =========================
         var result = new CollectionDetailDto
         {
             Id = collection.Id,
@@ -63,10 +77,10 @@ public class GetCollectionDetailHandler
             Type = collection.Type,
             IsVisibility = collection.IsVisibility,
 
-            // ✅ NEW
             TotalItems = items.Count,
             ProblemCount = problemCount,
             ContestCount = contestCount,
+            SolvedProblems = solvedCount,
 
             Items = items.Select(x => new CollectionItemDto
             {
@@ -77,11 +91,15 @@ public class GetCollectionDetailHandler
                 ContestId = x.ContestId,
                 ContestTitle = x.Contest?.Title,
 
-                CreatedAt = x.CreatedAt
+                CreatedAt = x.CreatedAt,
+
+                IsSolved = x.ProblemId != null &&
+                           solvedSet.Contains(x.ProblemId.Value)
             }).ToList()
         };
 
-        Console.WriteLine($"✅ Total: {items.Count} | Problems: {problemCount} | Contests: {contestCount}");
+        Console.WriteLine(
+            $"✅ Total: {items.Count} | Problems: {problemCount} | Contests: {contestCount} | Solved: {solvedCount}");
 
         return result;
     }

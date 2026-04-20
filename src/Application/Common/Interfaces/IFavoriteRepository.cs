@@ -41,7 +41,9 @@ namespace Application.Common.Interfaces
 
         Task<Problem?> GetProblemByIdAsync(Guid problemId);
         Task<Contest?> GetContestByIdAsync(Guid contestId);
-
+        Task<HashSet<Guid>> GetSolvedProblemIdsAsync(
+            Guid userId,
+            List<Guid> problemIds);
         Task CreateAsync(Collection collection);
 
         Task AddItemAsync(CollectionItem item);

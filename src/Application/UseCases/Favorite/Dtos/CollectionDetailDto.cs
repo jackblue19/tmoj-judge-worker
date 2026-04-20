@@ -14,10 +14,13 @@ public class CollectionDetailDto
     public string Type { get; set; } = default!;
     public bool IsVisibility { get; set; }
 
-    // ✅ NEW
+    // ✅ COUNT
     public int TotalItems { get; set; }
     public int ProblemCount { get; set; }
     public int ContestCount { get; set; }
+
+    // ✅ SOLVED STATS
+    public int SolvedProblems { get; set; }
 
     public List<CollectionItemDto> Items { get; set; } = new();
 }

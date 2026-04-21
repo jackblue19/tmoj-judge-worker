@@ -47,6 +47,17 @@ public partial class Problem
 
     public int? MemoryLimitKb { get; set; }
 
+    //  rv3
+    public string? ProblemMode { get; set; }
+    public string? ProblemSource { get; set; }
+    public int UsedCount { get; set; }
+    public Guid? OriginId { get; set; }
+
+    public virtual Problem? Origin { get; set; }
+    public virtual ICollection<Problem> InverseOrigin { get; set; } = new List<Problem>();
+    public virtual ICollection<ProblemTemplate> ProblemTemplates { get; set; } = new List<ProblemTemplate>();
+    //  end
+
     public string? StatementSourceCode { get; set; }
 
     public Guid? StatementFileId { get; set; }

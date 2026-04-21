@@ -41,5 +41,4 @@ public interface IReadRepository<TEntity, in TKey> where TEntity : class
         int page ,
         int pageSize ,
         CancellationToken ct = default);
-
 }

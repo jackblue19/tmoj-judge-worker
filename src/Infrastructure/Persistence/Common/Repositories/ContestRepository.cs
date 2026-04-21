@@ -78,6 +78,25 @@ public class ContestRepository : IContestRepository
             .Take(pageSize)
             .ToList();
 
+        var contestIds = paged.Select(x => x.Id).ToList();
+
+        var teamCounts = await _db.ContestTeams
+            .AsNoTracking()
+            .Where(ct => contestIds.Contains(ct.ContestId))
+            .GroupBy(ct => ct.ContestId)
+            .Select(g => new { ContestId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ContestId, x => x.Count);
+
+        var memberCounts = await _db.ContestTeams
+            .AsNoTracking()
+            .Where(ct => contestIds.Contains(ct.ContestId))
+            .SelectMany(ct => ct.Team.TeamMembers
+                .Select(tm => new { ct.ContestId, tm.UserId }))
+            .Distinct()
+            .GroupBy(x => x.ContestId)
+            .Select(g => new { ContestId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ContestId, x => x.Count);
+
         var items = paged.Select(x => new ContestDto
         {
             Id = x.Id,
@@ -87,6 +106,8 @@ public class ContestRepository : IContestRepository
             VisibilityCode = x.VisibilityCode,
             ContestType = x.ContestType,
             AllowTeams = x.AllowTeams,
+            TotalTeams = teamCounts.TryGetValue(x.Id, out var tc) ? tc : 0,
+            TotalMembers = memberCounts.TryGetValue(x.Id, out var mc) ? mc : 0,
             Status =
                 x.StartAt > now ? "upcoming" :
                 x.EndAt < now ? "ended" :
@@ -136,6 +157,8 @@ public class ContestRepository : IContestRepository
                 ? (int)(endAt - startAt).TotalMinutes
                 : 0;
 
+        var (totalTeams, totalMembers) = await GetContestParticipantCountsAsync(contestId);
+
         return new ContestDetailDto
         {
             Id = contest.Id,
@@ -166,6 +189,9 @@ public class ContestRepository : IContestRepository
 
             ProblemCount = problems.Count,
             TotalPoints = problems.Sum(p => p.Points ?? 0),
+
+            TotalTeams = totalTeams,
+            TotalMembers = totalMembers,
 
             Problems = problems.Select(p => new ContestProblemDto
             {
@@ -481,6 +507,26 @@ public class ContestRepository : IContestRepository
         Guid? ContestProblemId,
         string? VerdictCode,
         DateTime CreatedAt);
+
+    // =============================================
+    // PARTICIPANT COUNTS
+    // =============================================
+    public async Task<(int TotalTeams, int TotalMembers)> GetContestParticipantCountsAsync(Guid contestId)
+    {
+        var totalTeams = await _db.ContestTeams
+            .AsNoTracking()
+            .Where(ct => ct.ContestId == contestId)
+            .CountAsync();
+
+        var totalMembers = await _db.ContestTeams
+            .AsNoTracking()
+            .Where(ct => ct.ContestId == contestId)
+            .SelectMany(ct => ct.Team.TeamMembers.Select(tm => tm.UserId))
+            .Distinct()
+            .CountAsync();
+
+        return (totalTeams, totalMembers);
+    }
 
     // =============================================
     // GET MY CONTESTS

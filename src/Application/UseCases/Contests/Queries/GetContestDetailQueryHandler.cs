@@ -13,15 +13,18 @@ public class GetContestDetailQueryHandler
     : IRequestHandler<GetContestDetailQuery, ContestDetailDto>
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
+    private readonly IContestRepository _contestQueryRepo;
     private readonly IContestStatusService _statusService;
     private readonly ICurrentUserService _currentUser;
 
     public GetContestDetailQueryHandler(
         IReadRepository<Contest, Guid> contestRepo,
+        IContestRepository contestQueryRepo,
         IContestStatusService statusService,
         ICurrentUserService currentUser)
     {
         _contestRepo = contestRepo;
+        _contestQueryRepo = contestQueryRepo;
         _statusService = statusService;
         _currentUser = currentUser;
     }
@@ -60,6 +63,9 @@ public class GetContestDetailQueryHandler
             .ThenBy(cp => cp.Alias)
             .ToList();
 
+        var (totalTeams, totalMembers) =
+            await _contestQueryRepo.GetContestParticipantCountsAsync(contest.Id);
+
         // ❌ REMOVE:
         // FreezeContestPatch.EnsureViewAllowed(contest);
 
@@ -97,6 +103,9 @@ public class GetContestDetailQueryHandler
 
             ProblemCount = problems.Count,
             TotalPoints = problems.Sum(p => p.Points ?? 0),
+
+            TotalTeams = totalTeams,
+            TotalMembers = totalMembers,
 
             // ✅ ALWAYS return problems
             Problems = problems.Select(cp => new ContestProblemDto

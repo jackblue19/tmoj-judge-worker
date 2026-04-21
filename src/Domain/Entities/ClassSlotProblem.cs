@@ -23,7 +23,6 @@ public partial class ClassSlotProblem
 
     //  rv3
     public string? SubmissionMode { get; set; }
-    public string? TemplateCode { get; set; }
     public string? SolutionSignature { get; set; }
 
     //end

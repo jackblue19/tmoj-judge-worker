@@ -19,12 +19,14 @@ public class GetUserPublicCollectionsHandler
         GetUserPublicCollectionsQuery request,
         CancellationToken ct)
     {
-        var query = _repo.QueryPublicCollections()
+        var baseQuery = _repo.QueryPublicCollections()
             .Where(x => x.UserId == request.UserId);
 
-        var total = await query.CountAsync(ct);
+        var submissions = _repo.QuerySubmissions();
 
-        var items = await query
+        var total = await baseQuery.CountAsync(ct);
+
+        var items = await baseQuery
             .OrderByDescending(x => x.CreatedAt)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
@@ -40,7 +42,28 @@ public class GetUserPublicCollectionsHandler
                 OwnerId = x.UserId,
                 OwnerName = x.User.Username,
 
-                TotalItems = x.CollectionItems.Count,
+                TotalItems = x.CollectionItems.Count(),
+
+                ProblemCount = x.CollectionItems
+                    .Where(ci => ci.ProblemId != null)
+                    .Select(ci => ci.ProblemId)
+                    .Distinct()
+                    .Count(),
+
+                ContestCount = x.CollectionItems
+                    .Count(ci => ci.ContestId != null),
+
+                SolvedCount = (
+                    from ci in x.CollectionItems
+                    where ci.ProblemId != null
+                    join s in submissions on ci.ProblemId equals s.ProblemId
+                    where s.UserId == request.UserId
+                          && !s.IsDeleted
+                          && s.StatusCode == "accepted"
+                    select ci.ProblemId
+                )
+                .Distinct()
+                .Count(),
 
                 PreviewItems = x.CollectionItems
                     .OrderBy(ci => ci.OrderIndex)
@@ -48,16 +71,21 @@ public class GetUserPublicCollectionsHandler
                     .Select(ci => new PreviewItemDto
                     {
                         ItemId = ci.Id,
-
                         ProblemId = ci.ProblemId,
                         ProblemTitle = ci.Problem != null ? ci.Problem.Title : null,
-
                         ContestId = ci.ContestId,
                         ContestTitle = ci.Contest != null ? ci.Contest.Title : null
                     })
                     .ToList()
             })
             .ToListAsync(ct);
+
+        foreach (var item in items)
+        {
+            item.SolvedPercent = item.ProblemCount == 0
+                ? 0
+                : Math.Round((double)item.SolvedCount / item.ProblemCount * 100, 2);
+        }
 
         return new PublicCollectionsResult
         {

@@ -14,17 +14,11 @@ namespace Infrastructure.Persistence.Repositories
             _db = db;
         }
 
-        // =========================
-        // CREATE
-        // =========================
         public async Task AddAsync(Payment payment)
         {
             await _db.Set<Payment>().AddAsync(payment);
         }
 
-        // =========================
-        // READ
-        // =========================
         public async Task<Payment?> GetByIdAsync(Guid id)
         {
             return await _db.Set<Payment>()
@@ -32,18 +26,11 @@ namespace Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(x => x.PaymentId == id);
         }
 
-        // =========================
-        // UPDATE
-        // =========================
         public Task UpdateAsync(Payment payment)
         {
             _db.Set<Payment>().Update(payment);
             return Task.CompletedTask;
         }
-
-        // =========================
-        // EXTRA (nên có cho payment)
-        // =========================
 
         public async Task<Payment?> GetByTxnRefAsync(string txnRef)
         {
@@ -57,9 +44,6 @@ namespace Infrastructure.Persistence.Repositories
                 .AnyAsync(x => x.PaymentId == paymentId);
         }
 
-        // =========================
-        // SAVE (QUAN TRỌNG)
-        // =========================
         public async Task SaveChangesAsync()
         {
             await _db.SaveChangesAsync();

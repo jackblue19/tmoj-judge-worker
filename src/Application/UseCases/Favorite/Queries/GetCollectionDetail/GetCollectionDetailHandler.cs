@@ -18,8 +18,6 @@ public class GetCollectionDetailHandler
         GetCollectionDetailQuery request,
         CancellationToken ct)
     {
-        Console.WriteLine("🔥 GetCollectionDetail START");
-
         var userId = request.UserId;
         var collectionId = request.CollectionId;
 
@@ -29,46 +27,28 @@ public class GetCollectionDetailHandler
         if (collectionId == Guid.Empty)
             throw new Exception("CollectionId invalid");
 
-        // =========================
-        // GET COLLECTION
-        // =========================
         var collection = await _repo.GetCollectionByIdAsync(collectionId);
 
         if (collection == null)
             throw new Exception("Collection not found");
 
-        // =========================
-        // PERMISSION
-        // =========================
         if (!collection.IsVisibility && collection.UserId != userId)
-            throw new Exception("You do not have permission to view this collection");
+            throw new Exception("No permission");
 
-        // =========================
-        // GET ITEMS
-        // =========================
         var items = await _repo.GetCollectionItemsDetailAsync(collectionId);
 
-        // =========================
-        // COUNT
-        // =========================
         var problemIds = items
             .Where(x => x.ProblemId != null)
             .Select(x => x.ProblemId!.Value)
+            .Distinct()
             .ToList();
 
         var problemCount = problemIds.Count;
         var contestCount = items.Count(x => x.ContestId != null);
 
-        // =========================
-        // SOLVED
-        // =========================
         var solvedSet = await _repo.GetSolvedProblemIdsAsync(userId, problemIds);
-        var solvedCount = solvedSet.Count;
 
-        // =========================
-        // MAP
-        // =========================
-        var result = new CollectionDetailDto
+        return new CollectionDetailDto
         {
             Id = collection.Id,
             Name = collection.Name,
@@ -79,7 +59,7 @@ public class GetCollectionDetailHandler
             TotalItems = items.Count,
             ProblemCount = problemCount,
             ContestCount = contestCount,
-            SolvedProblems = solvedCount,
+            SolvedProblems = solvedSet.Count,
 
             Items = items.Select(x => new CollectionItemDto
             {
@@ -87,8 +67,6 @@ public class GetCollectionDetailHandler
 
                 ProblemId = x.ProblemId,
                 ProblemTitle = x.Problem?.Title,
-
-                // ✅ FIX CHÍNH
                 ProblemDifficulty = x.Problem?.Difficulty,
 
                 ContestId = x.ContestId,
@@ -100,10 +78,5 @@ public class GetCollectionDetailHandler
                            solvedSet.Contains(x.ProblemId.Value)
             }).ToList()
         };
-
-        Console.WriteLine(
-            $"✅ Total: {items.Count} | Problems: {problemCount} | Contests: {contestCount} | Solved: {solvedCount}");
-
-        return result;
     }
 }

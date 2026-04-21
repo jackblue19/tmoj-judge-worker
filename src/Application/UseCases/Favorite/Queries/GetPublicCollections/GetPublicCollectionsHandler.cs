@@ -20,9 +20,13 @@ public class GetPublicCollectionsHandler
         CancellationToken ct)
     {
         var baseQuery = _repo.QueryPublicCollections();
-        var submissions = _repo.QuerySubmissions(); // 👈 reuse (no nested call)
+        var submissions = _repo.QuerySubmissions();
 
         var total = await baseQuery.CountAsync(ct);
+
+        var userId = request.UserId == Guid.Empty
+            ? (Guid?)null
+            : request.UserId;
 
         var items = await baseQuery
             .OrderByDescending(x => x.CreatedAt)
@@ -41,30 +45,35 @@ public class GetPublicCollectionsHandler
                 OwnerName = x.User.Username,
 
                 // =========================
-                // COUNT (SQL LEVEL)
+                // COUNT
                 // =========================
                 TotalItems = x.CollectionItems.Count(),
 
                 ProblemCount = x.CollectionItems
-                    .Count(ci => ci.ProblemId != null),
+                    .Where(ci => ci.ProblemId != null)
+                    .Select(ci => ci.ProblemId)
+                    .Distinct()
+                    .Count(),
 
                 ContestCount = x.CollectionItems
                     .Count(ci => ci.ContestId != null),
 
                 // =========================
-                // ✅ SOLVED COUNT (NO N+1)
+                // SOLVED COUNT (NO N+1)
                 // =========================
-                SolvedCount = (
-                    from ci in x.CollectionItems
-                    where ci.ProblemId != null
-                    join s in submissions on ci.ProblemId equals s.ProblemId
-                    where s.UserId == request.UserId
-                          && !s.IsDeleted
-                          && s.StatusCode == "accepted"
-                    select ci.ProblemId
-                )
-                .Distinct()
-                .Count(),
+                SolvedCount = userId == null
+                    ? 0
+                    : (
+                        from ci in x.CollectionItems
+                        where ci.ProblemId != null
+                        join s in submissions on ci.ProblemId equals s.ProblemId
+                        where s.UserId == userId
+                              && !s.IsDeleted
+                              && s.StatusCode == "accepted"
+                        select ci.ProblemId
+                    )
+                    .Distinct()
+                    .Count(),
 
                 // =========================
                 // PREVIEW
@@ -85,7 +94,7 @@ public class GetPublicCollectionsHandler
             .ToListAsync(ct);
 
         // =========================
-        // SOLVED PERCENT (SAFE)
+        // SOLVED PERCENT
         // =========================
         foreach (var item in items)
         {

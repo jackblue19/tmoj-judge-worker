@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Application.UseCases.Wallets.Dtos
+﻿namespace Application.UseCases.Wallets.Queries.GetWalletTransactions
 {
     public class WalletTransactionDto
     {
-        public string Type { get; set; } = default!; // deposit | withdraw
+        public string Type { get; set; } = default!;
+        public string Direction { get; set; } = default!;
         public decimal Amount { get; set; }
+        public string Status { get; set; } = default!;
         public DateTime CreatedAt { get; set; }
     }
 }

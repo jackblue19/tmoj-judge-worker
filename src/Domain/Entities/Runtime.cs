@@ -32,4 +32,6 @@ public partial class Runtime
     public virtual ICollection<Solution> Solutions { get; set; } = new List<Solution>();
 
     public virtual ICollection<Submission> Submissions { get; set; } = new List<Submission>();
+
+    public virtual ICollection<ProblemTemplate> ProblemTemplates { get; set; } = new List<ProblemTemplate>();
 }

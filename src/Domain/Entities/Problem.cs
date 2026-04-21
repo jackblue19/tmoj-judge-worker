@@ -55,6 +55,7 @@ public partial class Problem
 
     public virtual Problem? Origin { get; set; }
     public virtual ICollection<Problem> InverseOrigin { get; set; } = new List<Problem>();
+    public virtual ICollection<ProblemTemplate> ProblemTemplates { get; set; } = new List<ProblemTemplate>();
     //  end
 
     public string? StatementSourceCode { get; set; }

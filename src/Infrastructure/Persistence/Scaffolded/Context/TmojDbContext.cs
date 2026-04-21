@@ -507,6 +507,9 @@ public partial class TmojDbContext : DbContext
                 .HasForeignKey(d => d.UpdatedBy)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("class_slot_updated_by_fkey");
+
+            // Submissions.class_slot_id column does not exist in DB — ignore inverse nav
+            entity.Ignore(e => e.Submissions);
         });
 
         modelBuilder.Entity<ClassSlotProblem>(entity =>
@@ -538,9 +541,6 @@ public partial class TmojDbContext : DbContext
 
             entity.Property(e => e.SubmissionMode)
                 .HasColumnName("submission_mode");
-
-            entity.Property(e => e.TemplateCode)
-                .HasColumnName("template_code");
 
             entity.Property(e => e.SolutionSignature)
                 .HasColumnName("solution_signature");
@@ -906,9 +906,6 @@ public partial class TmojDbContext : DbContext
 
             entity.Property(e => e.SubmissionMode)
                 .HasColumnName("submission_mode");
-
-            entity.Property(e => e.TemplateCode)
-                .HasColumnName("template_code");
 
             entity.Property(e => e.SolutionSignature)
                 .HasColumnName("solution_signature");

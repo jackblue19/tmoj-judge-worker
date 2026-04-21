@@ -41,5 +41,9 @@ public class ContestDetailDto
     public int ProblemCount { get; set; }
     public int TotalPoints { get; set; }
 
+    // participation counts (visible to everyone viewing the contest)
+    public int TotalTeams { get; set; }
+    public int TotalMembers { get; set; }
+
     public List<ContestProblemDto> Problems { get; set; } = new();
 }

@@ -19,6 +19,10 @@ namespace Application.UseCases.Contests.Dtos
 
         public bool AllowTeams { get; set; }
 
+        // participation counts
+        public int TotalTeams { get; set; }
+        public int TotalMembers { get; set; }
+
         // computed
         public string Status { get; set; } = string.Empty;
     }

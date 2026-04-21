@@ -50,4 +50,9 @@ public interface IContestRepository
     // 🔥 SCOREBOARD (ICPC)
     // =============================================
     Task<List<ContestScoreboardDto>> GetScoreboardAsync(Guid contestId);
+
+    // =============================================
+    // PARTICIPANT COUNTS
+    // =============================================
+    Task<(int TotalTeams, int TotalMembers)> GetContestParticipantCountsAsync(Guid contestId);
 }

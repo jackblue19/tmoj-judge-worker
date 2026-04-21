@@ -1,7 +1,6 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
 using MediatR;
-using StudyPlanEntity = Domain.Entities.StudyPlan;
 
 namespace Application.UseCases.StudyPlans.Queries.GetUnlockedPlans;
 
@@ -19,41 +18,55 @@ public class GetUnlockedPlansHandler
         GetUnlockedPlansQuery request,
         CancellationToken ct)
     {
-        // ✅ FIX: dùng đúng method hiện tại
-        var plans = await _repo.GetByCreatorAsync(request.CreatorId);
+        // =========================
+        // 1. GET ALL PLANS (FIX: bỏ CreatorId)
+        // =========================
+        var plans = await _repo.GetAllAsync();
 
+        if (plans == null || plans.Count == 0)
+            return new List<StudyPlanDto>();
+
+        // =========================
+        // 2. ORDER (tạm dùng CreatedAt)
+        // =========================
+        var orderedPlans = plans
+            .OrderBy(x => x.CreatedAt)
+            .ToList();
+
+        // =========================
+        // 3. BATCH CHECK COMPLETION
+        // =========================
+        var planIds = orderedPlans.Select(x => x.Id).ToList();
+
+        var completedMap = await _repo.GetCompletedPlansAsync(
+            request.UserId,
+            planIds
+        );
+
+        // =========================
+        // 4. BUILD RESULT (CHAIN LOGIC)
+        // =========================
         var result = new List<StudyPlanDto>();
 
-        StudyPlanEntity? previous = null;
-
-        foreach (var plan in plans)
+        for (int i = 0; i < orderedPlans.Count; i++)
         {
-            bool isUnlocked = true;
+            var plan = orderedPlans[i];
 
-            if (previous is not null)
-            {
-                isUnlocked = await _repo.IsStudyPlanCompletedAsync(
-                    request.UserId,
-                    previous.Id
-                );
-            }
+            var isCompleted = completedMap.GetValueOrDefault(plan.Id);
 
-            var isCompleted = await _repo.IsStudyPlanCompletedAsync(
-                request.UserId,
-                plan.Id
-            );
+            bool isUnlocked = i == 0
+                ? true
+                : completedMap.GetValueOrDefault(orderedPlans[i - 1].Id);
 
             result.Add(new StudyPlanDto
             {
                 Id = plan.Id,
                 Title = plan.Title,
-                Order = 0,
+                Order = i + 1,
                 ProblemCount = plan.StudyPlanItems?.Count ?? 0,
                 IsCompleted = isCompleted,
                 IsUnlocked = isUnlocked
             });
-
-            previous = plan;
         }
 
         return result;

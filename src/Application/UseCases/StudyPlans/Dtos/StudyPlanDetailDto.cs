@@ -11,9 +11,13 @@ public class StudyPlanDetailDto
 
 public class StudyPlanItemDto
 {
+    public Guid StudyPlanItemId { get; set; } // ✅ ADD THIS
+
     public Guid ProblemId { get; set; }
+
     public int Order { get; set; }
 
     public bool IsCompleted { get; set; }
+
     public bool IsUnlocked { get; set; }
 }

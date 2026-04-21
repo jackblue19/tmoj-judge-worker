@@ -19,25 +19,35 @@ public class GetStudyPlansHandler
         CancellationToken ct)
     {
         // =========================
-        // GET DATA
+        // 1. GET PLANS
         // =========================
         var plans = request.CreatorId.HasValue
             ? await _repo.GetByCreatorAsync(request.CreatorId.Value)
             : await _repo.GetAllAsync();
 
+        if (plans == null || plans.Count == 0)
+            return new List<StudyPlanDto>();
+
         // =========================
-        // MAP DTO
+        // 2. BUILD RESULT
         // =========================
-        return plans
-            .Select(p => new StudyPlanDto
+        var result = new List<StudyPlanDto>();
+
+        foreach (var p in plans)
+        {
+            var problemCount = await _repo.GetItemCountAsync(p.Id);
+
+            result.Add(new StudyPlanDto
             {
                 Id = p.Id,
                 Title = p.Title,
-                Order = 0,
-                ProblemCount = p.StudyPlanItems?.Count ?? 0,
-                IsCompleted = false,
-                IsUnlocked = true
-            })
-            .ToList();
+                Order = 0, // optional
+                ProblemCount = problemCount,
+                IsCompleted = false, // optional (có thể bổ sung sau)
+                IsUnlocked = true    // optional
+            });
+        }
+
+        return result;
     }
 }

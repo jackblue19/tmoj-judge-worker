@@ -15,37 +15,38 @@ public class GetNextStudyItemHandler
 
     public async Task<Guid?> Handle(GetNextStudyItemQuery request, CancellationToken ct)
     {
-        // 1. get current item
-        var currentItems = await _repo.GetItemsByPlanIdAsync(Guid.Empty);
-        // NOTE: ta không biết planId ở đây → sẽ optimize phía dưới
-
-        var currentProgress = await _repo.GetItemProgressAsync(
-            request.UserId,
-            request.StudyPlanItemId
-        );
-
-        // 2. get all items of this plan (FIX: cần resolve planId)
-        var allProgress = await _repo.GetAllItemProgressByUserAsync(request.UserId);
-
-        // 3. get current item
+        // =========================
+        // 1. GET CURRENT ITEM
+        // =========================
         var currentItem = await _repo.GetItemByIdAsync(request.StudyPlanItemId);
+
         if (currentItem == null)
             return null;
 
+        // =========================
+        // 2. GET ALL ITEMS IN PLAN
+        // =========================
         var items = await _repo.GetItemsByPlanIdAsync(currentItem.StudyPlanId);
+
+        if (items == null || items.Count == 0)
+            return null;
 
         var ordered = items
             .OrderBy(x => x.OrderIndex)
             .ToList();
 
-        // 4. find next item
+        // =========================
+        // 3. FIND NEXT ITEM
+        // =========================
         for (int i = 0; i < ordered.Count; i++)
         {
             if (ordered[i].Id == request.StudyPlanItemId)
             {
+                // nếu còn item phía sau
                 if (i + 1 < ordered.Count)
                     return ordered[i + 1].Id;
 
+                // nếu là item cuối
                 return null;
             }
         }

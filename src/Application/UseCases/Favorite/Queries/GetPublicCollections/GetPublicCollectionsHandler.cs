@@ -19,11 +19,12 @@ public class GetPublicCollectionsHandler
         GetPublicCollectionsQuery request,
         CancellationToken ct)
     {
-        var query = _repo.QueryPublicCollections();
+        var baseQuery = _repo.QueryPublicCollections();
+        var submissions = _repo.QuerySubmissions(); // 👈 reuse (no nested call)
 
-        var total = await query.CountAsync(ct);
+        var total = await baseQuery.CountAsync(ct);
 
-        var items = await query
+        var items = await baseQuery
             .OrderByDescending(x => x.CreatedAt)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
@@ -39,8 +40,35 @@ public class GetPublicCollectionsHandler
                 OwnerId = x.UserId,
                 OwnerName = x.User.Username,
 
-                TotalItems = x.CollectionItems.Count,
+                // =========================
+                // COUNT (SQL LEVEL)
+                // =========================
+                TotalItems = x.CollectionItems.Count(),
 
+                ProblemCount = x.CollectionItems
+                    .Count(ci => ci.ProblemId != null),
+
+                ContestCount = x.CollectionItems
+                    .Count(ci => ci.ContestId != null),
+
+                // =========================
+                // ✅ SOLVED COUNT (NO N+1)
+                // =========================
+                SolvedCount = (
+                    from ci in x.CollectionItems
+                    where ci.ProblemId != null
+                    join s in submissions on ci.ProblemId equals s.ProblemId
+                    where s.UserId == request.UserId
+                          && !s.IsDeleted
+                          && s.StatusCode == "accepted"
+                    select ci.ProblemId
+                )
+                .Distinct()
+                .Count(),
+
+                // =========================
+                // PREVIEW
+                // =========================
                 PreviewItems = x.CollectionItems
                     .OrderBy(ci => ci.OrderIndex)
                     .Take(3)
@@ -55,6 +83,16 @@ public class GetPublicCollectionsHandler
                     .ToList()
             })
             .ToListAsync(ct);
+
+        // =========================
+        // SOLVED PERCENT (SAFE)
+        // =========================
+        foreach (var item in items)
+        {
+            item.SolvedPercent = item.ProblemCount == 0
+                ? 0
+                : Math.Round((double)item.SolvedCount / item.ProblemCount * 100, 2);
+        }
 
         return new PublicCollectionsResult
         {

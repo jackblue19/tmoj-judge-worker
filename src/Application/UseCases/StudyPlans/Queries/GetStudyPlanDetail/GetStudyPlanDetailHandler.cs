@@ -31,48 +31,25 @@ public class GetStudyPlanDetailHandler
         // =========================
         var items = await _repo.GetItemsByPlanIdAsync(plan.Id);
 
-        // =========================
-        // GET ITEM PROGRESS (FIXED)
-        // =========================
-        var progress = await _repo.GetItemProgressByPlanAsync(
-            request.UserId,
-            plan.Id
-        );
-
-        // map theo StudyPlanItemId (FAST LOOKUP)
-        var progressDict = progress
-            .GroupBy(x => x.StudyPlanItemId)
-            .ToDictionary(g => g.Key, g => g.First());
-
-        // sort items
         var ordered = items
             .OrderBy(x => x.OrderIndex)
             .ToList();
 
-        var resultItems = new List<StudyPlanItemDto>();
-
-        for (int i = 0; i < ordered.Count; i++)
-        {
-            var item = ordered[i];
-
-            progressDict.TryGetValue(item.Id, out var p);
-
-            bool isCompleted = p?.IsCompleted == true;
-
-            // =========================
-            // UNLOCK LOGIC (CHAIN)
-            // =========================
-            bool isUnlocked = i == 0
-                || resultItems[i - 1].IsCompleted;
-
-            resultItems.Add(new StudyPlanItemDto
+        // =========================
+        // MAP DTO (NO PROGRESS HERE)
+        // =========================
+        var resultItems = ordered
+            .Select(i => new StudyPlanItemDto
             {
-                ProblemId = item.ProblemId,
-                Order = item.OrderIndex,
-                IsCompleted = isCompleted,
-                IsUnlocked = isUnlocked
-            });
-        }
+                StudyPlanItemId = i.Id,
+                ProblemId = i.ProblemId,
+                Order = i.OrderIndex,
+
+                // ❌ KHÔNG SET PROGRESS Ở ĐÂY
+                IsCompleted = false,
+                IsUnlocked = false
+            })
+            .ToList();
 
         return new StudyPlanDetailDto
         {

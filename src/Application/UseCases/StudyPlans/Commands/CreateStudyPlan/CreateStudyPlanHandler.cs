@@ -24,46 +24,34 @@ public class CreateStudyPlanHandler : IRequestHandler<CreateStudyPlanCommand, Gu
 
     public async Task<Guid> Handle(CreateStudyPlanCommand request, CancellationToken ct)
     {
-        try
+        var userIdStr = _httpContext.HttpContext?.User?
+            .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(userIdStr))
+            throw new UnauthorizedAccessException("User not authenticated");
+
+        var userId = Guid.Parse(userIdStr);
+
+        var plan = new StudyPlan
         {
-            // 🔥 LẤY USER ID TỪ JWT
-            var userIdStr = _httpContext.HttpContext?.User?
-                .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            Id = Guid.NewGuid(),
+            CreatorId = userId,
 
-            if (string.IsNullOrEmpty(userIdStr))
-            {
-                _logger.LogError("❌ UserId not found in token");
-                throw new UnauthorizedAccessException("User not authenticated");
-            }
+            Title = request.Title,
+            Description = request.Description,
 
-            var userId = Guid.Parse(userIdStr);
+            IsPublic = request.IsPublic,
+            IsPaid = request.IsPaid,
+            Price = request.Price,
 
-            _logger.LogInformation("🚀 Creating StudyPlan by User: {UserId}", userId);
+            CreatedAt = DateTime.UtcNow
+        };
 
-            var plan = new StudyPlan
-            {
-                Id = Guid.NewGuid(),
-                CreatorId = userId, // ✅ FIX QUAN TRỌNG
-                Title = request.Title,
-                Description = request.Description,
-                IsPublic = request.IsPublic,
-                IsPaid = request.IsPaid,
-                Price = request.Price,
-                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-            };
+        await _repo.CreateAsync(plan);
+        await _repo.SaveChangesAsync();
 
-            var id = await _repo.CreateAsync(plan);
+        _logger.LogInformation("✅ StudyPlan created: {Id}", plan.Id);
 
-            await _repo.SaveChangesAsync();
-
-            _logger.LogInformation("✅ StudyPlan created: {Id}", id);
-
-            return id;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ ERROR CreateStudyPlan");
-            throw;
-        }
+        return plan.Id;
     }
 }

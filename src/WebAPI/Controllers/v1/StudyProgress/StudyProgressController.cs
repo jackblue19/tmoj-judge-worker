@@ -6,6 +6,7 @@ using Application.UseCases.StudyProgress.Queries.GetMyStudyProgress;
 using Application.UseCases.StudyProgress.Queries.GetNextStudyItem;
 using Application.UseCases.StudyProgress.Queries.GetStudyPlanProgress;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Security.Claims;
@@ -13,6 +14,7 @@ using System.Security.Claims;
 namespace WebAPI.Controllers.v1.StudyProgress;
 
 [ApiController]
+[Authorize]
 [Route("api/study-progress")]
 public class StudyProgressController : ControllerBase
 {

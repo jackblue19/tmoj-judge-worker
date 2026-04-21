@@ -1,7 +1,8 @@
 ﻿using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
-using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Application.UseCases.StudyPlans.Commands.EnrollStudyPlan;
 
@@ -9,70 +10,63 @@ public class EnrollStudyPlanHandler
     : IRequestHandler<EnrollStudyPlanCommand, Unit>
 {
     private readonly IStudyPlanRepository _repo;
-    private readonly ILogger<EnrollStudyPlanHandler> _logger;
+    private readonly IHttpContextAccessor _httpContext;
 
     public EnrollStudyPlanHandler(
         IStudyPlanRepository repo,
-        ILogger<EnrollStudyPlanHandler> logger)
+        IHttpContextAccessor httpContext)
     {
         _repo = repo;
-        _logger = logger;
+        _httpContext = httpContext;
     }
 
     public async Task<Unit> Handle(EnrollStudyPlanCommand request, CancellationToken ct)
     {
-        _logger.LogInformation("🚀 Enroll START: {@Request}", request);
+        // =========================
+        // GET USER
+        // =========================
+        var userIdStr = _httpContext.HttpContext?.User?
+            .FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        var plan = await _repo.GetByIdAsync(request.StudyPlanId);
+        if (string.IsNullOrEmpty(userIdStr))
+            throw new UnauthorizedAccessException();
 
-        if (plan == null)
-            throw new Exception("Study plan not found");
+        var userId = Guid.Parse(userIdStr);
 
         // =========================
-        // CHECK PAID
+        // CHECK ALREADY ENROLLED
         // =========================
-        if (plan.IsPaid)
-        {
-            _logger.LogWarning("💰 Plan is paid");
-
-            // TODO: check purchase sau
-            throw new Exception("This plan requires purchase");
-        }
-
-        // =========================
-        // CHECK DUPLICATE
-        // =========================
-        var isEnrolled = await _repo.IsUserEnrolledAsync(
-            request.UserId,
-            request.StudyPlanId
-        );
+        var isEnrolled = await _repo.IsUserEnrolledAsync(userId, request.StudyPlanId);
 
         if (isEnrolled)
-        {
-            _logger.LogWarning("⚠️ Already enrolled");
-            return Unit.Value;
-        }
+            return Unit.Value; // idempotent
 
         // =========================
-        // INIT PROGRESS (QUAN TRỌNG)
+        // GET ITEMS
         // =========================
         var items = await _repo.GetItemsByPlanIdAsync(request.StudyPlanId);
 
-        foreach (var item in items)
+        if (items.Count == 0)
+            return Unit.Value;
+
+        // =========================
+        // CREATE PROGRESS FOR ALL ITEMS
+        // =========================
+        var progresses = items.Select(i => new UserStudyItemProgress
         {
-            await _repo.CreateItemProgressAsync(new UserStudyItemProgress
-            {
-                Id = Guid.NewGuid(),
-                UserId = request.UserId,
-                StudyPlanItemId = item.Id,
-                IsCompleted = false,
-                CompletedAt = null
-            });
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            StudyPlanItemId = i.Id,
+            IsCompleted = false,
+            CompletedAt = null
+        }).ToList();
+
+        foreach (var p in progresses)
+        {
+            await _repo.CreateItemProgressAsync(p);
         }
 
         await _repo.SaveChangesAsync();
-
-        _logger.LogInformation("✅ Enroll SUCCESS");
 
         return Unit.Value;
     }

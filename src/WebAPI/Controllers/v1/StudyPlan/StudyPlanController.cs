@@ -112,17 +112,22 @@ public class StudyPlansController : ControllerBase
     // =========================
     // UNLOCKED LIST
     // =========================
-    [HttpGet("creator/{creatorId:guid}/unlocked")]
+    [HttpGet("unlocked")]
     [Authorize]
-    public async Task<IActionResult> GetUnlocked(
-        Guid creatorId,
-        CancellationToken ct)
+    public async Task<IActionResult> GetUnlocked(CancellationToken ct)
     {
         try
         {
+            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userIdStr))
+                return Unauthorized();
+
+            var userId = Guid.Parse(userIdStr);
+
             var result = await _mediator.Send(new GetUnlockedPlansQuery
             {
-                CreatorId = creatorId
+                UserId = userId
             }, ct);
 
             return Ok(ApiResponse<object>.Ok(
@@ -134,7 +139,6 @@ public class StudyPlansController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-
     // =========================
     // DETAIL
     // =========================

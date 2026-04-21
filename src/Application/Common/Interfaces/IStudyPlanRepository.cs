@@ -12,11 +12,19 @@ public interface IStudyPlanRepository
     Task<Guid> CreateAsync(StudyPlan entity);
     Task<StudyPlan?> GetByIdAsync(Guid id);
     Task<List<StudyPlan>> GetByCreatorAsync(Guid creatorId);
+    Task<Dictionary<Guid, string>> GetPlanTitlesAsync(List<Guid> planIds);
+    Task<Dictionary<Guid, bool>> GetCompletedPlansAsync(Guid userId, List<Guid> planIds);
+
+    Task<Dictionary<Guid, Guid>> GetItemPlanMappingAsync(List<Guid> itemIds);
+    // key = StudyPlanItemId
+    // value = StudyPlanId
 
     // =========================
     // ITEMS
     // =========================
     Task AddItemAsync(StudyPlanItem entity);
+
+    Task<int> GetItemCountAsync(Guid planId);
     Task<List<StudyPlanItem>> GetItemsByPlanIdAsync(Guid studyPlanId);
 
     // =========================

@@ -1,26 +1,43 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
+using Application.UseCases.StudyPlans.Queries.GetStudyPlanEnrollment;
 using MediatR;
-
-namespace Application.UseCases.StudyPlans.Queries.GetStudyPlanEnrollment;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 public class GetStudyPlanEnrollmentHandler
     : IRequestHandler<GetStudyPlanEnrollmentQuery, StudyPlanEnrollmentDto>
 {
     private readonly IStudyPlanRepository _repo;
+    private readonly IHttpContextAccessor _httpContext;
 
-    public GetStudyPlanEnrollmentHandler(IStudyPlanRepository repo)
+    public GetStudyPlanEnrollmentHandler(
+        IStudyPlanRepository repo,
+        IHttpContextAccessor httpContext)
     {
         _repo = repo;
+        _httpContext = httpContext;
     }
 
     public async Task<StudyPlanEnrollmentDto> Handle(
         GetStudyPlanEnrollmentQuery request,
         CancellationToken ct)
     {
-        // 1. Get plan items
-        var items = await _repo.GetItemsByPlanIdAsync(request.StudyPlanId);
+        // =========================
+        // GET USER FROM TOKEN
+        // =========================
+        var userIdStr = _httpContext.HttpContext?.User?
+            .FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
+        if (string.IsNullOrEmpty(userIdStr))
+            throw new UnauthorizedAccessException();
+
+        var userId = Guid.Parse(userIdStr);
+
+        // =========================
+        // GET ITEMS
+        // =========================
+        var items = await _repo.GetItemsByPlanIdAsync(request.StudyPlanId);
         var totalItems = items.Count;
 
         if (totalItems == 0)
@@ -28,7 +45,7 @@ public class GetStudyPlanEnrollmentHandler
             return new StudyPlanEnrollmentDto
             {
                 StudyPlanId = request.StudyPlanId,
-                UserId = request.UserId,
+                UserId = userId,
                 IsEnrolled = false,
                 IsCompleted = false,
                 TotalItems = 0,
@@ -37,9 +54,11 @@ public class GetStudyPlanEnrollmentHandler
             };
         }
 
-        // 2. Get progress (ONLY 1 QUERY)
+        // =========================
+        // GET PROGRESS (1 QUERY)
+        // =========================
         var progresses = await _repo.GetItemProgressByPlanAsync(
-            request.UserId,
+            userId,
             request.StudyPlanId
         );
 
@@ -50,21 +69,16 @@ public class GetStudyPlanEnrollmentHandler
 
         var completedCount = completedSet.Count;
 
-        // 3. Enrolled = có bất kỳ progress nào
         var isEnrolled = progresses.Any();
 
-        // 4. Completed = full items done
-        var isCompleted = completedCount == totalItems && totalItems > 0;
+        var isCompleted = completedCount == totalItems;
 
-        // 5. Progress %
-        var percent = totalItems == 0
-            ? 0
-            : (double)completedCount / totalItems * 100;
+        var percent = (double)completedCount / totalItems * 100;
 
         return new StudyPlanEnrollmentDto
         {
             StudyPlanId = request.StudyPlanId,
-            UserId = request.UserId,
+            UserId = userId,
             IsEnrolled = isEnrolled,
             IsCompleted = isCompleted,
             TotalItems = totalItems,

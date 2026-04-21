@@ -12,7 +12,7 @@ public class CollectionItemDto
 
     public Guid? ProblemId { get; set; }
     public string? ProblemTitle { get; set; }
-
+    public string? ProblemDifficulty { get; set; }
     public Guid? ContestId { get; set; }
     public string? ContestTitle { get; set; }
 

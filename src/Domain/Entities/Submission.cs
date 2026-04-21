@@ -22,6 +22,10 @@ public partial class Submission
 
     //  rv3
     public string? SubmissionMode { get; set; }
+    public Guid? CodeTemplateId { get; set; }
+    public int? TemplateVersion { get; set; }
+
+    public virtual ProblemTemplate? CodeTemplate { get; set; }
     //  end
 
     public string StatusCode { get; set; } = null!;

@@ -20,4 +20,11 @@ public partial class ClassSlotProblem
     public virtual Problem Problem { get; set; } = null!;
 
     public virtual ClassSlot Slot { get; set; } = null!;
+
+    //  rv3
+    public string? SubmissionMode { get; set; }
+    public string? TemplateCode { get; set; }
+    public string? SolutionSignature { get; set; }
+
+    //end
 }

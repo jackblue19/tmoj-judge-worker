@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Persistence\Migrations\**" />
+    <EmbeddedResource Remove="Persistence\Migrations\**" />
+    <None Remove="Persistence\Migrations\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Ardalis.Specification" Version="8.0.0" />
     <PackageReference Include="Ardalis.Specification.EntityFrameworkCore" Version="8.0.0" />
     <PackageReference Include="AWSSDK.S3" Version="3.7.502" />
@@ -32,10 +38,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Application\Application.csproj" />
     <ProjectReference Include="..\Domain\Domain.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Persistence\Migrations\" />
   </ItemGroup>
 
 </Project>

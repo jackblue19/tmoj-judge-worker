@@ -10,6 +10,7 @@ using Infrastructure.Configurations.FileStorage;
 using Infrastructure.ExternalServices;
 using Infrastructure.Persistence.Common;
 using Infrastructure.Persistence.Common.Repositories;
+using Infrastructure.Persistence.Repositories;
 using Infrastructure.Persistence.Repositories.Problems;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +52,7 @@ public static class InfrastructureRegistration
         services.AddScoped<IProblemRepository , ProblemRepository>();
         services.AddScoped<ITagRepository , TagRepository>();
         services.AddScoped<IContestStatusService, ContestStatusService>();
+        services.AddScoped<IWalletRepository, WalletRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
@@ -60,6 +62,9 @@ public static class InfrastructureRegistration
         services.AddScoped<IStudyPlanApplicationService, StudyPlanApplicationService>();
         services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
         services.AddScoped<IGamificationRepository, GamificationRepository>();
+        services.AddScoped<IFavoriteRepository, FavoriteRepository>();
+        services.AddScoped<IVnPayService, VnPayService>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
         return services;
     }
 

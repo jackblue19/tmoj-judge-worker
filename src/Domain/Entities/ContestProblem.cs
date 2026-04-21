@@ -43,6 +43,14 @@ public partial class ContestProblem
 
     public Guid? CreatedBy { get; set; }
 
+    //  rv3
+
+    public string? SubmissionMode { get; set; }
+    public string? TemplateCode { get; set; }
+    public string? SolutionSignature { get; set; }
+
+    //  end
+
     public virtual Contest Contest { get; set; } = null!;
 
     public virtual User? CreatedByNavigation { get; set; }

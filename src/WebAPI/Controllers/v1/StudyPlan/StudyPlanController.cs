@@ -1,4 +1,8 @@
-﻿using Application.UseCases.StudyPlans.Commands.AddProblemToPlan;
+﻿using Application.Common.Pagination;
+using Application.UseCases.Problems.Commands.CreateProblem;
+using Application.UseCases.Problems.Dtos;
+using Application.UseCases.Problems.Queries.GetPublicProblems;
+using Application.UseCases.StudyPlans.Commands.AddProblemToPlan;
 using Application.UseCases.StudyPlans.Commands.CreateStudyPlan;
 using Application.UseCases.StudyPlans.Commands.EnrollStudyPlan;
 using Application.UseCases.StudyPlans.Dtos;
@@ -261,4 +265,39 @@ public class StudyPlansController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+    // tạo problem trong plan
+    // không tạo để chỉ mình dùng chỉ mình lấy, xong tạo 1 list problem của riêng mình, và create problem của riêng mình
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost ("/problem/in-plan")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> Create(
+       [FromForm] UpsertProblemContentRequestDto request,
+       CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateProblemCommand(
+                request.Title,
+                request.Slug,
+                request.Difficulty,
+                request.TypeCode,
+                request.VisibilityCode,
+                request.ScoringCode,
+                "in-plan",
+                request.TimeLimitMs,
+                request.MemoryLimitKb,
+                request.DescriptionMd,
+                request.StatementFile,
+                request.TagIds),
+            ct);
+
+        return CreatedAtAction(
+            nameof(GetDetail),
+            new { problemId = result.Id },
+            ApiResponse<ProblemDetailDto>.Ok(
+                result,
+                "Problem created successfully.",
+                HttpContext.TraceIdentifier));
+    }
+
 }

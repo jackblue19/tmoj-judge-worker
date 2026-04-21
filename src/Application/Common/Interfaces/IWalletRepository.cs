@@ -10,9 +10,7 @@ namespace Application.Common.Interfaces
         Task UpdateAsync(Wallet wallet);
         Task SaveChangesAsync();
 
-        // =========================
-        // WALLET TRANSACTIONS (MERGED)
-        // =========================
+        // TRANSACTIONS
         Task<List<WalletTransaction>> GetTransactionsAsync(Guid userId, int page, int pageSize);
         Task AddTransactionAsync(WalletTransaction transaction);
     }

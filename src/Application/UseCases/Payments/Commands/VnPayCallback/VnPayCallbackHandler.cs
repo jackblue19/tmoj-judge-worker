@@ -34,63 +34,75 @@ namespace Application.UseCases.Payments.Commands.VnPayCallback
             VnPayCallbackCommand request,
             CancellationToken cancellationToken)
         {
-            var query = request.Query;
-
-            _logger.LogInformation("VNPay callback received");
-
-            // =========================
-            // 1. Validate signature
-            // =========================
-            if (!_vnPayService.ValidateSignature(query))
+            try
             {
-                _logger.LogWarning("Invalid signature");
-                return new VnPayCallbackResult { Status = "invalid_signature" };
-            }
+                var query = request.Query;
 
-            var txnRef = query["vnp_TxnRef"].ToString();
-            var responseCode = query["vnp_ResponseCode"].ToString();
+                _logger.LogInformation("=== VNPay CALLBACK START ===");
 
-            if (string.IsNullOrEmpty(txnRef))
-            {
-                return new VnPayCallbackResult { Status = "missing_txn_ref" };
-            }
-
-            // =========================
-            // 2. Get payment
-            // =========================
-            var payment = await _paymentRepo.GetByTxnRefAsync(txnRef);
-
-            if (payment == null)
-            {
-                return new VnPayCallbackResult { Status = "not_found" };
-            }
-
-            _logger.LogInformation("Payment found: {PaymentId} - Status: {Status}",
-                payment.PaymentId, payment.Status);
-
-            // =========================
-            // 3. SUCCESS
-            // =========================
-            if (responseCode == "00")
-            {
-                if (payment.Status != "paid")
+                foreach (var q in query)
                 {
-                    payment.Status = "paid";
+                    _logger.LogInformation("[VNPay] {Key} = {Value}", q.Key, q.Value.ToString());
+                }
 
-                    await _paymentRepo.UpdateAsync(payment);
-                    await _paymentRepo.SaveChangesAsync();
-
-                    _logger.LogInformation("Payment marked as PAID");
-
-                    // =========================
-                    // WALLET
-                    // =========================
-                    if (payment.UserId == null)
+                // =========================
+                // VALIDATE SIGNATURE
+                // =========================
+                if (!_vnPayService.ValidateSignature(query))
+                {
+                    return new VnPayCallbackResult
                     {
-                        _logger.LogError("Payment has no UserId");
+                        Status = "invalid_signature"
+                    };
+                }
+
+                var txnRef = query["vnp_TxnRef"].ToString();
+                var responseCode = query["vnp_ResponseCode"].ToString();
+
+                if (string.IsNullOrEmpty(txnRef))
+                {
+                    return new VnPayCallbackResult
+                    {
+                        Status = "missing_txn_ref"
+                    };
+                }
+
+                // =========================
+                // FIND PAYMENT
+                // =========================
+                var payment = await _paymentRepo.GetByTxnRefAsync(txnRef);
+
+                if (payment == null)
+                {
+                    _logger.LogError("Payment NOT FOUND: {TxnRef}", txnRef);
+
+                    return new VnPayCallbackResult
+                    {
+                        Status = "not_found"
+                    };
+                }
+
+                // =========================
+                // SUCCESS FLOW
+                // =========================
+                if (responseCode == "00")
+                {
+                    if (payment.Status == "paid")
+                    {
                         return new VnPayCallbackResult
                         {
                             PaymentId = payment.PaymentId,
+                            Status = "already_processed"
+                        };
+                    }
+
+                    // mark paid
+                    payment.Status = "paid";
+
+                    if (payment.UserId == null)
+                    {
+                        return new VnPayCallbackResult
+                        {
                             Status = "no_user"
                         };
                     }
@@ -99,83 +111,96 @@ namespace Application.UseCases.Payments.Commands.VnPayCallback
 
                     if (wallet == null)
                     {
-                        _logger.LogWarning("Wallet not found -> creating");
-
                         wallet = new Wallet
                         {
                             WalletId = Guid.NewGuid(),
                             UserId = payment.UserId.Value,
-                            Balance = 0
+                            Balance = 0,
+                            Currency = "VND",
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
                         };
 
                         await _walletRepo.CreateAsync(wallet);
-                        await _walletRepo.SaveChangesAsync();
                     }
 
-                    // =========================
-                    // 🔥 CONVERT 1:1
-                    // =========================
-                    var rate = int.Parse(_config["Payment:VndToCoinRate"] ?? "1");
+                    // rate safe
+                    decimal rate = 1m;
+                    decimal.TryParse(_config["Payment:VndToCoinRate"], out rate);
 
-                    var coin = (decimal)(payment.AmountMoney / rate);
+                    var coin = payment.AmountMoney / rate;
 
-                    _logger.LogInformation("Convert VND -> Coin: {Coin}", coin);
-
-                    wallet.Balance += coin;
-
-                    await _walletRepo.UpdateAsync(wallet);
-                    await _walletRepo.SaveChangesAsync();
-
-                    _logger.LogInformation("Wallet updated: {Balance}", wallet.Balance);
+                    wallet.Balance = Math.Round(wallet.Balance + coin, 2);
+                    wallet.UpdatedAt = DateTime.UtcNow;
 
                     // =========================
-                    // WALLET TRANSACTION
+                    // TRANSACTION
                     // =========================
                     var transaction = new WalletTransaction
                     {
-                        TransactionId = Guid.NewGuid(),     // ✅ đúng field
-
+                        TransactionId = Guid.NewGuid(),
                         WalletId = wallet.WalletId,
 
-                        Type = "deposit",                   // ⚠️ theo DB constraint
+                        Type = "deposit",
                         Direction = "in",
 
-                        Amount = coin,                     // decimal OK
+                        Amount = Math.Abs(coin),
 
-                        SourceType = "payment",
+                        SourceType = "vnpay",
                         SourceId = payment.PaymentId,
 
-                        Status = "success",
+                        Status = "completed",
 
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        Wallet = wallet
                     };
 
+                    _logger.LogInformation("[TX] CREATE {Id}", transaction.TransactionId);
+
+                    // =========================
+                    // SAVE ALL IN 1 TIME (IMPORTANT FIX)
+                    // =========================
+                    await _paymentRepo.UpdateAsync(payment);
+                    await _walletRepo.UpdateAsync(wallet);
+
                     await _walletRepo.AddTransactionAsync(transaction);
+
                     await _walletRepo.SaveChangesAsync();
 
-                    _logger.LogInformation("Transaction created: +{Coin}", coin);
+                    _logger.LogInformation("[TX] SAVED SUCCESS");
+
+                    return new VnPayCallbackResult
+                    {
+                        PaymentId = payment.PaymentId,
+                        Status = "paid",
+                        WalletUpdated = true,
+                        TransactionCreated = true
+                    };
                 }
+
+                // =========================
+                // FAILED FLOW
+                // =========================
+                payment.Status = "failed";
+
+                await _paymentRepo.UpdateAsync(payment);
+                await _paymentRepo.SaveChangesAsync();
 
                 return new VnPayCallbackResult
                 {
                     PaymentId = payment.PaymentId,
-                    Status = "paid"
+                    Status = "failed"
                 };
             }
-
-            // =========================
-            // 4. FAILED
-            // =========================
-            payment.Status = "failed";
-
-            await _paymentRepo.UpdateAsync(payment);
-            await _paymentRepo.SaveChangesAsync();
-
-            return new VnPayCallbackResult
+            catch (Exception ex)
             {
-                PaymentId = payment.PaymentId,
-                Status = "failed"
-            };
+                _logger.LogError(ex, "VNPay CALLBACK CRASH");
+
+                return new VnPayCallbackResult
+                {
+                    Status = "error: " + (ex.InnerException?.Message ?? ex.Message)
+                };
+            }
         }
     }
 }

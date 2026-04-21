@@ -1,10 +1,11 @@
-﻿using Application.UseCases.Payments.Commands.CreateVnPayPayment;
+﻿using Application.Common.Interfaces;
+using Application.UseCases.Payments.Commands.CreateVnPayPayment;
 using Application.UseCases.Payments.Commands.VnPayCallback;
+using Application.UseCases.Payments.Dtos;
+using Application.UseCases.Payments.Queries.GetConversionRate;
 using Application.UseCases.Payments.Queries.VnPayReturn;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Application.Common.Interfaces;
-using Application.UseCases.Payments.Dtos;
 
 [ApiController]
 [Route("api/v1/payments")]
@@ -90,6 +91,13 @@ public class PaymentsController : ControllerBase
             PaymentId = id
         });
 
+        return Ok(result);
+    }
+
+    [HttpGet("conversion-rate")]
+    public async Task<IActionResult> GetRate()
+    {
+        var result = await _mediator.Send(new GetConversionRateQuery());
         return Ok(result);
     }
 }

@@ -19,59 +19,90 @@ namespace Infrastructure.Persistence.Common.Repositories
         // =========================
         public async Task<Wallet?> GetByUserIdAsync(Guid userId)
         {
-            var wallet = await _db.Set<Wallet>()
+            return await _db.Set<Wallet>()
                 .FirstOrDefaultAsync(x => x.UserId == userId);
-
-            Console.WriteLine($"[WalletRepo] GetByUserId: {userId} => {(wallet != null ? wallet.WalletId.ToString() : "NULL")}");
-
-            return wallet;
         }
 
         public async Task CreateAsync(Wallet wallet)
         {
-            Console.WriteLine($"[WalletRepo] Create wallet for UserId: {wallet.UserId}");
+            Console.WriteLine($"[WALLET] CREATE: {wallet.WalletId}");
             await _db.Set<Wallet>().AddAsync(wallet);
         }
 
         public Task UpdateAsync(Wallet wallet)
         {
-            Console.WriteLine($"[WalletRepo] Update wallet: {wallet.WalletId} balance={wallet.Balance}");
             _db.Set<Wallet>().Update(wallet);
             return Task.CompletedTask;
         }
 
         public async Task SaveChangesAsync()
         {
-            await _db.SaveChangesAsync();
-            Console.WriteLine("[WalletRepo] SaveChanges executed");
+            try
+            {
+                Console.WriteLine("=== SAVE START ===");
+
+                foreach (var entry in _db.ChangeTracker.Entries())
+                {
+                    Console.WriteLine($"STATE: {entry.Entity.GetType().Name} => {entry.State}");
+                }
+
+                var result = await _db.SaveChangesAsync();
+
+                Console.WriteLine($"=== SAVE SUCCESS: {result} rows ===");
+            }
+            catch (DbUpdateException ex)
+            {
+                Console.WriteLine("=== DB UPDATE ERROR ===");
+
+                Console.WriteLine(ex.InnerException?.Message ?? ex.Message);
+
+                // 🔥 QUAN TRỌNG: log full entity lỗi
+                foreach (var entry in ex.Entries)
+                {
+                    Console.WriteLine($"FAILED ENTITY: {entry.Entity.GetType().Name}");
+                    Console.WriteLine($"STATE: {entry.State}");
+                }
+
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("=== GENERAL ERROR ===");
+                Console.WriteLine(ex.Message);
+                throw;
+            }
         }
 
         // =========================
-        // WALLET TRANSACTION (MERGED)
+        // TRANSACTIONS
         // =========================
         public async Task<List<WalletTransaction>> GetTransactionsAsync(Guid userId, int page, int pageSize)
         {
-            Console.WriteLine($"[WalletRepo] GetTransactions userId={userId}, page={page}");
-
-            var data = await _db.Set<WalletTransaction>()
+            return await _db.Set<WalletTransaction>()
                 .Include(x => x.Wallet)
                 .Where(x => x.Wallet.UserId == userId)
                 .OrderByDescending(x => x.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
-
-            Console.WriteLine($"[WalletRepo] Transactions found: {data.Count}");
-
-            return data;
         }
 
-        // ✅ ADD THIS
         public async Task AddTransactionAsync(WalletTransaction transaction)
         {
-            Console.WriteLine($"[WalletRepo] AddTransaction type={transaction.Type}, amount={transaction.Amount}");
+            try
+            {
+                Console.WriteLine($"[TX] ADD START: {transaction.TransactionId}");
 
-            await _db.Set<WalletTransaction>().AddAsync(transaction);
+                await _db.Set<WalletTransaction>().AddAsync(transaction);
+
+                Console.WriteLine($"[TX] STATE: {_db.Entry(transaction).State}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[TX ADD ERROR]");
+                Console.WriteLine(ex.Message);
+                throw;
+            }
         }
     }
 }

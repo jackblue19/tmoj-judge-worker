@@ -29,6 +29,7 @@ builder.Services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionReposi
 builder.Services.AddScoped<IVnPayService, VnPayService>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IGamificationRepository, GamificationRepository>();
+builder.Services.AddScoped<IWalletRepository, WalletRepository>();
 builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
 builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();

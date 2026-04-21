@@ -1,9 +1,9 @@
 ﻿using Application.Common.Interfaces;
 using Domain.Entities;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 
 namespace Application.Common.Services
 {
@@ -18,10 +18,32 @@ namespace Application.Common.Services
 
         public string CreatePaymentUrl(Payment payment, string ipAddress)
         {
-            var vnpUrl = _config["VnPay:BaseUrl"]!;
-            var tmnCode = _config["VnPay:TmnCode"]!;
-            var hashSecret = _config["VnPay:HashSecret"]!;
-            var returnUrl = _config["VnPay:ReturnUrl"]!;
+            var isFake = _config["VnPay:Fake"] == "true";
+
+            // =========================
+            // 🔥 FAKE MODE
+            // =========================
+            if (isFake)
+            {
+                return $"http://localhost:3000/payment-result" +
+                       $"?paymentId={payment.PaymentId}" +
+                       $"&status=success";
+            }
+
+            // =========================
+            // REAL VNPay
+            // =========================
+            var vnpUrl = _config["VnPay:BaseUrl"]
+                ?? throw new Exception("Missing VnPay:BaseUrl");
+
+            var tmnCode = _config["VnPay:TmnCode"]
+                ?? throw new Exception("Missing VnPay:TmnCode");
+
+            var hashSecret = _config["VnPay:HashSecret"]
+                ?? throw new Exception("Missing VnPay:HashSecret");
+
+            var returnUrl = _config["VnPay:ReturnUrl"]
+                ?? throw new Exception("Missing VnPay:ReturnUrl");
 
             var txnRef = payment.PaymentId.ToString();
             var amount = ((long)(payment.AmountMoney * 100)).ToString();
@@ -39,35 +61,51 @@ namespace Application.Common.Services
                 { "vnp_OrderInfo", $"Payment {txnRef}" },
                 { "vnp_OrderType", "other" },
                 { "vnp_ReturnUrl", returnUrl },
-                { "vnp_TxnRef", txnRef },
-                { "vnp_ExpireDate", DateTime.UtcNow.AddMinutes(15).ToString("yyyyMMddHHmmss") }
+                { "vnp_TxnRef", txnRef }
             };
 
             var queryString = string.Join("&",
-                query.Select(x => $"{x.Key}={Uri.EscapeDataString(x.Value)}"));
+                query.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
 
             var secureHash = HmacSHA512(hashSecret, queryString);
 
             return $"{vnpUrl}?{queryString}&vnp_SecureHash={secureHash}";
         }
 
+        // =========================
+        // 🔥 VERIFY SIGNATURE (VNPay RETURN)
+        // =========================
         public bool ValidateSignature(IQueryCollection query)
         {
-            var hashSecret = _config["VnPay:HashSecret"]!;
-            var vnpSecureHash = query["vnp_SecureHash"].ToString();
+            var isFake = _config["VnPay:Fake"] == "true";
 
+            // Fake mode thì luôn true
+            if (isFake) return true;
+
+            var hashSecret = _config["VnPay:HashSecret"]
+                ?? throw new Exception("Missing VnPay:HashSecret");
+
+            var vnp_SecureHash = query["vnp_SecureHash"].ToString();
+
+            // lọc param đúng chuẩn VNPay
             var filtered = query
-                .Where(x => x.Key.StartsWith("vnp_") && x.Key != "vnp_SecureHash")
-                .OrderBy(x => x.Key);
+                .Where(kvp => kvp.Key.StartsWith("vnp_") && kvp.Key != "vnp_SecureHash")
+                .OrderBy(kvp => kvp.Key)
+                .ToDictionary(k => k.Key, v => v.Value.ToString());
 
             var rawData = string.Join("&",
-                filtered.Select(x => $"{x.Key}={x.Value}"));
+                filtered.Select(kvp =>
+                    $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"
+                ));
 
             var computedHash = HmacSHA512(hashSecret, rawData);
 
-            return computedHash.Equals(vnpSecureHash, StringComparison.OrdinalIgnoreCase);
+            return computedHash.Equals(vnp_SecureHash, StringComparison.OrdinalIgnoreCase);
         }
 
+        // =========================
+        // HASH
+        // =========================
         private string HmacSHA512(string key, string input)
         {
             var keyBytes = Encoding.UTF8.GetBytes(key);
@@ -76,7 +114,9 @@ namespace Application.Common.Services
             using var hmac = new HMACSHA512(keyBytes);
             var hash = hmac.ComputeHash(inputBytes);
 
-            return BitConverter.ToString(hash).Replace("-", "").ToLower();
+            return BitConverter.ToString(hash)
+                .Replace("-", "")
+                .ToLower();
         }
     }
 }

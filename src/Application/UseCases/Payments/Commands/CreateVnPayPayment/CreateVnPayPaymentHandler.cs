@@ -38,13 +38,14 @@ namespace Application.UseCases.Payments.Commands.CreateVnPayPayment
             };
 
             await _paymentRepo.AddAsync(payment);
+            await _paymentRepo.SaveChangesAsync(); // 🔥 FIX QUAN TRỌNG
 
-            var paymentUrl = _vnPayService.CreatePaymentUrl(payment, request.IpAddress);
+            var url = _vnPayService.CreatePaymentUrl(payment, request.IpAddress);
 
             return new CreateVnPayPaymentResponseDto
             {
                 PaymentId = payment.PaymentId,
-                PaymentUrl = paymentUrl
+                PaymentUrl = url
             };
         }
     }

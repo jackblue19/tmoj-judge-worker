@@ -64,6 +64,15 @@ public class AddContestToCollectionHandler
         }
 
         // =========================
+        // GET NEXT ORDER INDEX 🔥
+        // =========================
+        var items = await _repo.GetCollectionItemsByCollectionId(request.CollectionId);
+
+        int nextOrderIndex = items.Any()
+            ? items.Max(x => x.OrderIndex) + 1
+            : 1;
+
+        // =========================
         // CREATE ITEM
         // =========================
         var item = new CollectionItem
@@ -72,11 +81,34 @@ public class AddContestToCollectionHandler
             CollectionId = request.CollectionId,
             ProblemId = null,
             ContestId = request.ContestId,
+            OrderIndex = nextOrderIndex, // 🔥 FIX
             CreatedAt = DateTime.UtcNow
         };
 
-        await _repo.AddItemAsync(item);
-        await _repo.SaveChangesAsync();
+        // =========================
+        // SAFE INSERT (ANTI RACE CONDITION)
+        // =========================
+        var inserted = await _repo.TryAddItemAsync(item);
+
+        if (!inserted)
+        {
+            Console.WriteLine("⚠️ Race condition detected (duplicate)");
+
+            var existing = await _repo.GetCollectionItemAsync(
+                request.CollectionId,
+                null,
+                request.ContestId);
+
+            return new AddContestToCollectionResult
+            {
+                IsSuccess = false,
+                IsAlreadyExists = true,
+                CollectionId = request.CollectionId,
+                ContestId = request.ContestId,
+                ItemId = existing?.Id ?? Guid.Empty,
+                Message = "Contest already exists (race condition)"
+            };
+        }
 
         Console.WriteLine("✅ Added contest to collection");
 

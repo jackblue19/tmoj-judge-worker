@@ -22,7 +22,7 @@ public class CopyCollectionHandler
         Console.WriteLine("🔥 CopyCollection START");
 
         // =========================
-        // LOAD SOURCE COLLECTION
+        // LOAD SOURCE
         // =========================
         var source = await _repo.GetCollectionByIdAsync(request.SourceCollectionId);
 
@@ -38,60 +38,57 @@ public class CopyCollectionHandler
         var items = await _repo.GetCollectionItemsByCollectionId(source.Id);
 
         // =========================
-        // BUILD NAME (AVOID DUPLICATE)
+        // BUILD UNIQUE NAME 🔥
         // =========================
-        var newName = source.Name + " (Copy)";
+        string baseName = source.Name + " (Copy)";
+        string newName = baseName;
+        int attempt = 1;
 
-        var exists = await _repo.IsCollectionNameExistsAsync(
+        while (await _repo.IsCollectionNameExistsAsync(
             request.UserId,
             newName,
-            source.Type
-        );
-
-        if (exists)
+            source.Type))
         {
-            // fallback thêm timestamp
-            newName = $"{source.Name} (Copy {DateTime.UtcNow:yyyyMMddHHmmss})";
+            newName = $"{baseName} {attempt++}";
         }
 
         // =========================
-        // CREATE NEW COLLECTION
+        // CREATE COLLECTION
         // =========================
         var newCollection = new Collection
         {
             Id = Guid.NewGuid(),
             UserId = request.UserId,
-
             Name = newName,
             Description = source.Description,
             Type = source.Type,
-
-            IsVisibility = false, // luôn private khi copy
+            IsVisibility = false,
             CreatedAt = DateTime.UtcNow
         };
 
         await _repo.CreateAsync(newCollection);
 
         // =========================
-        // COPY ITEMS
+        // COPY ITEMS (KEEP ORDER)
         // =========================
-        foreach (var item in items)
+        foreach (var item in items.OrderBy(x => x.OrderIndex))
         {
             var newItem = new CollectionItem
             {
                 Id = Guid.NewGuid(),
                 CollectionId = newCollection.Id,
-
                 ProblemId = item.ProblemId,
                 ContestId = item.ContestId,
-
-                OrderIndex = item.OrderIndex,
+                OrderIndex = item.OrderIndex, // giữ nguyên thứ tự
                 CreatedAt = DateTime.UtcNow
             };
 
             await _repo.AddItemAsync(newItem);
         }
 
+        // =========================
+        // SAVE ONCE (FAST)
+        // =========================
         await _repo.SaveChangesAsync();
 
         Console.WriteLine("✅ CopyCollection DONE");

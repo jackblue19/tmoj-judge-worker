@@ -6,6 +6,7 @@ using Infrastructure;
 using Infrastructure.Configurations.Auth;
 using Infrastructure.ExternalServices;
 using Infrastructure.Persistence.Common.Repositories;
+using Infrastructure.Persistence.Repositories;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -25,6 +26,8 @@ var builder = WebApplication.CreateBuilder(args);
 //  database
 builder.Services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
 builder.Services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
+builder.Services.AddScoped<IVnPayService, VnPayService>();
+builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IGamificationRepository, GamificationRepository>();
 builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();

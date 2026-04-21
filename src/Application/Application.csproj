@@ -29,6 +29,10 @@
     <Folder Include="UseCases\Favorite\Specs\" />
     <Folder Include="UseCases\Gamification\Validators\" />
     <Folder Include="UseCases\Gamification\Specs\" />
+    <Folder Include="UseCases\Payments\EventHandlers\" />
+    <Folder Include="UseCases\Payments\Validators\" />
+    <Folder Include="UseCases\Payments\Specs\" />
+    <Folder Include="UseCases\Payments\Queries\" />
     <Folder Include="UseCases\StudyPlans\Specs\" />
     <Folder Include="UseCases\StudyPlans\Validators\" />
     <Folder Include="UseCases\StudyProgress\Specs\" />

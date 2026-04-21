@@ -25,15 +25,17 @@ namespace Application.Common.Interfaces
         Task<bool> IsCollectionNameExistsAsync(Guid userId, string name, string type);
 
         Task<Collection?> GetCollectionByIdAsync(Guid id);
+
         IQueryable<Problem> QueryFavoriteProblems(Guid collectionId);
+        IQueryable<Contest> QueryFavoriteContests(Guid collectionId);
+        IQueryable<Submission> QuerySubmissions();
 
         IQueryable<Collection> QueryPublicCollections();
 
         Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
+            Guid currentUserId,
             int page,
             int pageSize);
-
-        IQueryable<Contest> QueryFavoriteContests(Guid collectionId);
 
         Task<List<Collection>> GetCollectionsByUserAsync(Guid userId);
 
@@ -41,11 +43,8 @@ namespace Application.Common.Interfaces
 
         Task<Problem?> GetProblemByIdAsync(Guid problemId);
         Task<Contest?> GetContestByIdAsync(Guid contestId);
-        Task<HashSet<Guid>> GetSolvedProblemIdsAsync(
-            Guid userId,
-            List<Guid> problemIds);
-        Task CreateAsync(Collection collection);
 
+        Task CreateAsync(Collection collection);
         Task AddItemAsync(CollectionItem item);
 
         Task RemoveItemAsync(Guid itemId);
@@ -53,17 +52,20 @@ namespace Application.Common.Interfaces
         Task<CollectionItem?> GetCollectionItemByIdAsync(Guid itemId);
 
         Task<List<CollectionItem>> GetCollectionItemsByCollectionId(Guid collectionId);
-        Task DeleteCollectionAsync(Collection collection);
 
+        Task DeleteCollectionAsync(Collection collection);
         Task DeleteItemsByCollectionIdAsync(Guid collectionId);
 
         Task SaveChangesAsync();
 
+        Task<(List<Problem> Items, int Total)> GetFavoriteProblemsAsync(
+            Guid userId,
+            int page,
+            int pageSize);
 
-
-    Task<(List<Problem> Items, int Total)> GetFavoriteProblemsAsync(
-    Guid userId,
-    int page,
-    int pageSize);
+        // ✅ ADD THIS
+        Task<HashSet<Guid>> GetSolvedProblemIdsAsync(
+            Guid userId,
+            List<Guid> problemIds);
     }
 }

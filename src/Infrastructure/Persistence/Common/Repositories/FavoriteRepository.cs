@@ -188,16 +188,12 @@ public class FavoriteRepository : IFavoriteRepository
     }
 
     public async Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
-        int page,
-        int pageSize)
+    Guid currentUserId,
+    int page,
+    int pageSize)
     {
         var query = _db.Set<Collection>()
             .AsNoTracking()
-            .Include(x => x.User) // ✅ FIX NULL USER
-            .Include(x => x.CollectionItems)
-                .ThenInclude(ci => ci.Problem)
-            .Include(x => x.CollectionItems)
-                .ThenInclude(ci => ci.Contest)
             .Where(x => x.IsVisibility == true);
 
         var total = await query.CountAsync();
@@ -206,19 +202,47 @@ public class FavoriteRepository : IFavoriteRepository
             .OrderByDescending(x => x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(c => new PublicCollectionDto
+            .Select(c => new
             {
-                Id = c.Id,
-                Name = c.Name,
-                Description = c.Description,
+                c,
+                totalItems = c.CollectionItems.Count(),
 
-                OwnerId = c.UserId,
-                OwnerName = c.User.Username,
+                problemCount = c.CollectionItems.Count(ci => ci.ProblemId != null),
+                contestCount = c.CollectionItems.Count(ci => ci.ContestId != null),
 
-                TotalItems = c.CollectionItems.Count,
+                solvedCount =
+                    (from ci in c.CollectionItems
+                     where ci.ProblemId != null
+                     join s in _db.Set<Submission>()
+                         on ci.ProblemId equals s.ProblemId
+                     where s.UserId == currentUserId
+                           && !s.IsDeleted
+                           && s.StatusCode == "accepted"
+                     select ci.ProblemId)
+                    .Distinct()
+                    .Count()
+            })
+            .Select(x => new PublicCollectionDto
+            {
+                Id = x.c.Id,
+                Name = x.c.Name,
+                Description = x.c.Description,
 
-                PreviewItems = c.CollectionItems
-                    .OrderBy(x => x.OrderIndex)
+                OwnerId = x.c.UserId,
+                OwnerName = x.c.User.Username,
+
+                TotalItems = x.totalItems,
+                ProblemCount = x.problemCount,
+                ContestCount = x.contestCount,
+
+                SolvedCount = x.solvedCount,
+
+                SolvedPercent = x.problemCount == 0
+                    ? 0
+                    : (x.solvedCount * 100.0 / x.problemCount),
+
+                PreviewItems = x.c.CollectionItems
+                    .OrderBy(ci => ci.OrderIndex)
                     .Take(3)
                     .Select(ci => new PreviewItemDto
                     {
@@ -287,6 +311,10 @@ public class FavoriteRepository : IFavoriteRepository
     {
         var affected = await _db.SaveChangesAsync();
         _logger.LogInformation("🔥 SaveChanges affected rows: {count}", affected);
+    }
+    public IQueryable<Submission> QuerySubmissions()
+    {
+        return _db.Set<Submission>().AsNoTracking();
     }
 
     // =========================

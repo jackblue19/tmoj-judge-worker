@@ -535,6 +535,15 @@ public partial class TmojDbContext : DbContext
             entity.HasOne(d => d.Slot).WithMany(p => p.ClassSlotProblems)
                 .HasForeignKey(d => d.SlotId)
                 .HasConstraintName("class_slot_problems_slot_id_fkey");
+
+            entity.Property(e => e.SubmissionMode)
+                .HasColumnName("submission_mode");
+
+            entity.Property(e => e.TemplateCode)
+                .HasColumnName("template_code");
+
+            entity.Property(e => e.SolutionSignature)
+                .HasColumnName("solution_signature");
         });
 
         modelBuilder.Entity<CoinConversion>(entity =>
@@ -894,6 +903,15 @@ public partial class TmojDbContext : DbContext
             entity.HasOne(d => d.Problem).WithMany(p => p.ContestProblems)
                 .HasForeignKey(d => d.ProblemId)
                 .HasConstraintName("contest_problems_problem_id_fkey");
+
+            entity.Property(e => e.SubmissionMode)
+                .HasColumnName("submission_mode");
+
+            entity.Property(e => e.TemplateCode)
+                .HasColumnName("template_code");
+
+            entity.Property(e => e.SolutionSignature)
+                .HasColumnName("solution_signature");
         });
 
         modelBuilder.Entity<ContestScoreboard>(entity =>
@@ -1451,6 +1469,25 @@ public partial class TmojDbContext : DbContext
                         j.IndexerProperty<Guid>("ProblemId").HasColumnName("problem_id");
                         j.IndexerProperty<Guid>("TagId").HasColumnName("tag_id");
                     });
+
+            entity.Property(e => e.ProblemMode)
+                .HasColumnName("problem_mode");
+
+            entity.Property(e => e.ProblemSource)
+                .HasColumnName("problem_source");
+
+            entity.Property(e => e.UsedCount)
+                .HasDefaultValue(0)
+                .HasColumnName("used_count");
+
+            entity.Property(e => e.OriginId)
+                .HasColumnName("origin_id");
+
+            entity.HasOne(d => d.Origin)
+                .WithMany(p => p.InverseOrigin)
+                .HasForeignKey(d => d.OriginId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_problems_origin");
         });
 
         modelBuilder.Entity<ProblemDiscussion>(entity =>
@@ -2130,6 +2167,9 @@ public partial class TmojDbContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.Submissions)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("submissions_user_id_fkey");
+
+            entity.Property(e => e.SubmissionMode)
+                .HasColumnName("submission_mode");
         });
 
         modelBuilder.Entity<SubmissionQuotum>(entity =>
@@ -2333,9 +2373,9 @@ public partial class TmojDbContext : DbContext
 
             entity.ToTable("users");
 
-            entity.HasIndex(e => e.Email, "users_email_key").IsUnique();
+            entity.HasIndex(e => e.Email , "users_email_key").IsUnique();
 
-            entity.HasIndex(e => e.Username, "users_username_key").IsUnique();
+            entity.HasIndex(e => e.Username , "users_username_key").IsUnique();
 
             entity.Property(e => e.UserId)
                 .HasDefaultValueSql("gen_random_uuid()")

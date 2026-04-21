@@ -20,6 +20,10 @@ public partial class Submission
 
     public string CodeHash { get; set; } = null!;
 
+    //  rv3
+    public string? SubmissionMode { get; set; }
+    //  end
+
     public string StatusCode { get; set; } = null!;
 
     public string? VerdictCode { get; set; }

@@ -1,6 +1,5 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.Favorite.Dtos;
-using Application.UseCases.Favorite.Queries.GetCollectionDetail;
 using MediatR;
 
 namespace Application.UseCases.Favorite.Queries.GetCollectionDetail;
@@ -85,8 +84,12 @@ public class GetCollectionDetailHandler
             Items = items.Select(x => new CollectionItemDto
             {
                 Id = x.Id,
+
                 ProblemId = x.ProblemId,
                 ProblemTitle = x.Problem?.Title,
+
+                // ✅ FIX CHÍNH
+                ProblemDifficulty = x.Problem?.Difficulty,
 
                 ContestId = x.ContestId,
                 ContestTitle = x.Contest?.Title,

@@ -2,6 +2,7 @@
 using Application.UseCases.Favorite.Dtos;
 using Domain.Entities;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Application.UseCases.Favorite.Commands.AddProblemToCollection;
 
@@ -41,7 +42,7 @@ public class AddProblemToCollectionHandler
             throw new Exception("Problem not found");
 
         // =========================
-        // CHECK DUPLICATE
+        // CHECK DUPLICATE (APP LEVEL)
         // =========================
         var existed = await _repo.GetCollectionItemAsync(
             request.CollectionId,
@@ -64,6 +65,11 @@ public class AddProblemToCollectionHandler
         }
 
         // =========================
+        // 🔥 GET ORDER INDEX (FIX CORE BUG)
+        // =========================
+        var nextOrderIndex = await GetNextOrderIndex(request.CollectionId, ct);
+
+        // =========================
         // CREATE ITEM
         // =========================
         var item = new CollectionItem
@@ -72,11 +78,28 @@ public class AddProblemToCollectionHandler
             CollectionId = request.CollectionId,
             ProblemId = request.ProblemId,
             ContestId = null,
+            OrderIndex = nextOrderIndex, // 🔥 FIX QUAN TRỌNG
             CreatedAt = DateTime.UtcNow
         };
 
-        await _repo.AddItemAsync(item);
-        await _repo.SaveChangesAsync();
+        // =========================
+        // 🔥 SAFE INSERT (DB LEVEL)
+        // =========================
+        var success = await _repo.TryAddItemAsync(item);
+
+        if (!success)
+        {
+            Console.WriteLine("⚠️ Duplicate caught at DB level");
+
+            return new AddProblemToCollectionResult
+            {
+                IsSuccess = false,
+                IsAlreadyExists = true,
+                CollectionId = request.CollectionId,
+                ProblemId = request.ProblemId,
+                Message = "Problem already exists (DB constraint)"
+            };
+        }
 
         Console.WriteLine("✅ Added problem to collection");
 
@@ -89,5 +112,19 @@ public class AddProblemToCollectionHandler
             ItemId = item.Id,
             Message = "Added problem to collection successfully"
         };
+    }
+
+    // =========================
+    // 🔥 HELPER: ORDER INDEX
+    // =========================
+    private async Task<int> GetNextOrderIndex(Guid collectionId, CancellationToken ct)
+    {
+        var items = await _repo
+            .GetCollectionItemsByCollectionId(collectionId);
+
+        if (items == null || items.Count == 0)
+            return 1;
+
+        return items.Max(x => x.OrderIndex) + 1;
     }
 }

@@ -1,65 +1,80 @@
 ﻿using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
-using Microsoft.AspNetCore.Http;
-using System.Security.Claims;
+using Microsoft.Extensions.Logging;
 
 namespace Application.UseCases.StudyPlans.Commands.EnrollStudyPlan;
 
-public class EnrollStudyPlanHandler
-    : IRequestHandler<EnrollStudyPlanCommand, Unit>
+public class EnrollStudyPlanHandler : IRequestHandler<EnrollStudyPlanCommand, Unit>
 {
     private readonly IStudyPlanRepository _repo;
-    private readonly IHttpContextAccessor _httpContext;
+    private readonly IUserStudyPlanPurchaseRepository _purchaseRepo;
+    private readonly ICurrentUserService _currentUser;
+    private readonly ILogger<EnrollStudyPlanHandler> _logger;
 
     public EnrollStudyPlanHandler(
         IStudyPlanRepository repo,
-        IHttpContextAccessor httpContext)
+        IUserStudyPlanPurchaseRepository purchaseRepo,
+        ICurrentUserService currentUser,
+        ILogger<EnrollStudyPlanHandler> logger)
     {
         _repo = repo;
-        _httpContext = httpContext;
+        _purchaseRepo = purchaseRepo;
+        _currentUser = currentUser;
+        _logger = logger;
     }
 
     public async Task<Unit> Handle(EnrollStudyPlanCommand request, CancellationToken ct)
     {
-        // =========================
-        // GET USER
-        // =========================
-        var userIdStr = _httpContext.HttpContext?.User?
-            .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException();
 
-        if (string.IsNullOrEmpty(userIdStr))
-            throw new UnauthorizedAccessException();
+        _logger.LogInformation("ENROLL START | User={UserId} Plan={PlanId}", userId, request.StudyPlanId);
 
-        var userId = Guid.Parse(userIdStr);
+        var plan = await _repo.GetByIdAsync(request.StudyPlanId)
+            ?? throw new Exception("StudyPlan not found");
 
-        // =========================
-        // CHECK ALREADY ENROLLED
-        // =========================
-        var isEnrolled = await _repo.IsUserEnrolledAsync(userId, request.StudyPlanId);
+        var isFree = !plan.IsPaid;
+        var hasAccess = await _purchaseRepo.ExistsAsync(userId, plan.Id);
+
+        _logger.LogInformation("PLAN INFO | IsFree={IsFree} HasAccess={HasAccess}", isFree, hasAccess);
+
+        if (!isFree && !hasAccess)
+            throw new Exception("You must buy this plan first");
+
+        var isEnrolled = await _repo.IsUserEnrolledAsync(userId, plan.Id);
 
         if (isEnrolled)
-            return Unit.Value; // idempotent
-
-        // =========================
-        // GET ITEMS
-        // =========================
-        var items = await _repo.GetItemsByPlanIdAsync(request.StudyPlanId);
-
-        if (items.Count == 0)
-            return Unit.Value;
-
-        // =========================
-        // CREATE PROGRESS FOR ALL ITEMS
-        // =========================
-        var progresses = items.Select(i => new UserStudyItemProgress
         {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            StudyPlanItemId = i.Id,
-            IsCompleted = false,
-            CompletedAt = null
-        }).ToList();
+            _logger.LogInformation("Already enrolled | User={UserId} Plan={PlanId}", userId, plan.Id);
+            return Unit.Value;
+        }
+
+        var items = await _repo.GetItemsByPlanIdAsync(plan.Id);
+
+        _logger.LogInformation("PLAN ITEMS COUNT = {Count}", items.Count);
+
+        // =========================
+        // FIX CRITICAL: EMPTY PLAN
+        // =========================
+        if (items == null || items.Count == 0)
+        {
+            _logger.LogWarning("ENROLL FAILED: StudyPlan has no items");
+            throw new Exception("StudyPlan has no items. Add problems before enrolling.");
+        }
+
+        var progresses = new List<UserStudyItemProgress>();
+
+        foreach (var item in items)
+        {
+            progresses.Add(new UserStudyItemProgress
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                StudyPlanItemId = item.Id,
+                IsCompleted = false
+            });
+        }
 
         foreach (var p in progresses)
         {
@@ -67,6 +82,13 @@ public class EnrollStudyPlanHandler
         }
 
         await _repo.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "ENROLL SUCCESS | User={UserId} Plan={PlanId} Items={Count}",
+            userId,
+            plan.Id,
+            progresses.Count
+        );
 
         return Unit.Value;
     }

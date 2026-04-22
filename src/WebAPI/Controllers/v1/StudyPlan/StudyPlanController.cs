@@ -3,6 +3,7 @@ using Application.UseCases.Problems.Commands.CreateProblem;
 using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Queries.GetPublicProblems;
 using Application.UseCases.StudyPlans.Commands.AddProblemToPlan;
+using Application.UseCases.StudyPlans.Commands.BuyStudyPlan;
 using Application.UseCases.StudyPlans.Commands.CreateStudyPlan;
 using Application.UseCases.StudyPlans.Commands.EnrollStudyPlan;
 using Application.UseCases.StudyPlans.Dtos;
@@ -56,7 +57,7 @@ public class StudyPlansController : ControllerBase
     }
 
     // =========================
-    // ADD PROBLEM
+    // ADD PROBLEM TO PLAN
     // =========================
     [HttpPost("{planId:guid}/problems/{problemId:guid}")]
     [Authorize]
@@ -84,13 +85,35 @@ public class StudyPlansController : ControllerBase
     }
 
     // =========================
-    // ENROLL
+    // 🔥 BUY STUDY PLAN (COIN FLOW)
+    // =========================
+    [HttpPost("{planId:guid}/buy")]
+    [Authorize]
+    public async Task<IActionResult> Buy(Guid planId, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new BuyStudyPlanCommand
+            {
+                StudyPlanId = planId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                true,
+                "Buy success (coin deducted / access granted)"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // ENROLL (ONLY CREATE PROGRESS)
     // =========================
     [HttpPost("{planId:guid}/enroll")]
     [Authorize]
-    public async Task<IActionResult> Enroll(
-        Guid planId,
-        CancellationToken ct)
+    public async Task<IActionResult> Enroll(Guid planId, CancellationToken ct)
     {
         try
         {
@@ -139,14 +162,13 @@ public class StudyPlansController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
     // =========================
     // DETAIL
     // =========================
     [HttpGet("{id:guid}")]
     [Authorize]
-    public async Task<IActionResult> GetDetail(
-        Guid id,
-        CancellationToken ct)
+    public async Task<IActionResult> GetDetail(Guid id, CancellationToken ct)
     {
         try
         {
@@ -194,13 +216,11 @@ public class StudyPlansController : ControllerBase
     }
 
     // =========================
-    // ENROLLMENT
+    // ENROLLMENT STATUS
     // =========================
     [HttpGet("{planId:guid}/enrollment")]
     [Authorize]
-    public async Task<IActionResult> GetEnrollment(
-        Guid planId,
-        CancellationToken ct)
+    public async Task<IActionResult> GetEnrollment(Guid planId, CancellationToken ct)
     {
         try
         {
@@ -224,9 +244,7 @@ public class StudyPlansController : ControllerBase
     // =========================
     [HttpGet("{planId:guid}/stats")]
     [Authorize]
-    public async Task<IActionResult> GetStats(
-        Guid planId,
-        CancellationToken ct)
+    public async Task<IActionResult> GetStats(Guid planId, CancellationToken ct)
     {
         try
         {
@@ -244,14 +262,13 @@ public class StudyPlansController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
     // =========================
     // LIST STUDY PLANS
     // =========================
     [HttpGet]
     [Authorize]
-    public async Task<IActionResult> GetAll(
-        [FromQuery] Guid? creatorId,
-        CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] Guid? creatorId, CancellationToken ct)
     {
         try
         {
@@ -269,10 +286,12 @@ public class StudyPlansController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
-    // tạo problem trong plan
-    // không tạo để chỉ mình dùng chỉ mình lấy, xong tạo 1 list problem của riêng mình, và create problem của riêng mình
+
+    // =========================
+    // CREATE PROBLEM IN PLAN
+    // =========================
     [Authorize(Roles = "admin,manager,teacher")]
-    [HttpPost ("problem/in-plan")]
+    [HttpPost("/problem/in-plan")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> Create(
@@ -303,5 +322,4 @@ public class StudyPlansController : ControllerBase
                 "Problem created successfully.",
                 HttpContext.TraceIdentifier));
     }
-
 }

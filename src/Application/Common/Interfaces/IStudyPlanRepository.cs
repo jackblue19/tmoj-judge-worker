@@ -16,6 +16,8 @@ public interface IStudyPlanRepository
     Task<Dictionary<Guid, bool>> GetCompletedPlansAsync(Guid userId, List<Guid> planIds);
 
     Task<Dictionary<Guid, Guid>> GetItemPlanMappingAsync(List<Guid> itemIds);
+
+    Task<bool> HasUserPurchasedPlanAsync(Guid userId, Guid studyPlanId);
     // key = StudyPlanItemId
     // value = StudyPlanId
 

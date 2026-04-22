@@ -4,7 +4,7 @@ using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-
+using Npgsql;
 
 namespace Infrastructure.Persistence.Common.Repositories;
 
@@ -27,7 +27,6 @@ public class FavoriteRepository : IFavoriteRepository
     public async Task<Collection?> GetUserCollectionByTypeAsync(Guid userId, string type)
     {
         return await _db.Set<Collection>()
-            // ❌ REMOVE AsNoTracking
             .FirstOrDefaultAsync(x =>
                 x.UserId == userId &&
                 x.Type == type);
@@ -36,14 +35,13 @@ public class FavoriteRepository : IFavoriteRepository
     public async Task<Collection?> GetCollectionByIdAsync(Guid id)
     {
         return await _db.Set<Collection>()
-            // ❌ REMOVE AsNoTracking
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
     public async Task<List<Collection>> GetCollectionsByUserAsync(Guid userId)
     {
         return await _db.Set<Collection>()
-            .AsNoTracking() // ✅ read-only
+            .AsNoTracking()
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
@@ -64,15 +62,13 @@ public class FavoriteRepository : IFavoriteRepository
     }
 
     // =========================
-    // QUERY FAVORITES (READ ONLY)
+    // QUERY FAVORITES
     // =========================
     public IQueryable<Problem> QueryFavoriteProblems(Guid collectionId)
     {
         return _db.Set<CollectionItem>()
             .AsNoTracking()
-            .Where(ci =>
-                ci.CollectionId == collectionId &&
-                ci.ProblemId.HasValue)
+            .Where(ci => ci.CollectionId == collectionId && ci.ProblemId.HasValue)
             .Join(
                 _db.Set<Problem>().AsNoTracking(),
                 ci => ci.ProblemId!.Value,
@@ -86,9 +82,7 @@ public class FavoriteRepository : IFavoriteRepository
     {
         return _db.Set<CollectionItem>()
             .AsNoTracking()
-            .Where(ci =>
-                ci.CollectionId == collectionId &&
-                ci.ContestId.HasValue)
+            .Where(ci => ci.CollectionId == collectionId && ci.ContestId.HasValue)
             .Join(
                 _db.Set<Contest>().AsNoTracking(),
                 ci => ci.ContestId!.Value,
@@ -96,6 +90,33 @@ public class FavoriteRepository : IFavoriteRepository
                 (ci, c) => c
             )
             .Distinct();
+    }
+
+    // =========================
+    // SAFE INSERT (🔥 FIX CORE)
+    // =========================
+    public async Task<bool> TryAddItemAsync(CollectionItem item)
+    {
+        try
+        {
+            await _db.Set<CollectionItem>().AddAsync(item);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("✅ Insert success: {ItemId}", item.Id);
+            return true;
+        }
+        catch (DbUpdateException ex)
+        {
+            if (ex.InnerException is PostgresException pg &&
+                pg.SqlState == "23505") // UNIQUE VIOLATION
+            {
+                _logger.LogWarning("⚠️ Duplicate detected at DB level");
+                return false;
+            }
+
+            _logger.LogError(ex, "❌ DB ERROR when inserting CollectionItem");
+            throw;
+        }
     }
 
     // =========================
@@ -141,7 +162,7 @@ public class FavoriteRepository : IFavoriteRepository
     }
 
     // =========================
-    // GET ENTITY (READ ONLY)
+    // ENTITY
     // =========================
     public async Task<Problem?> GetProblemByIdAsync(Guid problemId)
     {
@@ -172,103 +193,8 @@ public class FavoriteRepository : IFavoriteRepository
     public async Task<List<CollectionItem>> GetCollectionItemsByCollectionId(Guid collectionId)
     {
         return await _db.Set<CollectionItem>()
-            // ✅ TRACKED (important for reorder)
             .Where(x => x.CollectionId == collectionId)
             .ToListAsync();
-    }
-
-    // =========================
-    // PUBLIC COLLECTIONS
-    // =========================
-    public IQueryable<Collection> QueryPublicCollections()
-    {
-        return _db.Set<Collection>()
-            .AsNoTracking()
-            .Where(x => x.IsVisibility == true);
-    }
-
-    public async Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
-    Guid currentUserId,
-    int page,
-    int pageSize)
-    {
-        var query = _db.Set<Collection>()
-            .AsNoTracking()
-            .Where(x => x.IsVisibility == true);
-
-        var total = await query.CountAsync();
-
-        var collections = await query
-            .OrderByDescending(x => x.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(c => new
-            {
-                c,
-                totalItems = c.CollectionItems.Count(),
-
-                problemCount = c.CollectionItems.Count(ci => ci.ProblemId != null),
-                contestCount = c.CollectionItems.Count(ci => ci.ContestId != null),
-
-                solvedCount =
-                    (from ci in c.CollectionItems
-                     where ci.ProblemId != null
-                     join s in _db.Set<Submission>()
-                         on ci.ProblemId equals s.ProblemId
-                     where s.UserId == currentUserId
-                           && !s.IsDeleted
-                           && s.StatusCode == "accepted"
-                     select ci.ProblemId)
-                    .Distinct()
-                    .Count()
-            })
-            .Select(x => new PublicCollectionDto
-            {
-                Id = x.c.Id,
-                Name = x.c.Name,
-                Description = x.c.Description,
-
-                OwnerId = x.c.UserId,
-                OwnerName = x.c.User.Username,
-
-                TotalItems = x.totalItems,
-                ProblemCount = x.problemCount,
-                ContestCount = x.contestCount,
-
-                SolvedCount = x.solvedCount,
-
-                SolvedPercent = x.problemCount == 0
-                    ? 0
-                    : (x.solvedCount * 100.0 / x.problemCount),
-
-                PreviewItems = x.c.CollectionItems
-                    .OrderBy(ci => ci.OrderIndex)
-                    .Take(3)
-                    .Select(ci => new PreviewItemDto
-                    {
-                        ItemId = ci.Id,
-                        ProblemId = ci.ProblemId,
-                        ProblemTitle = ci.Problem != null ? ci.Problem.Title : null,
-                        ContestId = ci.ContestId,
-                        ContestTitle = ci.Contest != null ? ci.Contest.Title : null
-                    }).ToList()
-            })
-            .ToListAsync();
-
-        return (collections, total);
-    }
-
-    // =========================
-    // CREATE
-    // =========================
-    public async Task CreateAsync(Collection collection)
-    {
-        await _db.Set<Collection>().AddAsync(collection);
-    }
-
-    public async Task AddItemAsync(CollectionItem item)
-    {
-        await _db.Set<CollectionItem>().AddAsync(item);
     }
 
     // =========================
@@ -312,14 +238,36 @@ public class FavoriteRepository : IFavoriteRepository
         var affected = await _db.SaveChangesAsync();
         _logger.LogInformation("🔥 SaveChanges affected rows: {count}", affected);
     }
+
     public IQueryable<Submission> QuerySubmissions()
     {
         return _db.Set<Submission>().AsNoTracking();
     }
 
     // =========================
-    // LEGACY
+    // SOLVED
     // =========================
+    public async Task<HashSet<Guid>> GetSolvedProblemIdsAsync(
+        Guid userId,
+        List<Guid> problemIds)
+    {
+        if (problemIds == null || problemIds.Count == 0)
+            return new HashSet<Guid>();
+
+        var list = await _db.Set<Submission>()
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId &&
+                !x.IsDeleted &&
+                problemIds.Contains(x.ProblemId) &&
+                x.StatusCode == "accepted")
+            .Select(x => x.ProblemId)
+            .Distinct()
+            .ToListAsync();
+
+        return list.ToHashSet();
+    }
+
     public async Task<(List<Problem> Items, int Total)> GetFavoriteProblemsAsync(
         Guid userId,
         int page,
@@ -346,24 +294,104 @@ public class FavoriteRepository : IFavoriteRepository
         return (items, total);
     }
 
-    public async Task<HashSet<Guid>> GetSolvedProblemIdsAsync(
-     Guid userId,
-     List<Guid> problemIds)
+    // =========================
+    // CREATE (FIX MISSING)
+    // =========================
+    public async Task CreateAsync(Collection collection)
     {
-        if (problemIds == null || problemIds.Count == 0)
-            return new HashSet<Guid>();
+        await _db.Set<Collection>().AddAsync(collection);
+    }
 
-        var list = await _db.Set<Submission>()
+    public async Task AddItemAsync(CollectionItem item)
+    {
+        await _db.Set<CollectionItem>().AddAsync(item);
+    }
+
+    // =========================
+    // PUBLIC COLLECTIONS (FIX MISSING)
+    // =========================
+    public IQueryable<Collection> QueryPublicCollections()
+    {
+        return _db.Set<Collection>()
             .AsNoTracking()
-            .Where(x =>
-                x.UserId == userId &&
-                !x.IsDeleted &&
-                problemIds.Contains(x.ProblemId) &&
-                x.StatusCode == "accepted")
-            .Select(x => x.ProblemId)
-            .Distinct()
+            .Where(x => x.IsVisibility == true);
+    }
+
+    public async Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
+        Guid currentUserId,
+        int page,
+        int pageSize)
+    {
+        var query = _db.Set<Collection>()
+            .AsNoTracking()
+            .Where(x => x.IsVisibility == true);
+
+        var total = await query.CountAsync();
+
+        var collections = await query
+            .OrderByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new PublicCollectionDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Description = c.Description,
+
+                OwnerId = c.UserId,
+                OwnerName = c.User.Username,
+
+                TotalItems = c.CollectionItems.Count(),
+
+                ProblemCount = c.CollectionItems
+                    .Count(ci => ci.ProblemId != null),
+
+                ContestCount = c.CollectionItems
+                    .Count(ci => ci.ContestId != null),
+
+                SolvedCount =
+                    (from ci in c.CollectionItems
+                     where ci.ProblemId != null
+                     join s in _db.Set<Submission>()
+                         on ci.ProblemId equals s.ProblemId
+                     where s.UserId == currentUserId
+                           && !s.IsDeleted
+                           && s.StatusCode == "accepted"
+                     select ci.ProblemId)
+                    .Distinct()
+                    .Count(),
+
+                SolvedPercent = c.CollectionItems.Count(ci => ci.ProblemId != null) == 0
+                    ? 0
+                    : (
+                        (from ci in c.CollectionItems
+                         where ci.ProblemId != null
+                         join s in _db.Set<Submission>()
+                             on ci.ProblemId equals s.ProblemId
+                         where s.UserId == currentUserId
+                               && !s.IsDeleted
+                               && s.StatusCode == "accepted"
+                         select ci.ProblemId)
+                        .Distinct()
+                        .Count() * 100.0
+                      / c.CollectionItems.Count(ci => ci.ProblemId != null)
+                    ),
+
+                PreviewItems = c.CollectionItems
+                    .OrderBy(ci => ci.OrderIndex)
+                    .Take(3)
+                    .Select(ci => new PreviewItemDto
+                    {
+                        ItemId = ci.Id,
+                        ProblemId = ci.ProblemId,
+                        ProblemTitle = ci.Problem != null ? ci.Problem.Title : null,
+                        ContestId = ci.ContestId,
+                        ContestTitle = ci.Contest != null ? ci.Contest.Title : null
+                    })
+                    .ToList()
+            })
             .ToListAsync();
 
-        return list.ToHashSet();
+        return (collections, total);
     }
 }

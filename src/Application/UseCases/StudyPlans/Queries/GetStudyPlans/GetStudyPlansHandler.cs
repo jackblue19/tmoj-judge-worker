@@ -18,9 +18,6 @@ public class GetStudyPlansHandler
         GetStudyPlansQuery request,
         CancellationToken ct)
     {
-        // =========================
-        // 1. GET PLANS
-        // =========================
         var plans = request.CreatorId.HasValue
             ? await _repo.GetByCreatorAsync(request.CreatorId.Value)
             : await _repo.GetAllAsync();
@@ -28,12 +25,13 @@ public class GetStudyPlansHandler
         if (plans == null || plans.Count == 0)
             return new List<StudyPlanDto>();
 
-        // =========================
-        // 2. BUILD RESULT
-        // =========================
+        var ordered = plans
+            .OrderBy(x => x.CreatedAt)
+            .ToList();
+
         var result = new List<StudyPlanDto>();
 
-        foreach (var p in plans)
+        foreach (var p in ordered)
         {
             var problemCount = await _repo.GetItemCountAsync(p.Id);
 
@@ -41,10 +39,12 @@ public class GetStudyPlansHandler
             {
                 Id = p.Id,
                 Title = p.Title,
-                Order = 0, // optional
+                Order = 0,
                 ProblemCount = problemCount,
-                IsCompleted = false, // optional (có thể bổ sung sau)
-                IsUnlocked = true    // optional
+
+                // ❌ FIX: remove fake data
+                IsCompleted = false,
+                IsUnlocked = !p.IsPaid // tạm basic rule: free = unlocked
             });
         }
 

@@ -112,7 +112,7 @@ public class UpdateContestCommandHandler
         // Đảm bảo contest luôn có invite code (kể cả public). Bổ sung nếu thiếu.
         if (string.IsNullOrEmpty(contest.InviteCode))
         {
-            contest.InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper();
+            contest.InviteCode = Guid.NewGuid().ToString("N")[..10].ToUpper();
         }
 
         // =========================

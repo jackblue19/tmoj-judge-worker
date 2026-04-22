@@ -251,8 +251,9 @@ public class ContestRepository : IContestRepository
     // =============================================
     public async Task<Contest?> GetActiveContestByTeamIdAsync(Guid teamId)
     {
+        var now = DateTime.UtcNow;
         return await _db.ContestTeams
-            .Where(ct => ct.TeamId == teamId)
+            .Where(ct => ct.TeamId == teamId && ct.Contest.EndAt > now)
             .Select(ct => ct.Contest)
             .OrderByDescending(c => c.StartAt)
             .FirstOrDefaultAsync();
@@ -282,6 +283,7 @@ public class ContestRepository : IContestRepository
                 ContestId = ct.ContestId,
                 TeamId = ct.Team.Id,
                 TeamName = ct.Team.TeamName,
+                TeamAvatarUrl = ct.Team.AvatarUrl,
                 LeaderId = ct.Team.LeaderId,
                 TeamSize = ct.Team.TeamSize,
                 MemberCount = ct.Team.TeamMembers.Count(),
@@ -293,6 +295,9 @@ public class ContestRepository : IContestRepository
                 {
                     UserId = m.UserId,
                     UserName = m.User.Username,
+                    DisplayName = m.User.DisplayName,
+                    Email = m.User.Email,
+                    AvatarUrl = m.User.AvatarUrl,
                     JoinedAt = m.JoinedAt
                 }).ToList()
             })

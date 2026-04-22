@@ -8,6 +8,7 @@ public class MyTeamInContestDto
 
     public Guid TeamId { get; set; }
     public string TeamName { get; set; } = string.Empty;
+    public string? TeamAvatarUrl { get; set; }
 
     public Guid LeaderId { get; set; }
 

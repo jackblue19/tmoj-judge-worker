@@ -96,6 +96,25 @@ public class TeamsController : ControllerBase
     }
 
     // =========================
+    // UPDATE TEAM AVATAR
+    // =========================
+    [HttpPut("{id:guid}/avatar")]
+    [Authorize]
+    public async Task<IActionResult> UpdateAvatar(
+        Guid id,
+        [FromBody] UpdateAvatarRequest body,
+        CancellationToken ct)
+    {
+        await _mediator.Send(new UpdateTeamAvatarCommand
+        {
+            TeamId = id,
+            AvatarUrl = body.AvatarUrl
+        }, ct);
+
+        return Ok(ApiResponse<object?>.Ok(null, "Team avatar updated"));
+    }
+
+    // =========================
     // DELETE TEAM
     // =========================
     [HttpDelete("{id:guid}")]
@@ -107,3 +126,5 @@ public class TeamsController : ControllerBase
         return Ok(ApiResponse<object?>.Ok(null, "Team deleted"));
     }
 }
+
+public record UpdateAvatarRequest(string? AvatarUrl);

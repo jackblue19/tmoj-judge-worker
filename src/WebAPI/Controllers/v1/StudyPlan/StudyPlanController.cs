@@ -268,7 +268,7 @@ public class StudyPlansController : ControllerBase
     // tạo problem trong plan
     // không tạo để chỉ mình dùng chỉ mình lấy, xong tạo 1 list problem của riêng mình, và create problem của riêng mình
     [Authorize(Roles = "admin,manager,teacher")]
-    [HttpPost ("/problem/in-plan")]
+    [HttpPost ("{planId:guid}/problem/in-plan")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> Create(

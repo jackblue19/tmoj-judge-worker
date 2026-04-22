@@ -18,52 +18,44 @@ public class GetUnlockedPlansHandler
         GetUnlockedPlansQuery request,
         CancellationToken ct)
     {
-        // =========================
-        // 1. GET ALL PLANS (FIX: bỏ CreatorId)
-        // =========================
         var plans = await _repo.GetAllAsync();
 
         if (plans == null || plans.Count == 0)
             return new List<StudyPlanDto>();
 
-        // =========================
-        // 2. ORDER (tạm dùng CreatedAt)
-        // =========================
         var orderedPlans = plans
             .OrderBy(x => x.CreatedAt)
             .ToList();
 
-        // =========================
-        // 3. BATCH CHECK COMPLETION
-        // =========================
-        var planIds = orderedPlans.Select(x => x.Id).ToList();
-
-        var completedMap = await _repo.GetCompletedPlansAsync(
-            request.UserId,
-            planIds
-        );
-
-        // =========================
-        // 4. BUILD RESULT (CHAIN LOGIC)
-        // =========================
         var result = new List<StudyPlanDto>();
 
-        for (int i = 0; i < orderedPlans.Count; i++)
+        foreach (var plan in orderedPlans)
         {
-            var plan = orderedPlans[i];
+            var isUnlocked =
+                !plan.IsPaid ||
+                await _repo.HasUserPurchasedPlanAsync(request.UserId, plan.Id);
 
-            var isCompleted = completedMap.GetValueOrDefault(plan.Id);
+            var totalItems = await _repo.GetItemCountAsync(plan.Id);
 
-            bool isUnlocked = i == 0
-                ? true
-                : completedMap.GetValueOrDefault(orderedPlans[i - 1].Id);
+            var progresses = await _repo.GetItemProgressByPlanAsync(
+                request.UserId,
+                plan.Id
+            );
+
+            var completed = progresses.Count(x => x.IsCompleted == true);
+
+            var isCompleted =
+                totalItems > 0 &&
+                completed == totalItems;
 
             result.Add(new StudyPlanDto
             {
                 Id = plan.Id,
                 Title = plan.Title,
-                Order = i + 1,
-                ProblemCount = plan.StudyPlanItems?.Count ?? 0,
+                Order = 0,
+                ProblemCount = totalItems,
+
+                // 🔥 FIX NULLABLE HERE
                 IsCompleted = isCompleted,
                 IsUnlocked = isUnlocked
             });

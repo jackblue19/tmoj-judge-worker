@@ -26,4 +26,7 @@ public partial class StudyPlan
     public virtual ICollection<StudyPlanItem> StudyPlanItems { get; set; } = new List<StudyPlanItem>();
 
     public virtual ICollection<UserStudyProgress> UserStudyProgresses { get; set; } = new List<UserStudyProgress>();
+
+    public virtual ICollection<UserStudyPlanPurchase> UserStudyPlanPurchases { get; set; }
+    = new List<UserStudyPlanPurchase>();
 }

@@ -193,7 +193,28 @@ public class StudyPlanRepository : IStudyPlanRepository
     // =========================
     public async Task SaveChangesAsync()
     {
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            var entries = _db.ChangeTracker.Entries()
+                .Select(e => new
+                {
+                    Entity = e.Entity.GetType().Name,
+                    State = e.State.ToString()
+                });
+
+            var debugInfo = string.Join(", ", entries.Select(x => $"{x.Entity}:{x.State}"));
+
+            var inner = ex.InnerException?.Message;
+
+            throw new Exception(
+                $"DB ERROR: {inner ?? ex.Message} | ENTITIES: {debugInfo}",
+                ex
+            );
+        }
     }
 
     // =========================
@@ -247,5 +268,14 @@ public class StudyPlanRepository : IStudyPlanRepository
             .Include(x => x.StudyPlanItems)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
+    }
+
+    public async Task<bool> HasUserPurchasedPlanAsync(Guid userId, Guid studyPlanId)
+    {
+        return await _db.Set<UserStudyPlanPurchase>()
+            .AnyAsync(x =>
+                x.UserId == userId &&
+                x.StudyPlanId == studyPlanId
+            );
     }
 }

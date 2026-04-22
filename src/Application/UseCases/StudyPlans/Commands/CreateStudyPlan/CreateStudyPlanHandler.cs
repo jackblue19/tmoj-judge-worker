@@ -32,6 +32,17 @@ public class CreateStudyPlanHandler : IRequestHandler<CreateStudyPlanCommand, Gu
 
         var userId = Guid.Parse(userIdStr);
 
+        // =========================
+        // ✅ BUSINESS RULE FIX
+        // =========================
+        if (!request.IsPaid)
+        {
+            request.Price = 0;
+        }
+        else if (request.Price <= 0)
+        {
+            throw new Exception("Paid plan must have price > 0");
+        }
         var plan = new StudyPlan
         {
             Id = Guid.NewGuid(),
@@ -44,7 +55,7 @@ public class CreateStudyPlanHandler : IRequestHandler<CreateStudyPlanCommand, Gu
             IsPaid = request.IsPaid,
             Price = request.Price,
 
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
         };
 
         await _repo.CreateAsync(plan);

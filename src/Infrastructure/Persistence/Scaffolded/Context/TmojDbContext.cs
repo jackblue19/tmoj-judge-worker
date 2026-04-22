@@ -142,6 +142,7 @@ public partial class TmojDbContext : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
+    public virtual DbSet<UserStudyPlanPurchase> UserStudyPlanPurchases { get; set; }
     public virtual DbSet<UserBadge> UserBadges { get; set; }
 
     public virtual DbSet<UserNotificationSetting> UserNotificationSettings { get; set; }
@@ -1503,6 +1504,12 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValueSql("now()")
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("created_at");
+            entity.Property(e => e.VoteCount)
+               .HasDefaultValue(0)
+               .HasColumnName("vote_count");
+            entity.Property(e => e.IsHidden)
+                .HasDefaultValue(false)
+                .HasColumnName("is_hidden");
             entity.Property(e => e.IsLocked)
                 .HasDefaultValue(false)
                 .HasColumnName("is_locked");
@@ -2543,6 +2550,34 @@ public partial class TmojDbContext : DbContext
                 .HasForeignKey(d => d.StudyPlanItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("user_study_item_progress_study_plan_item_id_fkey");
+        });
+
+        modelBuilder.Entity<UserStudyPlanPurchase>(entity =>
+        {
+            entity.ToTable("user_study_plan_purchase");
+
+            entity.HasKey(e => new { e.UserId, e.StudyPlanId });
+
+            entity.Property(e => e.UserId)
+                .HasColumnName("user_id");
+
+            entity.Property(e => e.StudyPlanId)
+                .HasColumnName("study_plan_id");
+
+            entity.Property(e => e.PurchasedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("purchased_at")
+                .HasDefaultValueSql("now()");
+
+            // relationship: User
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.UserStudyPlanPurchases)
+                .HasForeignKey(e => e.UserId);
+
+            // relationship: StudyPlan
+            entity.HasOne(e => e.StudyPlan)
+                .WithMany(s => s.UserStudyPlanPurchases)
+                .HasForeignKey(e => e.StudyPlanId);
         });
 
         modelBuilder.Entity<UserBadge>(entity =>

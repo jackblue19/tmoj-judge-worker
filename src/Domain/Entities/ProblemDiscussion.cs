@@ -19,6 +19,10 @@ public partial class ProblemDiscussion
 
     public bool? IsLocked { get; set; }
 
+    public int VoteCount { get; set; }
+
+    public bool? IsHidden { get; set; }
+
     public DateTime? CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

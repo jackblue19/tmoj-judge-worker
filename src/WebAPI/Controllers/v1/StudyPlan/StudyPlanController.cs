@@ -272,7 +272,7 @@ public class StudyPlansController : ControllerBase
     // tạo problem trong plan
     // không tạo để chỉ mình dùng chỉ mình lấy, xong tạo 1 list problem của riêng mình, và create problem của riêng mình
     [Authorize(Roles = "admin,manager,teacher")]
-    [HttpPost ("/problem/in-plan")]
+    [HttpPost ("{planId:guid}/problem/in-plan")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> Create(
@@ -285,9 +285,9 @@ public class StudyPlansController : ControllerBase
                 request.Slug,
                 request.Difficulty,
                 request.TypeCode,
-                request.VisibilityCode,
-                request.ScoringCode,
                 "in-plan",
+                 request.ScoringCode,
+                request.StatusCode,
                 request.TimeLimitMs,
                 request.MemoryLimitKb,
                 request.DescriptionMd,

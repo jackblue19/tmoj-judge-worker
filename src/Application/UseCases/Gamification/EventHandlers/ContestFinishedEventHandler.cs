@@ -1,4 +1,4 @@
-﻿using Application.Common.Events;
+using Application.Common.Events;
 using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
@@ -38,7 +38,7 @@ public class ContestFinishedEventHandler
         // =========================
         foreach (var rule in rules)
         {
-            if (rule.RuleType != "contest_rank")
+            if (rule.RuleType != "rank")
                 continue;
 
             foreach (var (userId, rank) in ranking)

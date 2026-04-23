@@ -1,4 +1,4 @@
-﻿using Application.Common.Events;
+using Application.Common.Events;
 using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
@@ -47,7 +47,7 @@ public class ProblemSolvedEventHandler
         // =========================
         foreach (var rule in rules)
         {
-            if (rule.RuleType != "solved")
+            if (rule.RuleType != "solved_count")
                 continue;
 
             if (solvedCount >= rule.TargetValue)

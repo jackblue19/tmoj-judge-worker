@@ -16,17 +16,20 @@ public sealed class UpdateProblemTemplateCommandHandler
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IReadRepository<ProblemTemplate , Guid> _problemTemplateReadRepository;
+    private readonly IWriteRepository<ProblemTemplate , Guid> _problemTemplateWriteRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<UpdateProblemTemplateCommandHandler> _logger;
 
     public UpdateProblemTemplateCommandHandler(
         ICurrentUserService currentUser ,
         IReadRepository<ProblemTemplate , Guid> problemTemplateReadRepository ,
+        IWriteRepository<ProblemTemplate , Guid> problemTemplateWriteRepository ,
         IUnitOfWork unitOfWork ,
         ILogger<UpdateProblemTemplateCommandHandler> logger)
     {
         _currentUser = currentUser;
         _problemTemplateReadRepository = problemTemplateReadRepository;
+        _problemTemplateWriteRepository = problemTemplateWriteRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -51,7 +54,7 @@ public sealed class UpdateProblemTemplateCommandHandler
             ? null
             : request.SolutionSignature.Trim();
 
-        // ép cứng lại theo problem mode hiện tại của problem
+        // ép cứng theo problem mode hiện tại của problem
         entity.WrapperType = ProblemTemplateGuard.ResolveWrapperTypeFromProblemMode(entity.Problem.ProblemMode);
 
         if ( request.IsActive.HasValue )
@@ -59,12 +62,15 @@ public sealed class UpdateProblemTemplateCommandHandler
 
         try
         {
+            _problemTemplateWriteRepository.Update(entity);
             await _unitOfWork.SaveChangesAsync(ct);
+
             return entity.ToDto();
         }
         catch ( DbUpdateException ex )
         {
-            _logger.LogError(ex ,
+            _logger.LogError(
+                ex ,
                 "Database update failed while updating problem template. CodeTemplateId={CodeTemplateId}" ,
                 request.CodeTemplateId);
 

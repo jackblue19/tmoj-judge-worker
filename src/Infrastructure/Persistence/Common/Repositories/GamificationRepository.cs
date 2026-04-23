@@ -60,6 +60,14 @@ public class GamificationRepository : IGamificationRepository
         await _db.Set<UserBadge>().AddAsync(badge);
     }
 
+    public async Task<List<Badge>> GetAllBadgesAsync()
+    {
+        return await _db.Set<Badge>()
+            .AsNoTracking()
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync();
+    }
+
     public async Task<bool> ExistsBadgeCodeAsync(string badgeCode)
     {
         return await _db.Set<Badge>()

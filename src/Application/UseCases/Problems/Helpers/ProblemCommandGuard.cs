@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Application.UseCases.Problems.Helpers;
 
-internal static class ProblemCommandGuard
+public static class ProblemCommandGuard
 {
     public static void ValidateStatementInput(string? descriptionMd , IFormFile? statementFile)
     {
@@ -90,6 +90,38 @@ internal static class ProblemCommandGuard
             .Where(x => x != Guid.Empty)
             .Distinct()
             .ToList();
+    }
+
+    public static string NormalizeVisibilityForVirtual(string? visibilityCode)
+    {
+        var normalized = visibilityCode?.Trim().ToLowerInvariant();
+
+        return normalized switch
+        {
+            null or "" => "private",
+            "public" => "public",
+            "private" => "private",
+            "in-class" => "in-class",
+            "in-bank" => "in-bank",
+            _ => throw new ArgumentException("Invalid visibility code for virtual problem.")
+        };
+    }
+
+    public static string NormalizeVisibilityForClone(string? visibilityCode , string? fallback)
+    {
+        var normalized = visibilityCode?.Trim().ToLowerInvariant();
+
+        if ( string.IsNullOrWhiteSpace(normalized) )
+            return string.IsNullOrWhiteSpace(fallback) ? ProblemVisibilityCodes.Private : fallback.Trim().ToLowerInvariant();
+
+        return normalized switch
+        {
+            ProblemVisibilityCodes.Public => ProblemVisibilityCodes.Public,
+            ProblemVisibilityCodes.Private => ProblemVisibilityCodes.Private,
+            ProblemVisibilityCodes.InClass => ProblemVisibilityCodes.InClass,
+            ProblemVisibilityCodes.InBank => ProblemVisibilityCodes.InBank,
+            _ => throw new ArgumentException("Invalid visibility code.")
+        };
     }
 
     public static void ValidateProblemCoreFields(

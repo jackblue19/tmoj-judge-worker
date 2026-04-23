@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Favorite.Dtos;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -26,8 +26,8 @@ public class GetMyCollectionsHandler
 
         var submissions = _repo.QuerySubmissions();
 
-        var items = await _repo.QueryPublicCollections() // ❌ sai trước đó
-            .Where(x => x.UserId == userId)              // ✅ đúng logic
+        var items = await _repo.QueryCollections() // ✅ FIX: Dùng QueryCollections thay vì QueryPublicCollections
+            .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.CreatedAt)
             .Select(x => new CollectionDto
             {

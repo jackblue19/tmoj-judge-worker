@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Favorite.Dtos;
 using MediatR;
 
@@ -75,7 +75,9 @@ public class GetCollectionDetailHandler
                 CreatedAt = x.CreatedAt,
 
                 IsSolved = x.ProblemId != null &&
-                           solvedSet.Contains(x.ProblemId.Value)
+                           solvedSet.Contains(x.ProblemId.Value),
+                           
+                IsPrivate = x.Problem != null && x.Problem.VisibilityCode != "public" // ✅ Map cờ IsPrivate
             }).ToList()
         };
     }

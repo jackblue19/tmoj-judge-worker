@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Favorite.Dtos;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -60,10 +60,7 @@ public class GetFavoriteProblemsHandler
         // QUERY
         // =========================
         var query = _repo.QueryFavoriteProblems(collection.Id)
-            .Where(p =>
-                p.IsActive && // 🔥 tránh trả problem bị disable
-                (p.VisibilityCode == "public" || p.CreatedBy == userId) // 🔥 tránh leak private
-            );
+            .Where(p => p.IsActive); // 🔥 Chỉ lọc bài bị disable, KHÔNG LỌC BÀI PRIVATE NỮA
 
         var totalItems = await query.CountAsync(ct);
 
@@ -78,7 +75,8 @@ public class GetFavoriteProblemsHandler
                 Difficulty = p.Difficulty,
                 TypeCode = p.TypeCode,
                 StatusCode = p.StatusCode,
-                IsFavorited = true
+                IsFavorited = true,
+                IsPrivate = p.VisibilityCode != "public" // ✅ Map cờ IsPrivate
             })
             .ToListAsync(ct);
 

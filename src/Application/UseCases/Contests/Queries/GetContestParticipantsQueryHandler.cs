@@ -44,6 +44,7 @@ public class GetContestParticipantsQueryHandler
         {
             TeamId = t.TeamId,
             TeamName = t.Team.TeamName,
+            TeamAvatarUrl = t.Team.AvatarUrl,
             IsPersonal = t.Team.IsPersonal,
             LeaderId = t.Team.LeaderId,
             JoinAt = t.JoinAt,

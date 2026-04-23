@@ -28,6 +28,12 @@ public record UserDto(
     bool Status,
     string? Role);
 
+public record SimpleUserDto(
+    Guid UserId,
+    string? DisplayName,
+    string Email,
+    string? AvatarUrl);
+
 public record StudentProfileWithClassesResponse(
     UserDto Student,
     List<ClassInstanceInfo> Classes,

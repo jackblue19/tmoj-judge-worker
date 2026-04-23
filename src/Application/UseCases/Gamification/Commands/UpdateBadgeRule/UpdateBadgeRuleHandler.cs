@@ -18,7 +18,7 @@ public class UpdateBadgeRuleHandler : IRequestHandler<UpdateBadgeRuleCommand, bo
 
     public async Task<bool> Handle(UpdateBadgeRuleCommand request, CancellationToken ct)
     {
-        if (!_currentUser.IsInRole("Admin"))
+        if (!_currentUser.IsInRole("admin"))
             throw new UnauthorizedAccessException();
 
         var rule = await _repo.GetBadgeRuleByIdAsync(request.Id);

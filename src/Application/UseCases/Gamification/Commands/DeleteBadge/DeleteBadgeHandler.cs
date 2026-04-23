@@ -25,7 +25,7 @@ namespace Application.UseCases.Gamification.Commands.DeleteBadge
             _logger.LogInformation("Deleting badge {BadgeId}", request.BadgeId);
 
             // 🔐 ROLE CHECK
-            if (!_currentUser.IsInRole("Admin"))
+            if (!_currentUser.IsInRole("admin"))
                 throw new UnauthorizedAccessException("Only admin can delete badge");
 
             // 🔥 VALIDATION

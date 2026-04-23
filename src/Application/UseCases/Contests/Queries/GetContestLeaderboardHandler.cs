@@ -35,33 +35,27 @@ public class GetContestLeaderboardHandler
         GetContestLeaderboardQuery request,
         CancellationToken ct)
     {
-        Console.WriteLine("===== SCOREBOARD START =====");
-        Console.WriteLine($"ContestId: {request.ContestId}");
-
         if (request.ContestId == Guid.Empty)
             throw new ArgumentException("ContestId is required");
 
         var contest = await _contestRepo.GetByIdAsync(request.ContestId, ct);
-
         if (contest == null)
             throw new Exception("Contest not found");
 
-        Console.WriteLine($"Contest: {contest.Title}");
+        // Determine contest status
+        var now = DateTime.UtcNow;
+        var status = now < contest.StartAt ? "upcoming"
+                   : now > contest.EndAt ? "ended"
+                   : "running";
 
-        // ======================
-        // FREEZE STATE
-        // ======================
-        // Rule 4.4/9: admin/manager luôn thấy scoreboard thật (bypass freeze).
+        // Freeze state
         var isPrivileged =
             _currentUser.IsAuthenticated &&
             (_currentUser.IsInRole("admin") || _currentUser.IsInRole("manager"));
-
         var isFrozen = !isPrivileged && FreezeContestPatch.IsFrozen(contest);
         var freezeTime = contest.FreezeAt;
 
-        // ======================
-        // FETCH DATA
-        // ======================
+        // Fetch data
         var contestTeams = await _contestTeamRepo.ListAsync(
             new ContestTeamsSpec(request.ContestId), ct);
 
@@ -74,9 +68,7 @@ public class GetContestLeaderboardHandler
             .OrderBy(p => p.DisplayIndex ?? p.Ordinal ?? 999)
             .ToList();
 
-        // ======================
-        // APPLY FREEZE (CORE LOGIC)
-        // ======================
+        // Apply freeze filter
         if (isFrozen && freezeTime.HasValue)
         {
             submissions = submissions
@@ -84,112 +76,234 @@ public class GetContestLeaderboardHandler
                 .ToList();
         }
 
-        Console.WriteLine($"Teams: {contestTeams.Count}");
-        Console.WriteLine($"Submissions (after freeze filter): {submissions.Count}");
-        Console.WriteLine($"Problems: {problems.Count}");
+        var isAcm = contest.ContestType?.ToLower() == "acm";
 
-        var result = new GetContestLeaderboardResponse
+        var problemStats = new Dictionary<Guid, (int solvedCount, int totalAttempts)>();
+
+        // Initialize problem stats
+        foreach (var p in problems)
         {
-            ContestId = request.ContestId,
-            Teams = new()
-        };
+            problemStats[p.Id] = (0, 0);
+        }
 
-        // ======================
-        // BUILD SCOREBOARD
-        // ======================
-        foreach (var ctTeam in contestTeams)
+        // Build appropriate scoreboard based on mode
+        if (isAcm)
         {
-            var team = ctTeam.Team;
-            if (team == null) continue;
+            var acmRows = new List<ACMScoreboardRowDto>();
 
-            var teamSubs = submissions
-                .Where(x => x.TeamId == team.Id)
-                .ToList();
-
-            var dto = new TeamLeaderboardDto
+            foreach (var ctTeam in contestTeams)
             {
-                TeamId = team.Id,
-                TeamName = team.TeamName,
-                Problems = new()
-            };
+                var team = ctTeam.Team;
+                if (team == null) continue;
 
-            int solved = 0;
-            int penalty = 0;
+                var teamSubs = submissions.Where(x => x.TeamId == team.Id).ToList();
+                int totalSolved = 0;
+                int totalPenalty = 0;
+                var problemAttempts = new List<ACMProblemAttemptDto>();
 
-            foreach (var p in problems)
-            {
-                var subs = teamSubs
-                    .Where(x => x.ContestProblemId == p.Id)
-                    .OrderBy(x => x.CreatedAt)
-                    .ToList();
-
-                int wrong = 0;
-                DateTime? acTime = null;
-
-                foreach (var s in subs)
+                foreach (var p in problems)
                 {
-                    var verdict = s.VerdictCode?.ToUpper();
+                    var subs = teamSubs
+                        .Where(x => x.ContestProblemId == p.Id)
+                        .OrderBy(x => x.CreatedAt)
+                        .ToList();
 
-                    if (verdict == "AC")
+                    int wrongCount = 0;
+                    DateTime? acTime = null;
+                    bool isFirstBlood = false;
+
+                    foreach (var s in subs)
                     {
-                        acTime = s.CreatedAt;
-                        break;
+                        var verdict = s.VerdictCode?.ToUpper();
+                        if (verdict == "AC")
+                        {
+                            acTime = s.CreatedAt;
+                            break;
+                        }
+                        else if (verdict == "WA" || verdict == "TLE" || verdict == "MLE" || verdict == "RE")
+                        {
+                            wrongCount++;
+                        }
                     }
 
-                    // chỉ tính penalty cho fail hợp lệ
-                    if (verdict == "WA" || verdict == "TLE" || verdict == "MLE" || verdict == "RE")
+                    int probPenalty = 0;
+
+                    if (acTime != null)
                     {
-                        wrong++;
+                        totalSolved++;
+                        probPenalty = (int)(acTime.Value - contest.StartAt).TotalMinutes + wrongCount * 20;
+                        totalPenalty += probPenalty;
+
+                        // Check if first blood
+                        var firstBloodSub = submissions
+                            .Where(x => x.ContestProblemId == p.Id && x.VerdictCode?.ToUpper() == "AC")
+                            .OrderBy(x => x.CreatedAt)
+                            .FirstOrDefault();
+                        isFirstBlood = firstBloodSub?.TeamId == team.Id;
+
+                        // Update solved count
+                        var (solved, attempts) = problemStats[p.Id];
+                        problemStats[p.Id] = (solved + 1, attempts + subs.Count);
                     }
+                    else if (subs.Any())
+                    {
+                        var (solved, attempts) = problemStats[p.Id];
+                        problemStats[p.Id] = (solved, attempts + subs.Count);
+                    }
+
+                    problemAttempts.Add(new ACMProblemAttemptDto
+                    {
+                        ProblemId = p.DisplayIndex?.ToString() ?? (problems.IndexOf(p) + 1).ToString(),
+                        IsSolved = acTime != null,
+                        IsFirstBlood = isFirstBlood,
+                        AttemptsCount = subs.Count,
+                        PenaltyTime = probPenalty > 0 ? probPenalty : null
+                    });
                 }
 
-                int probPenalty = 0;
-
-                if (acTime != null)
+                acmRows.Add(new ACMScoreboardRowDto
                 {
-                    solved++;
-
-                    var minutes =
-                        (int)(acTime.Value - contest.StartAt).TotalMinutes;
-
-                    probPenalty = minutes + wrong * 20;
-
-                    penalty += probPenalty;
-                }
-
-                dto.Problems.Add(new ProblemLeaderboardDto
-                {
-                    ProblemId = p.ProblemId,
-                    IsSolved = acTime != null,
-                    WrongAttempts = wrong,
-                    FirstAcAt = acTime,
-                    Penalty = probPenalty,
-                    Submissions = new()
+                    Rank = 0,
+                    UserId = team.Id,
+                    Username = team.TeamName,
+                    AvatarUrl = null,
+                    Fullname = team.TeamName,
+                    TotalSolved = totalSolved,
+                    TotalPenalty = totalPenalty,
+                    Problems = problemAttempts
                 });
             }
 
-            dto.Solved = solved;
-            dto.Penalty = penalty;
+            // Sort and rank ACM
+            acmRows = acmRows.OrderByDescending(x => x.TotalSolved)
+                             .ThenBy(x => x.TotalPenalty)
+                             .ToList();
 
-            result.Teams.Add(dto);
+            int rank = 1;
+            foreach (var row in acmRows)
+            {
+                row.Rank = rank++;
+            }
+
+            var acmResult = new ACMScoreboardResponse
+            {
+                ContestId = request.ContestId,
+                ContestName = contest.Title,
+                ScoringMode = "acm",
+                Status = status,
+                Frozen = isFrozen,
+                Problems = problems.Select((p, idx) =>
+                {
+                    var (solvedCount, totalAttempts) = problemStats[p.Id];
+                    return new ContestProblemHeaderDto
+                    {
+                        Id = p.DisplayIndex?.ToString() ?? (idx + 1).ToString(),
+                        Title = p.Problem?.Title ?? "Unknown",
+                        BalloonColor = null,
+                        SolvedCount = solvedCount,
+                        TotalAttempts = totalAttempts
+                    };
+                }).ToList(),
+                Rows = acmRows,
+                LastUpdated = DateTime.UtcNow.ToString("O")
+            };
+
+            return acmResult;
         }
-
-        // ======================
-        // SORT + RANK
-        // ======================
-        result.Teams = result.Teams
-            .OrderByDescending(x => x.Solved)
-            .ThenBy(x => x.Penalty)
-            .ToList();
-
-        int rank = 1;
-        foreach (var t in result.Teams)
+        else
         {
-            t.Rank = rank++;
+            var ioiRows = new List<IOIScoreboardRowDto>();
+
+            foreach (var ctTeam in contestTeams)
+            {
+                var team = ctTeam.Team;
+                if (team == null) continue;
+
+                var teamSubs = submissions.Where(x => x.TeamId == team.Id).ToList();
+                int totalScore = 0;
+                var problemAttempts = new List<IOIProblemAttemptDto>();
+
+                foreach (var p in problems)
+                {
+                    var subs = teamSubs
+                        .Where(x => x.ContestProblemId == p.Id)
+                        .OrderByDescending(x => x.FinalScore ?? 0)
+                        .ToList();
+
+                    int bestScore = 0;
+
+                    foreach (var s in subs)
+                    {
+                        if (s.FinalScore.HasValue)
+                        {
+                            bestScore = Math.Max(bestScore, (int)s.FinalScore.Value);
+                        }
+                    }
+
+                    totalScore += bestScore;
+
+                    if (subs.Any())
+                    {
+                        var (solved, attempts) = problemStats[p.Id];
+                        if (bestScore > 0)
+                            problemStats[p.Id] = (solved + 1, attempts + subs.Count);
+                        else
+                            problemStats[p.Id] = (solved, attempts + subs.Count);
+                    }
+
+                    problemAttempts.Add(new IOIProblemAttemptDto
+                    {
+                        ProblemId = p.DisplayIndex?.ToString() ?? (problems.IndexOf(p) + 1).ToString(),
+                        Score = bestScore,
+                        AttemptsCount = subs.Count
+                    });
+                }
+
+                ioiRows.Add(new IOIScoreboardRowDto
+                {
+                    Rank = 0,
+                    UserId = team.Id,
+                    Username = team.TeamName,
+                    AvatarUrl = null,
+                    Fullname = team.TeamName,
+                    TotalScore = totalScore,
+                    Problems = problemAttempts
+                });
+            }
+
+            // Sort and rank IOI
+            ioiRows = ioiRows.OrderByDescending(x => x.TotalScore).ToList();
+
+            int rank = 1;
+            foreach (var row in ioiRows)
+            {
+                row.Rank = rank++;
+            }
+
+            var ioiResult = new IOIScoreboardResponse
+            {
+                ContestId = request.ContestId,
+                ContestName = contest.Title,
+                ScoringMode = "ioi",
+                Status = status,
+                Frozen = isFrozen,
+                Problems = problems.Select((p, idx) =>
+                {
+                    var (solvedCount, totalAttempts) = problemStats[p.Id];
+                    return new ContestProblemHeaderDto
+                    {
+                        Id = p.DisplayIndex?.ToString() ?? (idx + 1).ToString(),
+                        Title = p.Problem?.Title ?? "Unknown",
+                        BalloonColor = null,
+                        SolvedCount = solvedCount,
+                        TotalAttempts = totalAttempts
+                    };
+                }).ToList(),
+                Rows = ioiRows,
+                LastUpdated = DateTime.UtcNow.ToString("O")
+            };
+
+            return ioiResult;
         }
-
-        Console.WriteLine("===== SCOREBOARD END =====");
-
-        return result;
     }
 }

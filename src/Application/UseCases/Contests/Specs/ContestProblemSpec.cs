@@ -13,7 +13,8 @@ namespace Application.UseCases.Contests.Specs
     {
         public ContestProblemSpec(Guid contestId)
         {
-            Query.Where(x => x.ContestId == contestId);
+            Query.Where(x => x.ContestId == contestId)
+                 .Include(x => x.Problem);
         }
     }
 }

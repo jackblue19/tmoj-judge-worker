@@ -17,6 +17,7 @@ public class SubmitContestCommandHandler
     private readonly IReadRepository<Testset, Guid> _testsetRepo;
     private readonly IReadRepository<ClassSlot, Guid> _classSlotRepo;
     private readonly IReadRepository<ClassMember, Guid> _classMemberRepo;
+    private readonly IReadRepository<Runtime, Guid> _runtimeRepo;
     private readonly IWriteRepository<Submission, Guid> _submissionRepo;
     private readonly IWriteRepository<JudgeJob, Guid> _judgeJobRepo;
     private readonly ICurrentUserService _currentUser;
@@ -29,6 +30,7 @@ public class SubmitContestCommandHandler
         IReadRepository<Testset, Guid> testsetRepo,
         IReadRepository<ClassSlot, Guid> classSlotRepo,
         IReadRepository<ClassMember, Guid> classMemberRepo,
+        IReadRepository<Runtime, Guid> runtimeRepo,
         IWriteRepository<Submission, Guid> submissionRepo,
         IWriteRepository<JudgeJob, Guid> judgeJobRepo,
         ICurrentUserService currentUser,
@@ -40,6 +42,7 @@ public class SubmitContestCommandHandler
         _testsetRepo = testsetRepo;
         _classSlotRepo = classSlotRepo;
         _classMemberRepo = classMemberRepo;
+        _runtimeRepo = runtimeRepo;
         _submissionRepo = submissionRepo;
         _judgeJobRepo = judgeJobRepo;
         _currentUser = currentUser;
@@ -130,7 +133,16 @@ public class SubmitContestCommandHandler
             throw new Exception("No active testset found");
 
         // ======================
-        // 5. CREATE SUBMISSION + JOB
+        // 5. GET RUNTIME BY LANGUAGE
+        // ======================
+        var runtime = await _runtimeRepo.FirstOrDefaultAsync(
+            new RuntimeByNameSpec(request.Language), ct);
+
+        if (runtime == null)
+            throw new Exception("LANGUAGE_NOT_SUPPORTED");
+
+        // ======================
+        // 6. CREATE SUBMISSION + JOB
         // ======================
         var submissionId = Guid.NewGuid();
         var judgeJobId = Guid.NewGuid();
@@ -144,6 +156,7 @@ public class SubmitContestCommandHandler
             ClassSlotId = request.ClassSlotId,
             TeamId = team.TeamId,
             SourceCode = request.Code,
+            RuntimeId = runtime.Id,
 
             StatusCode = "queued",
             VerdictCode = null,

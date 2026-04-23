@@ -1,6 +1,7 @@
 @baseUrl = https://localhost:7210
 @apiVersion = 2
-@problemId = a656debb-1523-4db8-a4e0-0085587d593d
+# @problemId = a656debb-1523-4db8-a4e0-0085587d593d
+@problemId = 7fdae111-ef83-4c98-a22d-c9eb0f83d7d7
 @originProblemId = a656debb-1523-4db8-a4e0-0085587d593d
 @codeTemplateId = 943e4001-62d2-4032-a181-b8a144bb3635
 @runtimeId = 892e81ee-989b-4578-a85a-ef4ed31c2564
@@ -231,18 +232,17 @@ Content-Type: application/json
 ### 8) GET PROBLEM TEMPLATES
 GET {{baseUrl}}/api/v{{apiVersion}}/ProblemTemplates/{{problemId}}/templates
 
-### 9) UPDATE PROBLEM TEMPLATE
+###
 PUT {{baseUrl}}/api/v{{apiVersion}}/ProblemTemplates/templates/{{codeTemplateId}}
 Authorization: Bearer {{authToken}}
 Content-Type: application/json
 
 {
-  "templateCode": "#include <bits/stdc++.h>\\nusing namespace std;\\n\\nclass Solution {\\npublic:\\n    int solve(vector<int>& a) {\\n        {{USER_CODE}}\\n    }\\n};\\n// updated",
-  "injectionPoint": "{{USER_CODE}}",
+  "templateCode": "#include <bits/stdc++.h>\\nusing namespace std;\\n\\nclass Solution {\\npublic:\\n    int solve(vector<int>& a) {\\n        __USER_CODE__\\n    }\\n};\\n// updated",
+  "injectionPoint": "__USER_CODEzzzzzzzzzz_-",
   "solutionSignature": "int solve(vector<int>& a)",
   "isActive": true
 }
-
 ### 10) DELETE PROBLEM TEMPLATE (soft delete)
 DELETE {{baseUrl}}/api/v{{apiVersion}}/ProblemTemplates/templates/{{codeTemplateId}}
 Authorization: Bearer {{authToken}}

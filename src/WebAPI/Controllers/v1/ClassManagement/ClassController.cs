@@ -13,6 +13,8 @@ using WebAPI.Models.Common;
 using Microsoft.AspNetCore.Http;
 using System.IO;
 using System.Linq;
+using MediatR;
+using Application.UseCases.ClassSlots.Queries;
 
 namespace WebAPI.Controllers.v1.ClassManagement;
 
@@ -24,11 +26,13 @@ public class ClassController : ControllerBase
 {
     private readonly TmojDbContext _db;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IMediator _mediator;
 
-    public ClassController(TmojDbContext db, IPasswordHasher passwordHasher)
+    public ClassController(TmojDbContext db, IPasswordHasher passwordHasher, IMediator mediator)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _mediator = mediator;
     }
 
     // ──────────────────────────────────────────
@@ -1983,6 +1987,38 @@ public class ClassController : ControllerBase
         catch (Exception)
         {
             return StatusCode(500, new { Message = "An error occurred while joining the contest." });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v{version}/class/{classId}/semester/{semesterId}/rankings
+    // Overall rankings across all class slots in semester
+    // ──────────────────────────────────────────
+    [HttpGet("{classId:guid}/semester/{semesterId:guid}/rankings")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetClassSemesterOverallRankings(
+        Guid classId,
+        Guid semesterId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(
+                new GetClassSemesterOverallRankingsQuery { ClassSemesterId = semesterId },
+                ct);
+
+            return Ok(ApiResponse<GetClassSemesterOverallRankingsResponse>.Ok(
+                result,
+                "Fetched class semester overall rankings successfully"
+            ));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Class semester not found." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred while fetching rankings." });
         }
     }
 

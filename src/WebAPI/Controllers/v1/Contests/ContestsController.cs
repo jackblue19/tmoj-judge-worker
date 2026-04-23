@@ -220,7 +220,7 @@ public class ContestsController : ControllerBase
     // =============================================
     // SUBMIT (🔥 KHÔNG BLOCK KHI FREEZE)
     // =============================================
-    [HttpPost("{contestId}/submit")]
+    [HttpPost("{contestId:guid}/submit")]
     [Authorize]
     public async Task<IActionResult> Submit(
         Guid contestId,

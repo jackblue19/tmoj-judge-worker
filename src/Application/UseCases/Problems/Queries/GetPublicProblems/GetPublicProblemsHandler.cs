@@ -3,17 +3,14 @@ using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Http;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.UseCases.Problems.Queries.GetPublicProblems;
 
 public sealed class GetPublicProblemsHandler
     : IRequestHandler<GetPublicProblemsQuery , ApiPagedResponse<PublicProblemListItemDto>>
 {
+    private const int MaxPageSize = 100;
+
     private readonly IReadRepository<Problem , Guid> _problemReadRepository;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
@@ -30,17 +27,25 @@ public sealed class GetPublicProblemsHandler
         CancellationToken ct)
     {
         var safePage = request.Page < 1 ? 1 : request.Page;
-        var safePageSize = request.PageSize < 1 ? 1 : request.PageSize;
+        var safePageSize = request.PageSize < 1 ? 20 : Math.Min(request.PageSize , MaxPageSize);
+
+        var normalizedSearch = string.IsNullOrWhiteSpace(request.Search)
+            ? null
+            : request.Search.Trim();
+
+        var normalizedDifficulty = string.IsNullOrWhiteSpace(request.Difficulty)
+            ? null
+            : request.Difficulty.Trim().ToLowerInvariant();
 
         var countSpec = new PublicProblemsCountSpec(
-            request.Search ,
-            request.Difficulty);
+            normalizedSearch ,
+            normalizedDifficulty);
 
         var listSpec = new PublicProblemsPagedSpec(
             safePage ,
             safePageSize ,
-            request.Search ,
-            request.Difficulty);
+            normalizedSearch ,
+            normalizedDifficulty);
 
         var pagedResult = await _problemReadRepository.PageAsync(
             countSpec ,

@@ -1,4 +1,5 @@
 ﻿using Application.Common.Pagination;
+using Application.UseCases.Problems.Commands.CreateInPlanProblem;
 using Application.UseCases.Problems.Commands.CreateProblem;
 using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Queries.GetPublicProblems;
@@ -39,18 +40,18 @@ public class StudyPlansController : ControllerBase
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> Create(
-        [FromBody] CreateStudyPlanCommand command,
+        [FromBody] CreateStudyPlanCommand command ,
         CancellationToken ct)
     {
         try
         {
-            var id = await _mediator.Send(command, ct);
+            var id = await _mediator.Send(command , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                new { studyPlanId = id },
+                new { studyPlanId = id } ,
                 "Study plan created successfully"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -62,23 +63,23 @@ public class StudyPlansController : ControllerBase
     [HttpPost("{planId:guid}/problems/{problemId:guid}")]
     [Authorize]
     public async Task<IActionResult> AddProblem(
-        Guid planId,
-        Guid problemId,
+        Guid planId ,
+        Guid problemId ,
         CancellationToken ct)
     {
         try
         {
             await _mediator.Send(new AddProblemToPlanCommand
             {
-                StudyPlanId = planId,
+                StudyPlanId = planId ,
                 ProblemId = problemId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                true,
+                true ,
                 "Problem added to study plan"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -89,20 +90,20 @@ public class StudyPlansController : ControllerBase
     // =========================
     [HttpPost("{planId:guid}/buy")]
     [Authorize]
-    public async Task<IActionResult> Buy(Guid planId, CancellationToken ct)
+    public async Task<IActionResult> Buy(Guid planId , CancellationToken ct)
     {
         try
         {
             await _mediator.Send(new BuyStudyPlanCommand
             {
                 StudyPlanId = planId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                true,
+                true ,
                 "Buy success (coin deducted / access granted)"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -113,20 +114,20 @@ public class StudyPlansController : ControllerBase
     // =========================
     [HttpPost("{planId:guid}/enroll")]
     [Authorize]
-    public async Task<IActionResult> Enroll(Guid planId, CancellationToken ct)
+    public async Task<IActionResult> Enroll(Guid planId , CancellationToken ct)
     {
         try
         {
             await _mediator.Send(new EnrollStudyPlanCommand
             {
                 StudyPlanId = planId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                true,
+                true ,
                 "Enrolled successfully"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -143,7 +144,7 @@ public class StudyPlansController : ControllerBase
         {
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
-            if (string.IsNullOrEmpty(userIdStr))
+            if ( string.IsNullOrEmpty(userIdStr) )
                 return Unauthorized();
 
             var userId = Guid.Parse(userIdStr);
@@ -151,13 +152,13 @@ public class StudyPlansController : ControllerBase
             var result = await _mediator.Send(new GetUnlockedPlansQuery
             {
                 UserId = userId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                result,
+                result ,
                 "Fetched unlocked plans"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -168,20 +169,20 @@ public class StudyPlansController : ControllerBase
     // =========================
     [HttpGet("{id:guid}")]
     [Authorize]
-    public async Task<IActionResult> GetDetail(Guid id, CancellationToken ct)
+    public async Task<IActionResult> GetDetail(Guid id , CancellationToken ct)
     {
         try
         {
             var result = await _mediator.Send(new GetStudyPlanDetailQuery
             {
                 StudyPlanId = id
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                result,
+                result ,
                 "Fetched study plan detail"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -193,23 +194,23 @@ public class StudyPlansController : ControllerBase
     [HttpGet("{planId:guid}/next/{itemId:guid}")]
     [Authorize]
     public async Task<IActionResult> GetNext(
-        Guid planId,
-        Guid itemId,
+        Guid planId ,
+        Guid itemId ,
         CancellationToken ct)
     {
         try
         {
             var result = await _mediator.Send(new GetNextStudyPlanItemQuery
             {
-                StudyPlanId = planId,
+                StudyPlanId = planId ,
                 StudyPlanItemId = itemId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                result,
+                result ,
                 "Fetched next item"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -220,20 +221,20 @@ public class StudyPlansController : ControllerBase
     // =========================
     [HttpGet("{planId:guid}/enrollment")]
     [Authorize]
-    public async Task<IActionResult> GetEnrollment(Guid planId, CancellationToken ct)
+    public async Task<IActionResult> GetEnrollment(Guid planId , CancellationToken ct)
     {
         try
         {
             var result = await _mediator.Send(new GetStudyPlanEnrollmentQuery
             {
                 StudyPlanId = planId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                result,
+                result ,
                 "Fetched enrollment info"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -244,20 +245,20 @@ public class StudyPlansController : ControllerBase
     // =========================
     [HttpGet("{planId:guid}/stats")]
     [Authorize]
-    public async Task<IActionResult> GetStats(Guid planId, CancellationToken ct)
+    public async Task<IActionResult> GetStats(Guid planId , CancellationToken ct)
     {
         try
         {
             var result = await _mediator.Send(new GetStudyPlanStatsQuery
             {
                 StudyPlanId = planId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                result,
+                result ,
                 "Fetched stats"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -268,20 +269,20 @@ public class StudyPlansController : ControllerBase
     // =========================
     [HttpGet]
     [Authorize]
-    public async Task<IActionResult> GetAll([FromQuery] Guid? creatorId, CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] Guid? creatorId , CancellationToken ct)
     {
         try
         {
             var result = await _mediator.Send(new GetStudyPlansQuery
             {
                 CreatorId = creatorId
-            }, ct);
+            } , ct);
 
             return Ok(ApiResponse<object>.Ok(
-                result,
+                result ,
                 "Fetched study plans"));
         }
-        catch (Exception ex)
+        catch ( Exception ex )
         {
             return BadRequest(new { message = ex.Message });
         }
@@ -294,32 +295,31 @@ public class StudyPlansController : ControllerBase
     [HttpPost("/problem/in-plan")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
-    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> Create(
-       [FromForm] UpsertProblemContentRequestDto request,
-       CancellationToken ct)
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> CreateInPlan(
+    [FromForm] UpsertProblemContentRequestDto request ,
+    CancellationToken ct)
     {
         var result = await _mediator.Send(
-            new CreateProblemCommand(
-                request.Title,
-                request.Slug,
-                request.Difficulty,
-                request.TypeCode,
-                "in-plan",
-                 request.ScoringCode,
-                request.StatusCode,
-                request.TimeLimitMs,
-                request.MemoryLimitKb,
-                request.DescriptionMd,
-                request.StatementFile,
-                request.TagIds),
+            new CreateInPlanProblemCommand(
+                request.Title ,
+                request.Slug ,
+                request.Difficulty ,
+                request.TypeCode ,
+                request.ScoringCode ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.DescriptionMd ,
+                request.StatementFile ,
+                request.TagIds ,
+                request.ProblemMode) ,
             ct);
 
         return CreatedAtAction(
-            nameof(GetDetail),
-            new { problemId = result.Id },
+            nameof(GetDetail) ,
+            new { problemId = result.Id } ,
             ApiResponse<ProblemDetailDto>.Ok(
-                result,
-                "Problem created successfully.",
+                result ,
+                "In-plan problem created successfully." ,
                 HttpContext.TraceIdentifier));
     }
 }

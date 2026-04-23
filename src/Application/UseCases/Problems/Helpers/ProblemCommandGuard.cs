@@ -1,4 +1,5 @@
 ﻿using Application.UseCases.Problems.Constants;
+using Domain.Constants;
 using Microsoft.AspNetCore.Http;
 using System.Text;
 
@@ -37,19 +38,19 @@ internal static class ProblemCommandGuard
         using var reader = new StreamReader(stream , Encoding.UTF8 , detectEncodingFromByteOrderMarks: true);
         return await reader.ReadToEndAsync(ct);
     }
-
-    public static string NormalizeStatusCode(string? statusCode)
+    public static string? NormalizeVisibilityCode(string? visibilityCode)
     {
-        var normalized = statusCode?.Trim().ToLowerInvariant();
+        var normalized = visibilityCode?.Trim().ToLowerInvariant();
 
         return normalized switch
         {
-            null or "" => ProblemStatusCodes.Draft,
-            "draft" => "draft",
-            "pending" => "pending",
-            "published" => "published",
-            "archived" => "archived",
-            _ => throw new ArgumentException("Invalid status code. Allowed values: draft, pending, published, archived.")
+            null or "" => null,
+            "public" => "public",
+            "private" => "private",
+            "in-class" => "in-class",
+            "in-bank" => "in-bank",
+            "in-plan" => "in-plan",
+            _ => throw new ArgumentException("Invalid visibility code. Allowed values: public, private, in-class, in-bank, in-plan.")
         };
     }
 
@@ -67,18 +68,16 @@ internal static class ProblemCommandGuard
         };
     }
 
-    public static string? NormalizeVisibilityCode(string? visibilityCode)
+    public static string NormalizeProblemMode(string? problemMode)
     {
-        var normalized = visibilityCode?.Trim().ToLowerInvariant();
+        var normalized = problemMode?.Trim().ToLowerInvariant();
 
         return normalized switch
         {
-            null or "" => null,
-            "public" => "public",
-            "private" => "private",
-            "in-class" => "in-class",
-            "in-bank" => "in-bank",
-            _ => throw new ArgumentException("Invalid visibility code. Allowed values: public, private, in-class, in-bank.")
+            null or "" => ProblemModeCodes.Pro,
+            ProblemModeCodes.Amateur => ProblemModeCodes.Amateur,
+            ProblemModeCodes.Pro => ProblemModeCodes.Pro,
+            _ => throw new ArgumentException("Invalid problem mode. Allowed values: amateur, pro.")
         };
     }
 

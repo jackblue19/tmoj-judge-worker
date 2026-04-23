@@ -1,12 +1,16 @@
-﻿using Ardalis.Specification;
-using Application.UseCases.Problems.Dtos;
+﻿using Application.UseCases.Problems.Dtos;
+using Ardalis.Specification;
 using Domain.Entities;
 
 namespace Application.UseCases.Problems.Queries.GetPublicProblems;
 
 public sealed class PublicProblemsPagedSpec : Specification<Problem , PublicProblemListItemDto>
 {
-    public PublicProblemsPagedSpec(int page , int pageSize , string? search , string? difficulty)
+    public PublicProblemsPagedSpec(
+        int page ,
+        int pageSize ,
+        string? search ,
+        string? difficulty)
     {
         Query.Where(x =>
             x.IsActive &&
@@ -15,50 +19,59 @@ public sealed class PublicProblemsPagedSpec : Specification<Problem , PublicProb
 
         if ( !string.IsNullOrWhiteSpace(search) )
         {
-            var keyword = search.Trim();
+            var keyword = search.Trim().ToLower();
+
             Query.Where(x =>
-                x.Title.Contains(keyword) ||
-                (x.Slug != null && x.Slug.Contains(keyword)));
+                (x.Title != null && x.Title.ToLower().Contains(keyword)) ||
+                (x.Slug != null && x.Slug.ToLower().Contains(keyword)));
         }
 
         if ( !string.IsNullOrWhiteSpace(difficulty) )
         {
-            var normalizedDifficulty = difficulty.Trim();
-            Query.Where(x => x.Difficulty == normalizedDifficulty);
+            Query.Where(x => x.Difficulty == difficulty);
         }
 
-        Query.OrderBy(x => x.DisplayIndex ?? int.MaxValue)
-             .ThenBy(x => x.Title)
-             .Skip((page - 1) * pageSize)
-             .Take(pageSize);
+        Query
+            .OrderBy(x => x.DisplayIndex ?? int.MaxValue)
+            .ThenBy(x => x.Title)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize);
 
         Query.Select(x => new PublicProblemListItemDto
         {
             Id = x.Id ,
             Slug = x.Slug ?? string.Empty ,
             Title = x.Title ,
+
             Difficulty = x.Difficulty ,
             TypeCode = x.TypeCode ,
             VisibilityCode = x.VisibilityCode ,
             ScoringCode = x.ScoringCode ,
+
+            ProblemMode = x.ProblemMode ,
+            ProblemSource = x.ProblemSource ,
+
             AcceptancePercent = x.AcceptancePercent ,
             TimeLimitMs = x.TimeLimitMs ,
             MemoryLimitKb = x.MemoryLimitKb ,
             DisplayIndex = x.DisplayIndex ,
             PublishedAt = x.PublishedAt ,
+
             Tags = x.Tags
-                .OrderBy(t => t.Name)
-                .Select(t => new ProblemTagDto
-                {
-                    Id = t.Id ,
-                    Name = t.Name ,
-                    Slug = t.Slug ,
-                    Description = t.Description ,
-                    Color = t.Color ,
-                    Icon = t.Icon ,
-                    IsActive = t.IsActive
-                })
-                .ToList()
-        });
+                    .Where(t => t.IsActive)
+                    .OrderBy(t => t.Name)
+                    .Select(t => new ProblemTagDto
+                    {
+                        Id = t.Id ,
+                        Name = t.Name ,
+                        Slug = t.Slug ,
+                        Description = t.Description ,
+                        Color = t.Color ,
+                        Icon = t.Icon ,
+                        IsActive = t.IsActive
+                    })
+                    .ToList()
+        })
+            .AsNoTracking();
     }
 }

@@ -51,33 +51,46 @@ public static class ProblemDtoMappings
             Id = problem.Id ,
             Title = problem.Title ,
             Slug = problem.Slug ,
+
             StatusCode = problem.StatusCode ,
             Difficulty = problem.Difficulty ,
             TypeCode = problem.TypeCode ,
             VisibilityCode = problem.VisibilityCode ,
             ScoringCode = problem.ScoringCode ,
+
+            ProblemMode = problem.ProblemMode ,
+            ProblemSource = problem.ProblemSource ,
+            UsedCount = problem.UsedCount ,
+            OriginId = problem.OriginId ,
+
             DescriptionMd = problem.DescriptionMd ,
             AcceptancePercent = problem.AcceptancePercent ,
             DisplayIndex = problem.DisplayIndex ,
             TimeLimitMs = problem.TimeLimitMs ,
             MemoryLimitKb = problem.MemoryLimitKb ,
+
             IsActive = problem.IsActive ,
+
             CreatedAt = problem.CreatedAt ,
             CreatedBy = problem.CreatedBy ,
             UpdatedAt = problem.UpdatedAt ,
             UpdatedBy = problem.UpdatedBy ,
+
             ApprovedByUserId = problem.ApprovedByUserId ,
             ApprovedAt = problem.ApprovedAt ,
             PublishedAt = problem.PublishedAt ,
+
             StatementSourceCode = problem.StatementSourceCode ,
             StatementContentType = problem.StatementContentType ,
             StatementFileName = problem.StatementFileName ,
             StatementAccessUrl = statementAccessUrl ,
+
             PrimaryTestsetId = problem.Testsets
                 .Where(x => x.IsActive)
                 .OrderBy(x => x.CreatedAt)
                 .Select(x => (Guid?) x.Id)
                 .FirstOrDefault() ,
+
             Tags = problem.Tags
                 .OrderBy(x => x.Name)
                 .Select(x => x.ToDto())

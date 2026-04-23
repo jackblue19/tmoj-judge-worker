@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Payments.Commands.CreateVnPayPayment;
 using Application.UseCases.Payments.Commands.VnPayCallback;
 using Application.UseCases.Payments.Dtos;
@@ -99,5 +99,65 @@ public class PaymentsController : ControllerBase
     {
         var result = await _mediator.Send(new GetConversionRateQuery());
         return Ok(result);
+    }
+
+    // =========================
+    // HISTORY
+    // =========================
+    [HttpGet("history/me")]
+    public async Task<IActionResult> GetMyHistory(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId == null)
+            return Unauthorized("User chưa đăng nhập");
+
+        var result = await _mediator.Send(new Application.UseCases.Payments.Queries.GetMyPaymentHistory.GetMyPaymentHistoryQuery
+        {
+            UserId = _currentUser.UserId.Value,
+            Page = page,
+            PageSize = pageSize
+        });
+
+        return Ok(new
+        {
+            data = result.Items,
+            pagination = new
+            {
+                totalItems = result.TotalItems,
+                totalPages = result.TotalPages,
+                page = result.Page,
+                pageSize = result.PageSize
+            },
+            message = "Get my payment history successfully",
+            traceId = HttpContext.TraceIdentifier
+        });
+    }
+
+    [HttpGet("history/admin")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetAdminHistory(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        var result = await _mediator.Send(new Application.UseCases.Payments.Queries.GetAllPaymentHistory.GetAllPaymentHistoryQuery
+        {
+            Page = page,
+            PageSize = pageSize
+        });
+
+        return Ok(new
+        {
+            data = result.Items,
+            pagination = new
+            {
+                totalItems = result.TotalItems,
+                totalPages = result.TotalPages,
+                page = result.Page,
+                pageSize = result.PageSize
+            },
+            message = "Get all payment history successfully",
+            traceId = HttpContext.TraceIdentifier
+        });
     }
 }

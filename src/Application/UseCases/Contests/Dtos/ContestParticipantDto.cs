@@ -11,6 +11,7 @@ public class ContestParticipantTeamDto
 {
     public Guid TeamId { get; set; }
     public string TeamName { get; set; } = null!;
+    public string? TeamAvatarUrl { get; set; }
     public bool IsPersonal { get; set; }
     public Guid LeaderId { get; set; }
     public DateTime JoinAt { get; set; }

@@ -120,6 +120,14 @@ public class GamificationController : ControllerBase
     // BADGE MANAGEMENT (ADMIN)
     // =====================================================
 
+    [HttpGet("badges/all")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetAllBadges(CancellationToken ct)
+    {
+        return Ok(await _mediator.Send(
+            new Application.UseCases.Gamification.Queries.GetAllBadges.GetAllBadgesQuery(), ct));
+    }
+
     [HttpPost("badges")]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> CreateBadge(

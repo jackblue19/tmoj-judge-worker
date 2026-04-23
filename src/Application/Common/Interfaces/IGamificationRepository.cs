@@ -14,6 +14,7 @@ public interface IGamificationRepository
     // BADGES
     // =========================
     Task<List<UserBadge>> GetUserBadgesAsync(Guid userId);
+    Task<List<Badge>> GetAllBadgesAsync();
 
     Task<Guid> CreateBadgeAsync(Badge badge);
     Task<bool> ExistsBadgeCodeAsync(string badgeCode);

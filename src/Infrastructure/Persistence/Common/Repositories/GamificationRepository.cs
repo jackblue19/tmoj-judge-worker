@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Gamification.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -173,6 +173,52 @@ public class GamificationRepository : IGamificationRepository
             .ToListAsync();
     }
 
+    public async Task<List<(string ProblemTitle, string Difficulty, DateTime SolvedAt)>> GetSolvedProblemHistoryAsync(Guid userId)
+    {
+        var data = await _db.Set<UserProblemStat>()
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.Solved)
+            .Join(
+                _db.Set<Problem>(),
+                ups => ups.ProblemId,
+                p => p.Id,
+                (ups, p) => new
+                {
+                    ProblemTitle = p.Title,
+                    Difficulty = p.Difficulty ?? "unknown",
+                    SolvedAt = ups.LastSubmissionAt ?? DateTime.MinValue
+                }
+            )
+            .OrderByDescending(x => x.SolvedAt)
+            .ToListAsync();
+
+        return data
+            .Select(x => (x.ProblemTitle, x.Difficulty, x.SolvedAt))
+            .ToList();
+    }
+
+    public async Task<List<(string ContestTitle, int Rank, DateTime JoinAt)>> GetContestResultHistoryAsync(Guid userId)
+    {
+        var data = await _db.Set<ContestTeam>()
+            .AsNoTracking()
+            .Include(ct => ct.Contest)
+            .Include(ct => ct.Team)
+                .ThenInclude(t => t.TeamMembers)
+            .Where(ct => ct.Team.TeamMembers.Any(tm => tm.UserId == userId))
+            .OrderByDescending(ct => ct.JoinAt)
+            .Select(ct => new
+            {
+                ContestTitle = ct.Contest.Title,
+                Rank = ct.Rank ?? 0,
+                JoinAt = ct.JoinAt
+            })
+            .ToListAsync();
+
+        return data
+            .Select(x => (x.ContestTitle, x.Rank, x.JoinAt))
+            .ToList();
+    }
+
     // =========================
     // 🔥 LEADERBOARD (FIX EF)
     // =========================
@@ -277,5 +323,90 @@ public class GamificationRepository : IGamificationRepository
         }
 
         return result;
+    }
+
+    // =========================
+    // DAILY ACTIVITIES
+    // =========================
+    public async Task<List<DailyActivityRaw>> GetDailyActivitiesAsync(Guid userId, int year)
+    {
+        var startDate = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var endDate = new DateTime(year + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        // 1) Submissions
+        var submissionDates = await _db.Submissions
+            .AsNoTracking()
+            .Where(x => x.UserId == userId
+                && x.CreatedAt >= startDate
+                && x.CreatedAt < endDate)
+            .Select(x => x.CreatedAt.Date)
+            .ToListAsync();
+
+        // 2) UserSessions (login)
+        var sessionDates = await _db.UserSessions
+            .AsNoTracking()
+            .Where(x => x.UserId == userId
+                && x.CreatedAt >= startDate
+                && x.CreatedAt < endDate)
+            .Select(x => x.CreatedAt.Date)
+            .ToListAsync();
+
+        // 3) Contest participation (via ContestTeams → TeamMembers)
+        var contestDates = await _db.Set<ContestTeam>()
+            .AsNoTracking()
+            .Include(ct => ct.Team)
+                .ThenInclude(t => t.TeamMembers)
+            .Where(ct => ct.Team.TeamMembers.Any(tm => tm.UserId == userId)
+                && ct.JoinAt >= startDate
+                && ct.JoinAt < endDate)
+            .Select(ct => ct.JoinAt.Date)
+            .ToListAsync();
+
+        // Union all + group by date
+        var allDates = submissionDates
+            .Concat(sessionDates)
+            .Concat(contestDates);
+
+        var grouped = allDates
+            .GroupBy(d => DateOnly.FromDateTime(d))
+            .Select(g => new DailyActivityRaw(g.Key, g.Count()))
+            .OrderBy(x => x.Date)
+            .ToList();
+
+        return grouped;
+    }
+
+    // =========================
+    // DIFFICULTY STATS
+    // =========================
+    public async Task<Dictionary<string, int>> GetSolvedCountByDifficultyAsync(Guid userId)
+    {
+        var result = await _db.Set<UserProblemStat>()
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.Solved)
+            .Join(
+                _db.Set<Problem>(),
+                ups => ups.ProblemId,
+                p => p.Id,
+                (ups, p) => p.Difficulty
+            )
+            .Where(d => d != null)
+            .GroupBy(d => d!)
+            .Select(g => new { Difficulty = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        return result.ToDictionary(x => x.Difficulty, x => x.Count);
+    }
+
+    public async Task<Dictionary<string, int>> GetProblemCountByDifficultyAsync()
+    {
+        var result = await _db.Set<Problem>()
+            .AsNoTracking()
+            .Where(p => p.IsActive && p.Difficulty != null)
+            .GroupBy(p => p.Difficulty!)
+            .Select(g => new { Difficulty = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        return result.ToDictionary(x => x.Difficulty, x => x.Count);
     }
 }

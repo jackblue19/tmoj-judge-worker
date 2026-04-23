@@ -26,7 +26,7 @@ public class CreateBadgeRuleHandler : IRequestHandler<CreateBadgeRuleCommand, Gu
 
     public async Task<Guid> Handle(CreateBadgeRuleCommand request, CancellationToken ct)
     {
-        if (!_currentUser.IsInRole("Admin"))
+        if (!_currentUser.IsInRole("admin"))
             throw new UnauthorizedAccessException();
 
         if (!RuleTypes.Contains(request.RuleType))

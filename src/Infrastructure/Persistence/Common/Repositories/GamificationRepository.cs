@@ -146,6 +146,7 @@ public class GamificationRepository : IGamificationRepository
     {
         return await _db.Set<BadgeRule>()
             .AsNoTracking()
+            .Include(x => x.Badge)
             .Where(x => x.IsActive)
             .ToListAsync();
     }

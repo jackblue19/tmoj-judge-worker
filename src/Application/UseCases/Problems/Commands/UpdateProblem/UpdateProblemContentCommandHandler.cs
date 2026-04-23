@@ -57,27 +57,29 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
         if ( slugExists )
             throw new InvalidOperationException($"Problem slug '{slug}' already exists.");
 
-        var statusCode = ProblemCommandGuard.NormalizeStatusCode(request.StatusCode);
         var difficulty = ProblemCommandGuard.NormalizeDifficulty(request.Difficulty);
-        var visibilityCode = ProblemCommandGuard.NormalizeVisibilityCode(request.VisibilityCode);
+        var problemMode = ProblemCommandGuard.NormalizeProblemMode(request.ProblemMode);
         var normalizedTagIds = ProblemCommandGuard.NormalizeTagIds(request.TagIds);
 
         var now = DateTime.UtcNow;
 
+        // hardcode backend-owned fields
+        problem.VisibilityCode = "public";
+        problem.StatusCode = "published";
+        problem.PublishedAt = problem.PublishedAt ?? now;
+
+        // editable fields
         problem.Title = title!;
         problem.Slug = slug!;
         problem.Difficulty = difficulty;
         problem.TypeCode = request.TypeCode?.Trim();
-        problem.VisibilityCode = visibilityCode;
         problem.ScoringCode = request.ScoringCode?.Trim();
-        problem.StatusCode = statusCode;
         problem.TimeLimitMs = request.TimeLimitMs;
         problem.MemoryLimitKb = request.MemoryLimitKb;
+        problem.ProblemMode = problemMode;
+
         problem.UpdatedAt = now;
         problem.UpdatedBy = _currentUser.UserId.Value;
-        problem.PublishedAt = statusCode == "published"
-            ? problem.PublishedAt ?? now
-            : null;
 
         try
         {
@@ -102,24 +104,47 @@ public sealed class UpdateProblemContentCommandHandler : IRequestHandler<UpdateP
                 }
                 else
                 {
-                    var fileId = Guid.NewGuid();
+                    if ( problem.StatementFileId is Guid existingFileId )
+                    {
+                        await using var replaceStream = request.StatementFile.OpenReadStream();
 
-                    await using var stream = request.StatementFile.OpenReadStream();
-                    await _r2Service.UploadAsync(
-                        type: "Problem" ,
-                        id: fileId ,
-                        fileExtension: ext ,
-                        fileStream: stream ,
-                        contentType: contentType ,
-                        cancellationToken: ct);
+                        await _r2Service.ReplaceIfExistsAsync(
+                            type: "Problem" ,
+                            id: existingFileId ,
+                            fileExtension: ext ,
+                            fileStream: replaceStream ,
+                            contentType: contentType ,
+                            cancellationToken: ct);
 
-                    problem.DescriptionMd = null;
-                    problem.StatementSourceCode = sourceCode; // r2_pdf
-                    problem.StatementFileId = fileId;
-                    problem.StatementFileName = normalizedStatementFileName;
-                    problem.StatementContentType = contentType;
-                    problem.StatementExtension = ext;
-                    problem.StatementUploadedAt = now;
+                        problem.DescriptionMd = null;
+                        problem.StatementSourceCode = sourceCode;
+                        problem.StatementFileId = existingFileId;
+                        problem.StatementFileName = normalizedStatementFileName;
+                        problem.StatementContentType = contentType;
+                        problem.StatementExtension = ext;
+                        problem.StatementUploadedAt = now;
+                    }
+                    else
+                    {
+                        var fileId = Guid.NewGuid();
+
+                        await using var stream = request.StatementFile.OpenReadStream();
+                        await _r2Service.UploadAsync(
+                            type: "Problem" ,
+                            id: fileId ,
+                            fileExtension: ext ,
+                            fileStream: stream ,
+                            contentType: contentType ,
+                            cancellationToken: ct);
+
+                        problem.DescriptionMd = null;
+                        problem.StatementSourceCode = sourceCode;
+                        problem.StatementFileId = fileId;
+                        problem.StatementFileName = normalizedStatementFileName;
+                        problem.StatementContentType = contentType;
+                        problem.StatementExtension = ext;
+                        problem.StatementUploadedAt = now;
+                    }
                 }
             }
             else

@@ -27,7 +27,8 @@ public sealed class GetProblemDetailQueryHandler
         CancellationToken ct)
     {
         var publicResult = await _readRepository.FirstOrDefaultAsync(
-            new ProblemPublicDetailSpec(request.ProblemId) , ct);
+            new ProblemPublicDetailSpec(request.ProblemId) ,
+            ct);
 
         if ( publicResult is not null )
             return publicResult;
@@ -37,8 +38,7 @@ public sealed class GetProblemDetailQueryHandler
 
         var currentUserId = _currentUser.UserId.Value;
 
-        var isAdmin = Roles.AdminRoles
-            .Any(role => _currentUser.IsInRole(role));
+        var isAdmin = Roles.AdminRoles.Any(role => _currentUser.IsInRole(role));
 
         var managementResult = await _readRepository.FirstOrDefaultAsync(
             new ProblemManagementDetailSpec(

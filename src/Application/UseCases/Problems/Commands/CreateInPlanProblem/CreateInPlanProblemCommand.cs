@@ -2,9 +2,9 @@
 using MediatR;
 using Microsoft.AspNetCore.Http;
 
-namespace Application.UseCases.Problems.Commands.CreateProblem;
+namespace Application.UseCases.Problems.Commands.CreateInPlanProblem;
 
-public sealed record CreateProblemCommand(
+public sealed record CreateInPlanProblemCommand(
     string Title ,
     string Slug ,
     string? Difficulty ,

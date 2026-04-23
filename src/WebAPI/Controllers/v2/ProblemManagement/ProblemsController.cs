@@ -44,14 +44,13 @@ public class ProblemsController : ControllerBase
                 request.Slug ,
                 request.Difficulty ,
                 request.TypeCode ,
-                request.VisibilityCode ,
                 request.ScoringCode ,
-                request.StatusCode ,
                 request.TimeLimitMs ,
                 request.MemoryLimitKb ,
                 request.DescriptionMd ,
                 request.StatementFile ,
-                request.TagIds) ,
+                request.TagIds ,
+                request.ProblemMode) ,
             ct);
 
         return CreatedAtAction(
@@ -63,7 +62,9 @@ public class ProblemsController : ControllerBase
                 HttpContext.TraceIdentifier));
     }
 
+
     // GET PROBLEM DETAIL
+    [AllowAnonymous]
     [HttpGet("{problemId:guid}")]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> GetDetail(Guid problemId , CancellationToken ct)
     {
@@ -102,7 +103,6 @@ public class ProblemsController : ControllerBase
 
     // UPDATE PROBLEM
     [Authorize(Roles = "admin,manager,teacher")]
-    //[Authorize]
     [HttpPut("{problemId:guid}/content")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
@@ -118,14 +118,13 @@ public class ProblemsController : ControllerBase
                 request.Slug ,
                 request.Difficulty ,
                 request.TypeCode ,
-                request.VisibilityCode ,
                 request.ScoringCode ,
-                request.StatusCode ,
                 request.TimeLimitMs ,
                 request.MemoryLimitKb ,
                 request.DescriptionMd ,
                 request.StatementFile ,
-                request.TagIds) ,
+                request.TagIds ,
+                request.ProblemMode) ,
             ct);
 
         return Ok(
@@ -218,6 +217,7 @@ public class ProblemsController : ControllerBase
     }
 
     // GET ALL PUBLIC PROBLEMS
+    // GET ALL PUBLIC PROBLEMS
     [HttpGet("public")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ApiPagedResponse<PublicProblemListItemDto>) , StatusCodes.Status200OK)]
@@ -261,7 +261,7 @@ public class ProblemsController : ControllerBase
     }
 
     //  create draft => for student
-    [Authorize]
+    /*[Authorize]
     [HttpPost("drafts")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
@@ -292,5 +292,5 @@ public class ProblemsController : ControllerBase
                 result ,
                 "Problem draft created successfully." ,
                 HttpContext.TraceIdentifier));
-    }
+    }*/
 }

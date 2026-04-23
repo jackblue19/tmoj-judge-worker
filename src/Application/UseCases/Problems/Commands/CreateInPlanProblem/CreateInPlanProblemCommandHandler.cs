@@ -10,24 +10,25 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace Application.UseCases.Problems.Commands.CreateProblem;
+namespace Application.UseCases.Problems.Commands.CreateInPlanProblem;
 
-public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemCommand , ProblemDetailDto>
+public sealed class CreateInPlanProblemCommandHandler
+    : IRequestHandler<CreateInPlanProblemCommand , ProblemDetailDto>
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IProblemRepository _problemRepository;
     private readonly IWriteRepository<Problem , Guid> _problemWriteRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IR2Service _r2Service;
-    private readonly ILogger<CreateProblemCommandHandler> _logger;
+    private readonly ILogger<CreateInPlanProblemCommandHandler> _logger;
 
-    public CreateProblemCommandHandler(
+    public CreateInPlanProblemCommandHandler(
         ICurrentUserService currentUser ,
         IProblemRepository problemRepository ,
         IWriteRepository<Problem , Guid> problemWriteRepository ,
         IUnitOfWork unitOfWork ,
         IR2Service r2Service ,
-        ILogger<CreateProblemCommandHandler> logger)
+        ILogger<CreateInPlanProblemCommandHandler> logger)
     {
         _currentUser = currentUser;
         _problemRepository = problemRepository;
@@ -37,7 +38,7 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
         _logger = logger;
     }
 
-    public async Task<ProblemDetailDto> Handle(CreateProblemCommand request , CancellationToken ct)
+    public async Task<ProblemDetailDto> Handle(CreateInPlanProblemCommand request , CancellationToken ct)
     {
         if ( !_currentUser.IsAuthenticated || _currentUser.UserId is null )
             throw new UnauthorizedAccessException("User is not authenticated.");
@@ -54,14 +55,8 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
         ProblemCommandGuard.ValidateStatementInput(request.DescriptionMd , request.StatementFile);
 
         var difficulty = ProblemCommandGuard.NormalizeDifficulty(request.Difficulty);
+        var problemMode = ProblemCommandGuard.NormalizeProblemMode(request.ProblemMode);
         var normalizedTagIds = ProblemCommandGuard.NormalizeTagIds(request.TagIds);
-
-        // hardcode backend
-        const string visibilityCode = "public";
-        const string statusCode = "published";
-
-        var problemMode = NormalizeProblemMode(request.ProblemMode);
-        var problemSource = ProblemSourceCodes.Origin;
 
         var slugExists = await _problemRepository.SlugExistsAsync(slug! , null , ct);
         if ( slugExists )
@@ -75,19 +70,18 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
             Title = title! ,
             Slug = slug! ,
             Difficulty = difficulty ,
-            StatusCode = statusCode ,
             TypeCode = request.TypeCode?.Trim() ,
-            VisibilityCode = visibilityCode ,
+            VisibilityCode = "in-plan" ,
             ScoringCode = request.ScoringCode?.Trim() ,
-            TimeLimitMs = request.TimeLimitMs ,
-            MemoryLimitKb = request.MemoryLimitKb ,
+            StatusCode = "published" ,
 
-            // new fields
             ProblemMode = problemMode ,
-            ProblemSource = problemSource ,
+            ProblemSource = ProblemSourceCodes.Origin ,
             UsedCount = 0 ,
             OriginId = null ,
 
+            TimeLimitMs = request.TimeLimitMs ,
+            MemoryLimitKb = request.MemoryLimitKb ,
             PublishedAt = now ,
             IsActive = true ,
             CreatedAt = now ,
@@ -171,38 +165,23 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
         }
         catch ( OperationCanceledException )
         {
-            _logger.LogWarning("Create problem was cancelled. ProblemId={ProblemId}" , entity.Id);
+            _logger.LogWarning("Create in-plan problem was cancelled. ProblemId={ProblemId}" , entity.Id);
             throw;
         }
         catch ( DbUpdateException ex )
         {
-            _logger.LogError(ex , "Database update failed while creating problem. Slug={Slug}" , slug);
-            throw new InvalidOperationException("Failed to save problem. Please verify input data and try again.");
+            _logger.LogError(ex , "Database update failed while creating in-plan problem. Slug={Slug}" , slug);
+            throw new InvalidOperationException("Failed to save in-plan problem. Please verify input data and try again.");
         }
         catch ( IOException ex )
         {
-            _logger.LogError(ex , "I/O error while handling statement for problem. Slug={Slug}" , slug);
+            _logger.LogError(ex , "I/O error while handling statement for in-plan problem. Slug={Slug}" , slug);
             throw new InvalidOperationException("Failed to process statement file. Please try again.");
         }
         catch ( Exception ex ) when ( ex is not ArgumentException and not InvalidOperationException and not KeyNotFoundException and not UnauthorizedAccessException )
         {
-            _logger.LogError(ex , "Unexpected error while creating problem. Slug={Slug}" , slug);
-            throw new InvalidOperationException("Unexpected error occurred while creating problem.");
+            _logger.LogError(ex , "Unexpected error while creating in-plan problem. Slug={Slug}" , slug);
+            throw new InvalidOperationException("Unexpected error occurred while creating in-plan problem.");
         }
-    }
-
-    private static string NormalizeProblemMode(string? value)
-    {
-        var normalized = value?.Trim().ToLowerInvariant();
-
-        if ( string.IsNullOrWhiteSpace(normalized) )
-            return ProblemModeCodes.Pro;
-
-        return normalized switch
-        {
-            ProblemModeCodes.Amateur => ProblemModeCodes.Amateur,
-            ProblemModeCodes.Pro => ProblemModeCodes.Pro,
-            _ => throw new ArgumentException("Problem mode must be 'amateur' or 'pro'.")
-        };
     }
 }

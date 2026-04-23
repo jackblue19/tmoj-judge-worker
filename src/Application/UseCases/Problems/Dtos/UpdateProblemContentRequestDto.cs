@@ -7,21 +7,17 @@ namespace Application.UseCases.Problems.Dtos;
 /// </summary>
 public sealed class UpsertProblemContentRequestDto
 {
-    public string Title { get; init; } = string.Empty;
-    public string Slug { get; init; } = string.Empty;
+    public string Title { get; set; } = null!;
+    public string Slug { get; set; } = null!;
+    public string? Difficulty { get; set; }
+    public string? TypeCode { get; set; }
+    public string? ScoringCode { get; set; }
+    public int? TimeLimitMs { get; set; }
+    public int? MemoryLimitKb { get; set; }
+    public string? DescriptionMd { get; set; }
+    public IFormFile? StatementFile { get; set; }
+    public IReadOnlyCollection<Guid>? TagIds { get; set; }
 
-    public string? Difficulty { get; init; }
-    public string? TypeCode { get; init; }
-    public string? VisibilityCode { get; init; }
-    public string? ScoringCode { get; init; }
-
-    public string? StatusCode { get; init; } // draft | pending | published | archived
-
-    public int? TimeLimitMs { get; init; }
-    public int? MemoryLimitKb { get; init; }
-
-    public string? DescriptionMd { get; init; }
-    public IFormFile? StatementFile { get; init; }
-
-    public List<Guid>? TagIds { get; init; }
+    // amateur | pro
+    public string? ProblemMode { get; set; }
 }

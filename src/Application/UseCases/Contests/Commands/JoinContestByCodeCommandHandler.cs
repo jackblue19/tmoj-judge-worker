@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Application.UseCases.Contests.Commands;
 
 public class JoinContestByCodeCommandHandler
-    : IRequestHandler<JoinContestByCodeCommand, Guid>
+    : IRequestHandler<JoinContestByCodeCommand, JoinByCodeResult>
 {
     private readonly IReadRepository<Contest, Guid> _contestRepo;
     private readonly IUserRepository _userRepo;
@@ -48,7 +48,7 @@ public class JoinContestByCodeCommandHandler
         _logger = logger;
     }
 
-    public async Task<Guid> Handle(JoinContestByCodeCommand request, CancellationToken ct)
+    public async Task<JoinByCodeResult> Handle(JoinContestByCodeCommand request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.InviteCode))
             throw new ArgumentException("INVITE_CODE_REQUIRED");
@@ -60,26 +60,103 @@ public class JoinContestByCodeCommandHandler
         if (!isActive)
             throw new ArgumentException("ACCOUNT_LOCKED");
 
-        var code = request.InviteCode.Trim();
+        var code = request.InviteCode.Trim().ToUpper();
 
-        // 1. Thử tìm contest theo code
-        var contest = await _contestRepo.FirstOrDefaultAsync(
-            new ContestByInviteCodeSpec(code), ct);
+        // =========================
+        // PHÂN BIỆT: 10 ký tự = contest code, 8 ký tự = team invite code
+        // =========================
+        if (code.Length == 8)
+            return await HandleTeamCode(code, userId, ct);
 
-        Team? teamFromCode = null;
+        if (code.Length == 10)
+            return await HandleContestCode(code, userId, ct);
 
-        if (contest == null)
+        throw new ArgumentException("INVALID_INVITE_CODE");
+    }
+
+    // =========================
+    // TEAM CODE FLOW (8 ký tự)
+    // Join thẳng vào team, tự động vào contest nếu team đang trong contest
+    // =========================
+    private async Task<JoinByCodeResult> HandleTeamCode(string code, Guid userId, CancellationToken ct)
+    {
+        var team = await _teamCustomRepo.GetByInviteCodeAsync(code)
+            ?? throw new KeyNotFoundException("INVALID_INVITE_CODE");
+
+        var alreadyInTeam = await _teamCustomRepo.IsUserInTeamAsync(userId, team.Id);
+
+        if (!alreadyInTeam)
         {
-            // 2. Không phải contest code → thử team code
-            teamFromCode = await _teamCustomRepo.GetByInviteCodeAsync(code);
+            var count = await _teamCustomRepo.GetTeamMemberCountAsync(team.Id);
+            if (count >= 3)
+                throw new InvalidOperationException("TEAM_FULL");
 
-            if (teamFromCode == null)
-                throw new KeyNotFoundException("INVALID_INVITE_CODE");
+            await _memberRepo.AddAsync(new TeamMember
+            {
+                TeamId = team.Id,
+                UserId = userId,
+                JoinedAt = DateTime.UtcNow
+            }, ct);
 
-            contest = await _contestCustomRepo
-                .GetActiveContestByTeamIdAsync(teamFromCode.Id)
-                ?? throw new KeyNotFoundException("TEAM_NOT_IN_CONTEST");
+            team.TeamSize = count + 1;
+            team.UpdatedAt = DateTime.UtcNow;
+            _teamRepo.Update(team);
         }
+
+        // Nếu team đang trong contest active → tự động thêm ContestTeam
+        Guid? contestTeamId = null;
+        Guid? contestId = null;
+
+        var contest = await _contestCustomRepo.GetActiveContestByTeamIdAsync(team.Id);
+
+        if (contest != null)
+        {
+            contestId = contest.Id;
+            var joined = await _contestCustomRepo.IsTeamJoinedAsync(contest.Id, team.Id);
+
+            if (joined)
+            {
+                var existing = await _contestCustomRepo.GetContestTeamAsync(contest.Id, team.Id);
+                contestTeamId = existing?.Id;
+            }
+            else
+            {
+                var entry = new ContestTeam
+                {
+                    Id = Guid.NewGuid(),
+                    ContestId = contest.Id,
+                    TeamId = team.Id,
+                    JoinAt = DateTime.UtcNow
+                };
+                await _contestTeamRepo.AddAsync(entry, ct);
+                contestTeamId = entry.Id;
+            }
+        }
+
+        await _uow.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Joined by team code | TeamId={TeamId} | UserId={UserId} | ContestId={ContestId}",
+            team.Id, userId, contestId);
+
+        return new JoinByCodeResult
+        {
+            Type = "team",
+            TeamId = team.Id,
+            ContestTeamId = contestTeamId,
+            ContestId = contestId
+        };
+    }
+
+    // =========================
+    // CONTEST CODE FLOW (10 ký tự)
+    // Tạo personal team nếu cần, join contest
+    // =========================
+    private async Task<JoinByCodeResult> HandleContestCode(string code, Guid userId, CancellationToken ct)
+    {
+        var contest = await _contestRepo.FirstOrDefaultAsync(
+            new ContestByInviteCodeSpec(code), ct)
+            ?? throw new KeyNotFoundException("INVALID_INVITE_CODE");
 
         if (contest.EndAt < DateTime.UtcNow)
             throw new ArgumentException("CONTEST_ENDED");
@@ -93,110 +170,66 @@ public class JoinContestByCodeCommandHandler
         if (conflict)
             throw new InvalidOperationException("TIME_CONFLICT");
 
+        var teams = await _teamCustomRepo.GetTeamsByUserAsync(userId);
+        var personal = teams.FirstOrDefault(x => x.IsPersonal);
+
         Guid teamId;
 
-        // =========================
-        // TEAM CODE FLOW — join thẳng team đó (user vào team + thành participant contest)
-        // =========================
-        if (teamFromCode != null)
+        if (personal != null)
         {
-            var alreadyInTeam = await _teamCustomRepo
-                .IsUserInTeamAsync(userId, teamFromCode.Id);
-
-            if (!alreadyInTeam)
-            {
-                var count = await _teamCustomRepo.GetTeamMemberCountAsync(teamFromCode.Id);
-                if (count >= 3)
-                    throw new InvalidOperationException("TEAM_FULL");
-
-                await _memberRepo.AddAsync(new TeamMember
-                {
-                    TeamId = teamFromCode.Id,
-                    UserId = userId,
-                    JoinedAt = DateTime.UtcNow
-                }, ct);
-
-                teamFromCode.TeamSize = count + 1;
-                teamFromCode.UpdatedAt = DateTime.UtcNow;
-                _teamRepo.Update(teamFromCode);
-            }
-
-            teamId = teamFromCode.Id;
+            teamId = personal.Id;
         }
         else
         {
-            // =========================
-            // CONTEST CODE FLOW — join qua personal team
-            // =========================
-            var teams = await _teamCustomRepo.GetTeamsByUserAsync(userId);
-            var personal = teams.FirstOrDefault(x => x.IsPersonal);
-
-            if (personal != null)
+            var team = new Team
             {
-                teamId = personal.Id;
-            }
-            else
+                Id = Guid.NewGuid(),
+                LeaderId = userId,
+                TeamName = $"User-{userId}",
+                IsPersonal = true,
+                TeamSize = 1,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            await _teamRepo.AddAsync(team, ct);
+
+            await _memberRepo.AddAsync(new TeamMember
             {
-                var team = new Team
-                {
-                    Id = Guid.NewGuid(),
-                    LeaderId = userId,
-                    TeamName = $"User-{userId}",
-                    IsPersonal = true,
-                    TeamSize = 1,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
+                TeamId = team.Id,
+                UserId = userId,
+                JoinedAt = DateTime.UtcNow
+            }, ct);
 
-                await _teamRepo.AddAsync(team, ct);
-
-                await _memberRepo.AddAsync(new TeamMember
-                {
-                    TeamId = team.Id,
-                    UserId = userId,
-                    JoinedAt = DateTime.UtcNow
-                }, ct);
-
-                teamId = team.Id;
-            }
+            teamId = team.Id;
         }
 
         var joined = await _contestCustomRepo.IsTeamJoinedAsync(contest.Id, teamId);
 
-        Guid contestTeamId;
-
         if (joined)
+            throw new InvalidOperationException("ALREADY_JOINED");
+
+        var entry = new ContestTeam
         {
-            // Team code flow — team đã ở contest, user vừa vào team thì coi như xong.
-            if (teamFromCode == null)
-                throw new InvalidOperationException("ALREADY_JOINED");
+            Id = Guid.NewGuid(),
+            ContestId = contest.Id,
+            TeamId = teamId,
+            JoinAt = DateTime.UtcNow
+        };
 
-            var existingEntry = await _contestCustomRepo
-                .GetContestTeamAsync(contest.Id, teamId)
-                ?? throw new InvalidOperationException("CONTEST_TEAM_NOT_FOUND");
-
-            contestTeamId = existingEntry.Id;
-        }
-        else
-        {
-            var entry = new ContestTeam
-            {
-                Id = Guid.NewGuid(),
-                ContestId = contest.Id,
-                TeamId = teamId,
-                JoinAt = DateTime.UtcNow
-            };
-
-            await _contestTeamRepo.AddAsync(entry, ct);
-            contestTeamId = entry.Id;
-        }
-
+        await _contestTeamRepo.AddAsync(entry, ct);
         await _uow.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "Joined by code | ContestId={ContestId} | TeamId={TeamId} | User={UserId} | ByTeamCode={ByTeam}",
-            contest.Id, teamId, userId, teamFromCode != null);
+            "Joined by contest code | ContestId={ContestId} | TeamId={TeamId} | UserId={UserId}",
+            contest.Id, teamId, userId);
 
-        return contestTeamId;
+        return new JoinByCodeResult
+        {
+            Type = "contest",
+            TeamId = teamId,
+            ContestTeamId = entry.Id,
+            ContestId = contest.Id
+        };
     }
 }

@@ -188,7 +188,7 @@ public class RegisterContestCommandHandler
                 TeamName = request.TeamName,
                 TeamSize = allMembers.Count,
                 IsPersonal = false,
-                InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper(),
+                InviteCode = Guid.NewGuid().ToString("N")[..10].ToUpper(),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };

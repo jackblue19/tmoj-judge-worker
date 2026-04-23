@@ -66,7 +66,7 @@ public class CreateContestCommandHandler
             IsActive = true,
 
             // Mọi contest đều gen invite code — public contest cũng join được bằng code.
-            InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper(),
+            InviteCode = Guid.NewGuid().ToString("N")[..10].ToUpper(),
 
             CreatedAt = DateTime.UtcNow,
             CreatedBy = _currentUser.UserId

@@ -1,9 +1,4 @@
 ﻿using Application.UseCases.Problems.Dtos;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Application.UseCases.Problems.Queries.GetPublicProblems;
 
@@ -17,6 +12,9 @@ public sealed class PublicProblemListItemDto
     public string? TypeCode { get; init; }
     public string? VisibilityCode { get; init; }
     public string? ScoringCode { get; init; }
+
+    public string? ProblemMode { get; init; }
+    public string? ProblemSource { get; init; }
 
     public decimal? AcceptancePercent { get; init; }
     public int? TimeLimitMs { get; init; }

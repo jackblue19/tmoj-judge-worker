@@ -64,7 +64,7 @@ public class ChangeVisibilityCommandHandler
 
         if (newVisibility == "private" && string.IsNullOrEmpty(contest.InviteCode))
         {
-            contest.InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpper();
+            contest.InviteCode = Guid.NewGuid().ToString("N")[..10].ToUpper();
         }
 
         contest.UpdatedAt = now;

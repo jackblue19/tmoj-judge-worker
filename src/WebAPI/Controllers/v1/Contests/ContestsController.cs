@@ -545,10 +545,11 @@ public class ContestsController : ControllerBase
     {
         var result = await _mediator.Send(command, ct);
 
-        return Ok(ApiResponse<object>.Ok(
-            result,
-            "Joined contest successfully"
-        ));
+        var message = result.Type == "team"
+            ? "Joined team successfully"
+            : "Joined contest successfully";
+
+        return Ok(ApiResponse<object>.Ok(result, message));
     }
 
     // =============================================

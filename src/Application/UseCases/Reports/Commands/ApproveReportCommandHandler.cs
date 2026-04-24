@@ -117,20 +117,26 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         // =========================
         if (authorId.HasValue)
         {
-            var targetName = report.TargetType == "comment" ? "Bình luận" : "Bài thảo luận";
-            await _notificationRepo.AddAsync(new Notification
+            var existingApproved = await _readRepo.CountAsync(
+                new ReportsByTargetAndStatusSpec(report.TargetId, report.TargetType, "approved"), ct);
+
+            if (existingApproved == 0)
             {
-                NotificationId = Guid.NewGuid(),
-                UserId = authorId.Value,
-                Title = $"{targetName} bị gỡ do vi phạm",
-                Message = $"{targetName} của bạn đã bị quản trị viên gỡ bỏ vì vi phạm tiêu chuẩn cộng đồng. Lý do: {report.Reason}",
-                Type = "system",
-                ScopeType = report.TargetType,
-                ScopeId = report.TargetId,
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = adminId
-            }, ct);
+                var targetName = report.TargetType == "comment" ? "Bình luận" : "Bài thảo luận";
+                await _notificationRepo.AddAsync(new Notification
+                {
+                    NotificationId = Guid.NewGuid(),
+                    UserId = authorId.Value,
+                    Title = $"{targetName} bị gỡ do vi phạm",
+                    Message = $"{targetName} của bạn đã bị quản trị viên gỡ bỏ vì vi phạm tiêu chuẩn cộng đồng. Lý do: {report.Reason}",
+                    Type = "system",
+                    ScopeType = report.TargetType,
+                    ScopeId = report.TargetId,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = adminId
+                }, ct);
+            }
         }
 
         // =========================
@@ -176,20 +182,23 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
             if (commentIds.Any())
             {
                 var comments = await _commentRepo.ListAsync(
-                    new CommentsByIdsSpec(commentIds), ct);
+                    new CommentsByIdsSpec(commentIds.Distinct().ToList()), ct);
 
-                commentCount = comments.Count(x => x.UserId == authorId);
+                var userCommentIds = comments.Where(x => x.UserId == authorId).Select(x => x.Id).ToHashSet();
+                commentCount = commentIds.Count(id => userCommentIds.Contains(id));
             }
 
             if (discussionIds.Any())
             {
                 var discussions = await _discussionRepo
-                    .GetDiscussionEntitiesByIdsAsync(discussionIds);
+                    .GetDiscussionEntitiesByIdsAsync(discussionIds.Distinct().ToList());
 
-                discussionCount = discussions.Count(x => x.UserId == authorId);
+                var userDiscussionIds = discussions.Where(x => x.UserId == authorId).Select(x => x.Id).ToHashSet();
+                discussionCount = discussionIds.Count(id => userDiscussionIds.Contains(id));
             }
 
-            var total = commentCount + discussionCount;
+            // Cộng thêm report hiện tại vì nó chưa được save vào DB với status = approved
+            var total = commentCount + discussionCount + 1;
 
             if (total >= 5)
             {

@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.DiscussionComments.Commands;
 using Application.UseCases.DiscussionComments.Specs;
 using Application.UseCases.Reports.Specs;
@@ -21,6 +21,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
 
     private readonly IReadRepository<User, Guid> _userRepo;
     private readonly IWriteRepository<User, Guid> _userWriteRepo;
+    private readonly IWriteRepository<Notification, Guid> _notificationRepo;
 
     private readonly IUnitOfWork _uow;
     private readonly IMediator _mediator;
@@ -35,6 +36,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         IProblemDiscussionRepository discussionRepo,
         IReadRepository<User, Guid> userRepo,
         IWriteRepository<User, Guid> userWriteRepo,
+        IWriteRepository<Notification, Guid> notificationRepo,
         IUnitOfWork uow,
         IMediator mediator,
         ICurrentUserService currentUser)
@@ -47,6 +49,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         _discussionRepo = discussionRepo;
         _userRepo = userRepo;
         _userWriteRepo = userWriteRepo;
+        _notificationRepo = notificationRepo;
         _uow = uow;
         _mediator = mediator;
         _currentUser = currentUser;
@@ -107,6 +110,27 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
             authorId = discussion.UserId;
 
             await _discussionRepo.LockAsync(report.TargetId);
+        }
+
+        // =========================
+        // NOTIFY AUTHOR OF MODERATION
+        // =========================
+        if (authorId.HasValue)
+        {
+            var targetName = report.TargetType == "comment" ? "Bình luận" : "Bài thảo luận";
+            await _notificationRepo.AddAsync(new Notification
+            {
+                NotificationId = Guid.NewGuid(),
+                UserId = authorId.Value,
+                Title = $"{targetName} bị gỡ do vi phạm",
+                Message = $"{targetName} của bạn đã bị quản trị viên gỡ bỏ vì vi phạm tiêu chuẩn cộng đồng. Lý do: {report.Reason}",
+                Type = "system",
+                ScopeType = report.TargetType,
+                ScopeId = report.TargetId,
+                IsRead = false,
+                CreatedAt = now,
+                CreatedBy = adminId
+            }, ct);
         }
 
         // =========================
@@ -184,6 +208,18 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                         ActionType = "auto_ban_user",
                         Note = $"Auto banned (total approved reports = {total})",
                         CreatedAt = now
+                    }, ct);
+
+                    await _notificationRepo.AddAsync(new Notification
+                    {
+                        NotificationId = Guid.NewGuid(),
+                        UserId = authorId.Value,
+                        Title = "Tài khoản bị cấm (Banned)",
+                        Message = $"Tài khoản của bạn đã bị khóa do có quá nhiều nội dung vi phạm tiêu chuẩn cộng đồng ({total} vi phạm).",
+                        Type = "system",
+                        IsRead = false,
+                        CreatedAt = now,
+                        CreatedBy = adminId
                     }, ct);
                 }
             }

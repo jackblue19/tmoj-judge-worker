@@ -151,6 +151,9 @@ public partial class User
 
     public virtual ICollection<ContestHistory> Histories { get; set; } = new List<ContestHistory>();
 
+    public virtual ICollection<UserStudyPlanPurchase> UserStudyPlanPurchases { get; set; }
+     = new List<UserStudyPlanPurchase>();
+
     public virtual ICollection<UserStudyItemProgress> UserStudyItemProgresses { get; set; }
     = new List<UserStudyItemProgress>();
 }

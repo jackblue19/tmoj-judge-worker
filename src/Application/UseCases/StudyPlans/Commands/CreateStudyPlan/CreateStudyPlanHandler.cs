@@ -24,46 +24,45 @@ public class CreateStudyPlanHandler : IRequestHandler<CreateStudyPlanCommand, Gu
 
     public async Task<Guid> Handle(CreateStudyPlanCommand request, CancellationToken ct)
     {
-        try
+        var userIdStr = _httpContext.HttpContext?.User?
+            .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrEmpty(userIdStr))
+            throw new UnauthorizedAccessException("User not authenticated");
+
+        var userId = Guid.Parse(userIdStr);
+
+        // =========================
+        // ✅ BUSINESS RULE FIX
+        // =========================
+        if (!request.IsPaid)
         {
-            // 🔥 LẤY USER ID TỪ JWT
-            var userIdStr = _httpContext.HttpContext?.User?
-                .FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userIdStr))
-            {
-                _logger.LogError("❌ UserId not found in token");
-                throw new UnauthorizedAccessException("User not authenticated");
-            }
-
-            var userId = Guid.Parse(userIdStr);
-
-            _logger.LogInformation("🚀 Creating StudyPlan by User: {UserId}", userId);
-
-            var plan = new StudyPlan
-            {
-                Id = Guid.NewGuid(),
-                CreatorId = userId, // ✅ FIX QUAN TRỌNG
-                Title = request.Title,
-                Description = request.Description,
-                IsPublic = request.IsPublic,
-                IsPaid = request.IsPaid,
-                Price = request.Price,
-                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
-            };
-
-            var id = await _repo.CreateAsync(plan);
-
-            await _repo.SaveChangesAsync();
-
-            _logger.LogInformation("✅ StudyPlan created: {Id}", id);
-
-            return id;
+            request.Price = 0;
         }
-        catch (Exception ex)
+        else if (request.Price <= 0)
         {
-            _logger.LogError(ex, "❌ ERROR CreateStudyPlan");
-            throw;
+            throw new Exception("Paid plan must have price > 0");
         }
+        var plan = new StudyPlan
+        {
+            Id = Guid.NewGuid(),
+            CreatorId = userId,
+
+            Title = request.Title,
+            Description = request.Description,
+
+            IsPublic = request.IsPublic,
+            IsPaid = request.IsPaid,
+            Price = request.Price,
+
+            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+        };
+
+        await _repo.CreateAsync(plan);
+        await _repo.SaveChangesAsync();
+
+        _logger.LogInformation("✅ StudyPlan created: {Id}", plan.Id);
+
+        return plan.Id;
     }
 }

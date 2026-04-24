@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,4 +20,7 @@ public class CollectionItemDto
 
     // ✅ NEW
     public bool IsSolved { get; set; }
+    
+    // ✅ NEW: Frontend cần để biết hiển thị ổ khóa
+    public bool IsPrivate { get; set; }
 }

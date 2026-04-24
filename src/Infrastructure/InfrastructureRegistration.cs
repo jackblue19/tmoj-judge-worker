@@ -59,12 +59,14 @@ public static class InfrastructureRegistration
         services.AddScoped<IUserProblemQueries, UserProblemQueries>();
         services.AddScoped<IWriteRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
         services.AddScoped<IReadRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
+        services.AddScoped<IUserStudyPlanPurchaseRepository, UserStudyPlanPurchaseRepository>();
         services.AddScoped<IStudyPlanApplicationService, StudyPlanApplicationService>();
         services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
         services.AddScoped<IGamificationRepository, GamificationRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IVnPayService, VnPayService>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
         return services;
     }
 

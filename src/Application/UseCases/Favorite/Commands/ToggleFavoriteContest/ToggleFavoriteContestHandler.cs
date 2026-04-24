@@ -16,8 +16,8 @@ public class ToggleFavoriteContestHandler
     }
 
     public async Task<ToggleFavoriteContestResponseDto> Handle(
-    ToggleFavoriteContestCommand request,
-    CancellationToken ct)
+        ToggleFavoriteContestCommand request,
+        CancellationToken ct)
     {
         Console.WriteLine("🔥 ToggleFavoriteContest START");
 
@@ -62,6 +62,9 @@ public class ToggleFavoriteContestHandler
 
         var item = await _repo.GetCollectionItemAsync(collection.Id, null, contestId);
 
+        // =========================
+        // REMOVE
+        // =========================
         if (item != null)
         {
             Console.WriteLine("👉 REMOVE");
@@ -79,18 +82,41 @@ public class ToggleFavoriteContestHandler
             };
         }
 
+        // =========================
+        // ADD
+        // =========================
         Console.WriteLine("👉 ADD");
+
+        var items = await _repo.GetCollectionItemsByCollectionId(collection.Id);
+
+        int nextOrderIndex = items.Any()
+            ? items.Max(x => x.OrderIndex) + 1
+            : 1;
 
         var newItem = new CollectionItem
         {
             Id = Guid.NewGuid(),
             CollectionId = collection.Id,
             ContestId = contestId,
+            OrderIndex = nextOrderIndex, // 🔥 FIX
             CreatedAt = DateTime.UtcNow
         };
 
-        await _repo.AddItemAsync(newItem);
-        await _repo.SaveChangesAsync();
+        var inserted = await _repo.TryAddItemAsync(newItem);
+
+        if (!inserted)
+        {
+            Console.WriteLine("⚠️ Race condition");
+
+            return new ToggleFavoriteContestResponseDto
+            {
+                ContestId = contestId,
+                IsFavorited = true,
+                Action = "added",
+                IsSuccess = true,
+                Collection = MapCollection(collection)
+            };
+        }
 
         return new ToggleFavoriteContestResponseDto
         {
@@ -102,13 +128,8 @@ public class ToggleFavoriteContestHandler
         };
     }
 
-    // =========================
-    // HELPERS
-    // =========================
     private ToggleFavoriteContestResponseDto Fail(Guid id, string code, string msg)
     {
-        Console.WriteLine($"❌ {code} - {msg}");
-
         return new ToggleFavoriteContestResponseDto
         {
             ContestId = id,

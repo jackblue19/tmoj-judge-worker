@@ -5,74 +5,90 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.UseCases.StudyPlans.Commands.EnrollStudyPlan;
 
-public class EnrollStudyPlanHandler
-    : IRequestHandler<EnrollStudyPlanCommand, Unit>
+public class EnrollStudyPlanHandler : IRequestHandler<EnrollStudyPlanCommand, Unit>
 {
     private readonly IStudyPlanRepository _repo;
+    private readonly IUserStudyPlanPurchaseRepository _purchaseRepo;
+    private readonly ICurrentUserService _currentUser;
     private readonly ILogger<EnrollStudyPlanHandler> _logger;
 
     public EnrollStudyPlanHandler(
         IStudyPlanRepository repo,
+        IUserStudyPlanPurchaseRepository purchaseRepo,
+        ICurrentUserService currentUser,
         ILogger<EnrollStudyPlanHandler> logger)
     {
         _repo = repo;
+        _purchaseRepo = purchaseRepo;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
     public async Task<Unit> Handle(EnrollStudyPlanCommand request, CancellationToken ct)
     {
-        _logger.LogInformation("🚀 Enroll START: {@Request}", request);
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException();
 
-        var plan = await _repo.GetByIdAsync(request.StudyPlanId);
+        _logger.LogInformation("ENROLL START | User={UserId} Plan={PlanId}", userId, request.StudyPlanId);
 
-        if (plan == null)
-            throw new Exception("Study plan not found");
+        var plan = await _repo.GetByIdAsync(request.StudyPlanId)
+            ?? throw new Exception("StudyPlan not found");
 
-        // =========================
-        // CHECK PAID
-        // =========================
-        if (plan.IsPaid)
-        {
-            _logger.LogWarning("💰 Plan is paid");
+        var isFree = !plan.IsPaid;
+        var hasAccess = await _purchaseRepo.ExistsAsync(userId, plan.Id);
 
-            // TODO: check purchase sau
-            throw new Exception("This plan requires purchase");
-        }
+        _logger.LogInformation("PLAN INFO | IsFree={IsFree} HasAccess={HasAccess}", isFree, hasAccess);
 
-        // =========================
-        // CHECK DUPLICATE
-        // =========================
-        var isEnrolled = await _repo.IsUserEnrolledAsync(
-            request.UserId,
-            request.StudyPlanId
-        );
+        if (!isFree && !hasAccess)
+            throw new Exception("You must buy this plan first");
+
+        var isEnrolled = await _repo.IsUserEnrolledAsync(userId, plan.Id);
 
         if (isEnrolled)
         {
-            _logger.LogWarning("⚠️ Already enrolled");
+            _logger.LogInformation("Already enrolled | User={UserId} Plan={PlanId}", userId, plan.Id);
             return Unit.Value;
         }
 
+        var items = await _repo.GetItemsByPlanIdAsync(plan.Id);
+
+        _logger.LogInformation("PLAN ITEMS COUNT = {Count}", items.Count);
+
         // =========================
-        // INIT PROGRESS (QUAN TRỌNG)
+        // FIX CRITICAL: EMPTY PLAN
         // =========================
-        var items = await _repo.GetItemsByPlanIdAsync(request.StudyPlanId);
+        if (items == null || items.Count == 0)
+        {
+            _logger.LogWarning("ENROLL FAILED: StudyPlan has no items");
+            throw new Exception("StudyPlan has no items. Add problems before enrolling.");
+        }
+
+        var progresses = new List<UserStudyItemProgress>();
 
         foreach (var item in items)
         {
-            await _repo.CreateItemProgressAsync(new UserStudyItemProgress
+            progresses.Add(new UserStudyItemProgress
             {
                 Id = Guid.NewGuid(),
-                UserId = request.UserId,
+                UserId = userId,
                 StudyPlanItemId = item.Id,
-                IsCompleted = false,
-                CompletedAt = null
+                IsCompleted = false
             });
+        }
+
+        foreach (var p in progresses)
+        {
+            await _repo.CreateItemProgressAsync(p);
         }
 
         await _repo.SaveChangesAsync();
 
-        _logger.LogInformation("✅ Enroll SUCCESS");
+        _logger.LogInformation(
+            "ENROLL SUCCESS | User={UserId} Plan={PlanId} Items={Count}",
+            userId,
+            plan.Id,
+            progresses.Count
+        );
 
         return Unit.Value;
     }

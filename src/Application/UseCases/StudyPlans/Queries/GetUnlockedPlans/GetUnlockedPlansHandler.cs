@@ -1,7 +1,6 @@
 ﻿using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
 using MediatR;
-using StudyPlanEntity = Domain.Entities.StudyPlan;
 
 namespace Application.UseCases.StudyPlans.Queries.GetUnlockedPlans;
 
@@ -19,41 +18,47 @@ public class GetUnlockedPlansHandler
         GetUnlockedPlansQuery request,
         CancellationToken ct)
     {
-        // ✅ FIX: dùng đúng method hiện tại
-        var plans = await _repo.GetByCreatorAsync(request.CreatorId);
+        var plans = await _repo.GetAllAsync();
+
+        if (plans == null || plans.Count == 0)
+            return new List<StudyPlanDto>();
+
+        var orderedPlans = plans
+            .OrderBy(x => x.CreatedAt)
+            .ToList();
 
         var result = new List<StudyPlanDto>();
 
-        StudyPlanEntity? previous = null;
-
-        foreach (var plan in plans)
+        foreach (var plan in orderedPlans)
         {
-            bool isUnlocked = true;
+            var isUnlocked =
+                !plan.IsPaid ||
+                await _repo.HasUserPurchasedPlanAsync(request.UserId, plan.Id);
 
-            if (previous is not null)
-            {
-                isUnlocked = await _repo.IsStudyPlanCompletedAsync(
-                    request.UserId,
-                    previous.Id
-                );
-            }
+            var totalItems = await _repo.GetItemCountAsync(plan.Id);
 
-            var isCompleted = await _repo.IsStudyPlanCompletedAsync(
+            var progresses = await _repo.GetItemProgressByPlanAsync(
                 request.UserId,
                 plan.Id
             );
+
+            var completed = progresses.Count(x => x.IsCompleted == true);
+
+            var isCompleted =
+                totalItems > 0 &&
+                completed == totalItems;
 
             result.Add(new StudyPlanDto
             {
                 Id = plan.Id,
                 Title = plan.Title,
                 Order = 0,
-                ProblemCount = plan.StudyPlanItems?.Count ?? 0,
+                ProblemCount = totalItems,
+
+                // 🔥 FIX NULLABLE HERE
                 IsCompleted = isCompleted,
                 IsUnlocked = isUnlocked
             });
-
-            previous = plan;
         }
 
         return result;

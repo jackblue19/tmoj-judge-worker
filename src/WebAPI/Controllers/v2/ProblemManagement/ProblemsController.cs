@@ -1,11 +1,15 @@
 ﻿using Application.Common.Pagination;
 using Application.UseCases.Problems.Commands.AttachProblemTags;
 using Application.UseCases.Problems.Commands.CreateProblem;
+using Application.UseCases.Problems.Commands.CreateRemixProblem;
 using Application.UseCases.Problems.Commands.CreateTag;
+using Application.UseCases.Problems.Commands.CreateVirtualProblem;
+using Application.UseCases.Problems.Commands.DonateProblem;
 using Application.UseCases.Problems.Commands.ReplaceProblemTags;
 using Application.UseCases.Problems.Commands.UpdateProblem;
 using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Queries.GetAllTags;
+using Application.UseCases.Problems.Queries.GetProblemBanks;
 using Application.UseCases.Problems.Queries.GetProblemById;
 using Application.UseCases.Problems.Queries.GetPublicProblems;
 using Asp.Versioning;
@@ -44,14 +48,13 @@ public class ProblemsController : ControllerBase
                 request.Slug ,
                 request.Difficulty ,
                 request.TypeCode ,
-                request.VisibilityCode ,
                 request.ScoringCode ,
-                request.StatusCode ,
                 request.TimeLimitMs ,
                 request.MemoryLimitKb ,
                 request.DescriptionMd ,
                 request.StatementFile ,
-                request.TagIds) ,
+                request.TagIds ,
+                request.ProblemMode) ,
             ct);
 
         return CreatedAtAction(
@@ -63,7 +66,103 @@ public class ProblemsController : ControllerBase
                 HttpContext.TraceIdentifier));
     }
 
+    //  DOANTE PROBLEM -> VISIBILITY CODE = IN-BANK
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("donate")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> Donate(
+        [FromForm] UpsertProblemContentRequestDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new DonateProblemCommand(
+                request.Title ,
+                request.Slug ,
+                request.Difficulty ,
+                request.TypeCode ,
+                request.ScoringCode ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.DescriptionMd ,
+                request.StatementFile ,
+                request.TagIds ,
+                request.ProblemMode) ,
+            ct);
+
+        return CreatedAtAction(
+            nameof(GetDetail) ,
+            new { problemId = result.Id } ,
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Problem donated successfully." ,
+                HttpContext.TraceIdentifier));
+    }
+
+
+    //  virtual problem
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("virtual")]
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> CreateVirtual(
+        [FromBody] CreateVirtualProblemRequestDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+         new CreateVirtualProblemCommand(
+             request.OriginProblemId ,
+             request.OriginProblemSlug ,
+             request.Slug ,
+             request.Title ,
+             request.VisibilityCode) ,
+         ct);
+
+        return CreatedAtAction(
+            nameof(GetDetail) ,
+            new { problemId = result.Id } ,
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Virtual problem created successfully." ,
+                HttpContext.TraceIdentifier));
+    }
+
+    //  REMIX PROBLEM
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("remix")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> CreateRemix(
+        [FromForm] CreateRemixProblemRequestDto request ,
+        CancellationToken ct)
+    {
+        var result = await _mediator.Send(
+            new CreateRemixProblemCommand(
+                request.OriginProblemId ,
+                request.OriginProblemSlug ,
+                request.Title ,
+                request.Slug ,
+                request.Difficulty ,
+                request.TypeCode ,
+                request.VisibilityCode ,
+                request.ScoringCode ,
+                request.TimeLimitMs ,
+                request.MemoryLimitKb ,
+                request.DescriptionMd ,
+                request.StatementFile ,
+                request.TagIds ,
+                request.ProblemMode) ,
+            ct);
+
+        return CreatedAtAction(
+            nameof(GetDetail) ,
+            new { problemId = result.Id } ,
+            ApiResponse<ProblemDetailDto>.Ok(
+                result ,
+                "Remix problem created successfully." ,
+                HttpContext.TraceIdentifier));
+    }
+
     // GET PROBLEM DETAIL
+    [AllowAnonymous]
     [HttpGet("{problemId:guid}")]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> GetDetail(Guid problemId , CancellationToken ct)
     {
@@ -102,7 +201,6 @@ public class ProblemsController : ControllerBase
 
     // UPDATE PROBLEM
     [Authorize(Roles = "admin,manager,teacher")]
-    //[Authorize]
     [HttpPut("{problemId:guid}/content")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
@@ -118,14 +216,13 @@ public class ProblemsController : ControllerBase
                 request.Slug ,
                 request.Difficulty ,
                 request.TypeCode ,
-                request.VisibilityCode ,
                 request.ScoringCode ,
-                request.StatusCode ,
                 request.TimeLimitMs ,
                 request.MemoryLimitKb ,
                 request.DescriptionMd ,
                 request.StatementFile ,
-                request.TagIds) ,
+                request.TagIds ,
+                request.ProblemMode) ,
             ct);
 
         return Ok(
@@ -179,7 +276,6 @@ public class ProblemsController : ControllerBase
 
     // ATTACH TAGS TO PROBLEM
     [Authorize(Roles = "admin,manager,teacher")]
-    //[Authorize]
     [HttpPost("{problemId:guid}/tags/attach")]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> AttachTags(
         Guid problemId ,
@@ -199,7 +295,6 @@ public class ProblemsController : ControllerBase
 
     // REPLACE PROBLEM TAGS
     [Authorize(Roles = "admin,manager,teacher")]
-    //[Authorize]
     [HttpPut("{problemId:guid}/tags")]
     public async Task<ActionResult<ApiResponse<ProblemDetailDto>>> ReplaceTags(
         Guid problemId ,
@@ -240,6 +335,30 @@ public class ProblemsController : ControllerBase
         return Ok(result);
     }
 
+    //  GET PROBLEM BANKS (IN-BANK)
+    // GET PROBLEM BANKS
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("banks")]
+    [ProducesResponseType(typeof(ApiPagedResponse<ProblemBankListItemDto>) , StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ApiPagedResponse<ProblemBankListItemDto>>> GetProblemBanks(
+        [FromQuery] int page = 1 ,
+        [FromQuery] int pageSize = 20 ,
+        [FromQuery] string? search = null ,
+        [FromQuery] string? difficulty = null ,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new GetProblemBanksQuery(
+                Page: page ,
+                PageSize: pageSize ,
+                Search: search ,
+                Difficulty: difficulty) ,
+            ct);
+
+        return Ok(result);
+    }
+
     // UPDATE PROBLEM DIFFICULTY
     [Authorize(Roles = "admin,manager,teacher")]
     //[Authorize]
@@ -261,7 +380,7 @@ public class ProblemsController : ControllerBase
     }
 
     //  create draft => for student
-    [Authorize]
+    /*[Authorize]
     [HttpPost("drafts")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(20_000_000)]
@@ -292,5 +411,5 @@ public class ProblemsController : ControllerBase
                 result ,
                 "Problem draft created successfully." ,
                 HttpContext.TraceIdentifier));
-    }
+    }*/
 }

@@ -28,7 +28,7 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
             _logger.LogInformation("Updating badge {BadgeId}", request.BadgeId);
 
             // 🔐 ROLE CHECK
-            if (!_currentUser.IsInRole("Admin"))
+            if (!_currentUser.IsInRole("admin"))
                 throw new UnauthorizedAccessException("Only admin can update badge");
 
             // 🔥 VALIDATION

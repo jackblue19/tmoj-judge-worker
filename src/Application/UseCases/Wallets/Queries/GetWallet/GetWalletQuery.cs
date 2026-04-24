@@ -5,5 +5,6 @@ namespace Application.UseCases.Wallets.Queries.GetWallet
 {
     public class GetWalletQuery : IRequest<GetWalletResult>
     {
+        public Guid UserId { get; set; }
     }
 }

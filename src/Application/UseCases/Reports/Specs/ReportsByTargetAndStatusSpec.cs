@@ -1,4 +1,4 @@
-﻿using Ardalis.Specification;
+using Ardalis.Specification;
 using Domain.Entities;
 
 namespace Application.UseCases.Reports.Specs;
@@ -11,7 +11,7 @@ public class ReportsByTargetAndStatusSpec : Specification<ContentReport>
             x.TargetId == targetId &&
             x.TargetType != null &&
             x.Status != null &&
-            x.TargetType.ToLower() == targetType.ToLower() &&
-            x.Status.ToLower() == status.ToLower());
+            x.TargetType == targetType &&
+            x.Status == status);
     }
 }

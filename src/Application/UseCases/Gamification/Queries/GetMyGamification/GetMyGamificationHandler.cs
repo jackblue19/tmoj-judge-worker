@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using MediatR;
 
 namespace Application.UseCases.Gamification.Queries.GetMyGamification;
@@ -32,6 +32,10 @@ public class GetMyGamificationHandler
         var badges = await _repo.GetUserBadgesAsync(userId);
         var solvedCount = await _repo.GetSolvedProblemCountAsync(userId);
 
+        // Difficulty stats
+        var solvedByDifficulty = await _repo.GetSolvedCountByDifficultyAsync(userId);
+        var totalByDifficulty = await _repo.GetProblemCountByDifficultyAsync();
+
         // =========================
         // MAP
         // =========================
@@ -40,6 +44,13 @@ public class GetMyGamificationHandler
             CurrentStreak = streak?.CurrentStreak ?? 0,
             LongestStreak = streak?.LongestStreak ?? 0,
             SolvedProblems = solvedCount,
+
+            EasySolved = solvedByDifficulty.GetValueOrDefault("easy", 0),
+            EasyTotal = totalByDifficulty.GetValueOrDefault("easy", 0),
+            MediumSolved = solvedByDifficulty.GetValueOrDefault("medium", 0),
+            MediumTotal = totalByDifficulty.GetValueOrDefault("medium", 0),
+            HardSolved = solvedByDifficulty.GetValueOrDefault("hard", 0),
+            HardTotal = totalByDifficulty.GetValueOrDefault("hard", 0),
 
             Badges = badges.Select(b => new BadgeDto
             {

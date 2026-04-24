@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+using Domain.Entities;
 using System.Threading.Tasks;
 
 namespace Application.Common.Interfaces;
@@ -12,11 +12,21 @@ public interface IStudyPlanRepository
     Task<Guid> CreateAsync(StudyPlan entity);
     Task<StudyPlan?> GetByIdAsync(Guid id);
     Task<List<StudyPlan>> GetByCreatorAsync(Guid creatorId);
+    Task<Dictionary<Guid, string>> GetPlanTitlesAsync(List<Guid> planIds);
+    Task<Dictionary<Guid, bool>> GetCompletedPlansAsync(Guid userId, List<Guid> planIds);
+
+    Task<Dictionary<Guid, Guid>> GetItemPlanMappingAsync(List<Guid> itemIds);
+
+    Task<bool> HasUserPurchasedPlanAsync(Guid userId, Guid studyPlanId);
+    // key = StudyPlanItemId
+    // value = StudyPlanId
 
     // =========================
     // ITEMS
     // =========================
     Task AddItemAsync(StudyPlanItem entity);
+
+    Task<int> GetItemCountAsync(Guid planId);
     Task<List<StudyPlanItem>> GetItemsByPlanIdAsync(Guid studyPlanId);
 
     // =========================
@@ -34,6 +44,7 @@ public interface IStudyPlanRepository
     // =========================
     Task<bool> IsUserEnrolledAsync(Guid userId, Guid studyPlanId);
     Task<bool> IsStudyPlanCompletedAsync(Guid userId, Guid studyPlanId);
+    Task<bool> HasAccessToInPlanProblemAsync(Guid userId, Guid problemId); // ✅ NEW
     Task DeleteItemProgressRangeAsync(List<UserStudyItemProgress> entities);
 
     // =========================

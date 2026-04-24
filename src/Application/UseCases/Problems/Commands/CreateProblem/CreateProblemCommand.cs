@@ -9,12 +9,11 @@ public sealed record CreateProblemCommand(
     string Slug ,
     string? Difficulty ,
     string? TypeCode ,
-    string? VisibilityCode ,
     string? ScoringCode ,
-    string? StatusCode ,
     int? TimeLimitMs ,
     int? MemoryLimitKb ,
     string? DescriptionMd ,
     IFormFile? StatementFile ,
-    IReadOnlyCollection<Guid>? TagIds
+    IReadOnlyCollection<Guid>? TagIds ,
+    string? ProblemMode
 ) : IRequest<ProblemDetailDto>;

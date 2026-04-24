@@ -1,9 +1,16 @@
 using Application.DTOs.NotificationDTOs;
-using Domain.Entities;
-using Infrastructure.Persistence.Scaffolded.Context;
+using Application.UseCases.Notifications.Commands;
+using Application.UseCases.Notifications.Commands.CreateNotification;
+using Application.UseCases.Notifications.Commands.DeleteNotification;
+using Application.UseCases.Notifications.Commands.MarkNotificationAsRead;
+using Application.UseCases.Notifications.Queries;
+using Application.UseCases.Notifications.Queries.GetAllNotificationsQuery;
+using Application.UseCases.Notifications.Queries.GetNotificationsByUserQuery;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
+using System;
+using System.Threading.Tasks;
 using WebAPI.Hubs;
 
 namespace WebAPI.Controllers
@@ -12,14 +19,14 @@ namespace WebAPI.Controllers
     [Route("api/notification")]
     public class NotificationController : ControllerBase
     {
-        private readonly TmojDbContext _context;
+        private readonly IMediator _mediator;
         private readonly IHubContext<NotificationHub> _hub;
 
         public NotificationController(
-            TmojDbContext context,
+            IMediator mediator,
             IHubContext<NotificationHub> hub)
         {
-            _context = context;
+            _mediator = mediator;
             _hub = hub;
         }
 
@@ -31,22 +38,18 @@ namespace WebAPI.Controllers
         public async Task<IActionResult> Create(
             [FromBody] CreateNotificationRequestDto request)
         {
-            var notification = new Notification
+            var command = new CreateNotificationCommand
             {
-                NotificationId = Guid.NewGuid(),
                 UserId = request.UserId,
                 Title = request.Title,
                 Message = request.Message,
                 Type = request.Type,
                 ScopeType = request.ScopeType,
                 ScopeId = request.ScopeId,
-                CreatedBy = request.CreatedBy,
-                IsRead = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedBy = request.CreatedBy
             };
 
-            _context.Notifications.Add(notification);
-            await _context.SaveChangesAsync();
+            var notification = await _mediator.Send(command);
 
             // SignalR realtime
             await _hub.Clients.User(request.UserId.ToString())
@@ -63,11 +66,7 @@ namespace WebAPI.Controllers
         [HttpGet("user/{userId}")]
         public async Task<IActionResult> GetByUser(Guid userId)
         {
-            var list = await _context.Notifications
-                .Where(x => x.UserId == userId)
-                .OrderByDescending(x => x.CreatedAt)
-                .ToListAsync();
-
+            var list = await _mediator.Send(new GetNotificationsByUserQuery(userId));
             return Ok(list);
         }
 
@@ -79,10 +78,7 @@ namespace WebAPI.Controllers
         [HttpGet("all")]
         public async Task<IActionResult> GetAll()
         {
-            var list = await _context.Notifications
-                .OrderByDescending(x => x.CreatedAt)
-                .ToListAsync();
-
+            var list = await _mediator.Send(new GetAllNotificationsQuery());
             return Ok(list);
         }
 
@@ -94,34 +90,30 @@ namespace WebAPI.Controllers
         [HttpPut("read/{id}")]
         public async Task<IActionResult> MarkAsRead(Guid id)
         {
-            var notification = await _context.Notifications
-                .FirstOrDefaultAsync(x => x.NotificationId == id);
-
-            if (notification == null)
-                return NotFound();
-
-            notification.IsRead = true;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(notification);
+            try
+            {
+                await _mediator.Send(new MarkNotificationAsReadCommand(id));
+                return Ok(new { message = "Marked as read" });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
         }
 
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var notification = await _context.Notifications
-                .FirstOrDefaultAsync(x => x.NotificationId == id);
-
-            if (notification == null)
-                return NotFound();
-
-            _context.Notifications.Remove(notification);
-
-            await _context.SaveChangesAsync();
-
-            return Ok("Deleted");
+            try
+            {
+                await _mediator.Send(new DeleteNotificationCommand(id));
+                return Ok("Deleted");
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
         }
 
     }

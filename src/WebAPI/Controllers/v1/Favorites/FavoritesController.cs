@@ -1,4 +1,4 @@
-﻿using Application.UseCases.Favorite.Commands.AddContestToCollection;
+using Application.UseCases.Favorite.Commands.AddContestToCollection;
 using Application.UseCases.Favorite.Commands.AddProblemToCollection;
 using Application.UseCases.Favorite.Commands.CopyCollection;
 using Application.UseCases.Favorite.Commands.CreateCollection;
@@ -324,13 +324,13 @@ public class FavoritesController : ControllerBase
     // =========================
     // ADD PROBLEM TO COLLECTION
     // =========================
-    [HttpPost("/api/v1/collections/{id}/problems")]
+    [HttpPost("collections/{id}/problems")]
     [Authorize]
     public async Task<IActionResult> AddProblemToCollection(
         Guid id,
         [FromBody] AddProblemToCollectionRequest request)
     {
-        Console.WriteLine("🔥 API AddProblemToCollection called");
+
 
         try
         {
@@ -367,7 +367,7 @@ public class FavoritesController : ControllerBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR AddProblemToCollection: {ex.Message}");
+
 
             return StatusCode(500, new
             {
@@ -381,13 +381,13 @@ public class FavoritesController : ControllerBase
     // =========================
     // ADD CONTEST TO COLLECTION
     // =========================
-    [HttpPost("/api/v1/collections/{id}/contests")]
+    [HttpPost("collections/{id}/contests")]
     [Authorize]
     public async Task<IActionResult> AddContestToCollection(
         Guid id,
         [FromBody] AddContestToCollectionRequest request)
     {
-        Console.WriteLine("🔥 API AddContestToCollection called");
+
 
         try
         {
@@ -424,7 +424,7 @@ public class FavoritesController : ControllerBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR AddContestToCollection: {ex.Message}");
+
 
             return StatusCode(500, new
             {
@@ -437,13 +437,13 @@ public class FavoritesController : ControllerBase
     // =========================
     // REMOVE ITEM FROM COLLECTION
     // =========================
-    [HttpDelete("/api/v1/collections/{id}/items/{itemId}")]
+    [HttpDelete("collections/{id}/items/{itemId}")]
     [Authorize]
     public async Task<IActionResult> RemoveItemFromCollection(
         Guid id,
         Guid itemId)
     {
-        Console.WriteLine("🔥 API RemoveItemFromCollection called");
+
 
         try
         {
@@ -477,7 +477,7 @@ public class FavoritesController : ControllerBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR RemoveItem: {ex.Message}");
+
 
             return StatusCode(500, new
             {
@@ -490,13 +490,13 @@ public class FavoritesController : ControllerBase
     // =========================
     // REORDER COLLECTION ITEMS
     // =========================
-    [HttpPut("/api/v1/collections/{id}/reorder")]
+    [HttpPut("collections/{id}/reorder")]
     [Authorize]
     public async Task<IActionResult> ReorderCollectionItems(
         Guid id,
         [FromBody] ReorderCollectionRequest request)
     {
-        Console.WriteLine("🔥 API ReorderCollectionItems called");
+
 
         try
         {
@@ -542,7 +542,7 @@ public class FavoritesController : ControllerBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ ERROR Reorder: {ex.Message}");
+
 
             return StatusCode(500, new
             {
@@ -555,7 +555,7 @@ public class FavoritesController : ControllerBase
     // =========================
     // GET PUBLIC COLLECTIONS
     // =========================
-    [HttpGet("/api/v1/collections/public")]
+    [HttpGet("collections/public")]
     public async Task<IActionResult> GetPublicCollections(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
@@ -619,11 +619,11 @@ public class FavoritesController : ControllerBase
     // =========================
     // COPY COLLECTION
     // =========================
-    [HttpPost("/api/v1/collections/{id}/copy")]
+    [HttpPost("collections/{id}/copy")]
     [Authorize]
     public async Task<IActionResult> CopyCollection(Guid id)
     {
-        Console.WriteLine(" API CopyCollection called");
+
 
         try
         {
@@ -656,7 +656,7 @@ public class FavoritesController : ControllerBase
         }
         catch (Exception ex)
         {
-            Console.WriteLine($" ERROR CopyCollection: {ex.Message}");
+
 
             return StatusCode(500, new
             {

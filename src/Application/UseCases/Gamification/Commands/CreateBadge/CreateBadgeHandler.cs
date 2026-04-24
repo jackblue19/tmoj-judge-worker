@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
 
@@ -7,23 +7,27 @@ namespace Application.UseCases.Gamification.Commands.CreateBadge;
 public class CreateBadgeHandler : IRequestHandler<CreateBadgeCommand, Guid>
 {
     private readonly IGamificationRepository _repo;
+    private readonly ICurrentUserService _currentUser;
 
-    public CreateBadgeHandler(IGamificationRepository repo)
+    public CreateBadgeHandler(
+        IGamificationRepository repo,
+        ICurrentUserService currentUser)
     {
         _repo = repo;
+        _currentUser = currentUser;
     }
 
     public async Task<Guid> Handle(CreateBadgeCommand request, CancellationToken cancellationToken)
     {
         var dto = request.Dto;
 
-        // 🔥 validate category
+        // validate category
         var validCategories = new[] { "contest", "course", "org", "streak", "problem" };
 
         if (!validCategories.Contains(dto.BadgeCategory))
             throw new Exception("Invalid badge category");
 
-        // 🔥 check duplicate code
+        // check duplicate code
         var exists = await _repo.ExistsBadgeCodeAsync(dto.BadgeCode);
 
         if (exists)
@@ -39,7 +43,8 @@ public class CreateBadgeHandler : IRequestHandler<CreateBadgeCommand, Guid>
             BadgeCategory = dto.BadgeCategory,
             BadgeLevel = dto.BadgeLevel,
             IsRepeatable = dto.IsRepeatable,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = _currentUser.UserId
         };
 
         return await _repo.CreateBadgeAsync(badge);

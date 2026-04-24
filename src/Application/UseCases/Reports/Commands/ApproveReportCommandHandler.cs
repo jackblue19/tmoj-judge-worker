@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.DiscussionComments.Commands;
 using Application.UseCases.DiscussionComments.Specs;
 using Application.UseCases.Reports.Specs;
@@ -21,6 +21,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
 
     private readonly IReadRepository<User, Guid> _userRepo;
     private readonly IWriteRepository<User, Guid> _userWriteRepo;
+    private readonly IWriteRepository<Notification, Guid> _notificationRepo;
 
     private readonly IUnitOfWork _uow;
     private readonly IMediator _mediator;
@@ -35,6 +36,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         IProblemDiscussionRepository discussionRepo,
         IReadRepository<User, Guid> userRepo,
         IWriteRepository<User, Guid> userWriteRepo,
+        IWriteRepository<Notification, Guid> notificationRepo,
         IUnitOfWork uow,
         IMediator mediator,
         ICurrentUserService currentUser)
@@ -47,6 +49,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         _discussionRepo = discussionRepo;
         _userRepo = userRepo;
         _userWriteRepo = userWriteRepo;
+        _notificationRepo = notificationRepo;
         _uow = uow;
         _mediator = mediator;
         _currentUser = currentUser;
@@ -110,6 +113,33 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         }
 
         // =========================
+        // NOTIFY AUTHOR OF MODERATION
+        // =========================
+        if (authorId.HasValue)
+        {
+            var existingApproved = await _readRepo.CountAsync(
+                new ReportsByTargetAndStatusSpec(report.TargetId, report.TargetType, "approved"), ct);
+
+            if (existingApproved == 0)
+            {
+                var targetName = report.TargetType == "comment" ? "Bình luận" : "Bài thảo luận";
+                await _notificationRepo.AddAsync(new Notification
+                {
+                    NotificationId = Guid.NewGuid(),
+                    UserId = authorId.Value,
+                    Title = $"{targetName} bị gỡ do vi phạm",
+                    Message = $"{targetName} của bạn đã bị quản trị viên gỡ bỏ vì vi phạm tiêu chuẩn cộng đồng. Lý do: {report.Reason}",
+                    Type = "system",
+                    ScopeType = report.TargetType,
+                    ScopeId = report.TargetId,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = adminId
+                }, ct);
+            }
+        }
+
+        // =========================
         // UPDATE REPORT
         // =========================
         report.Status = "approved";
@@ -152,20 +182,23 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
             if (commentIds.Any())
             {
                 var comments = await _commentRepo.ListAsync(
-                    new CommentsByIdsSpec(commentIds), ct);
+                    new CommentsByIdsSpec(commentIds.Distinct().ToList()), ct);
 
-                commentCount = comments.Count(x => x.UserId == authorId);
+                var userCommentIds = comments.Where(x => x.UserId == authorId).Select(x => x.Id).ToHashSet();
+                commentCount = commentIds.Count(id => userCommentIds.Contains(id));
             }
 
             if (discussionIds.Any())
             {
                 var discussions = await _discussionRepo
-                    .GetDiscussionEntitiesByIdsAsync(discussionIds);
+                    .GetDiscussionEntitiesByIdsAsync(discussionIds.Distinct().ToList());
 
-                discussionCount = discussions.Count(x => x.UserId == authorId);
+                var userDiscussionIds = discussions.Where(x => x.UserId == authorId).Select(x => x.Id).ToHashSet();
+                discussionCount = discussionIds.Count(id => userDiscussionIds.Contains(id));
             }
 
-            var total = commentCount + discussionCount;
+            // Cộng thêm report hiện tại vì nó chưa được save vào DB với status = approved
+            var total = commentCount + discussionCount + 1;
 
             if (total >= 5)
             {
@@ -184,6 +217,18 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                         ActionType = "auto_ban_user",
                         Note = $"Auto banned (total approved reports = {total})",
                         CreatedAt = now
+                    }, ct);
+
+                    await _notificationRepo.AddAsync(new Notification
+                    {
+                        NotificationId = Guid.NewGuid(),
+                        UserId = authorId.Value,
+                        Title = "Tài khoản bị cấm (Banned)",
+                        Message = $"Tài khoản của bạn đã bị khóa do có quá nhiều nội dung vi phạm tiêu chuẩn cộng đồng ({total} vi phạm).",
+                        Type = "system",
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = adminId
                     }, ct);
                 }
             }

@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
@@ -37,6 +37,67 @@ public class StudyPlanRepository : IStudyPlanRepository
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
     }
+    public async Task<Dictionary<Guid, Guid>> GetItemPlanMappingAsync(List<Guid> itemIds)
+    {
+        if (itemIds == null || itemIds.Count == 0)
+            return new Dictionary<Guid, Guid>();
+
+        return await _db.Set<StudyPlanItem>()
+            .Where(x => itemIds.Contains(x.Id))
+            .Select(x => new { x.Id, x.StudyPlanId })
+            .ToDictionaryAsync(x => x.Id, x => x.StudyPlanId);
+    }
+    public async Task<Dictionary<Guid, string>> GetPlanTitlesAsync(List<Guid> planIds)
+    {
+        if (planIds == null || planIds.Count == 0)
+            return new Dictionary<Guid, string>();
+
+        return await _db.Set<StudyPlan>()
+            .Where(x => planIds.Contains(x.Id))
+            .Select(x => new { x.Id, x.Title })
+            .ToDictionaryAsync(x => x.Id, x => x.Title);
+    }
+
+    public async Task<Dictionary<Guid, bool>> GetCompletedPlansAsync(Guid userId, List<Guid> planIds)
+    {
+        if (planIds == null || planIds.Count == 0)
+            return new Dictionary<Guid, bool>();
+
+        // total items per plan
+        var totalItems = await _db.Set<StudyPlanItem>()
+            .Where(x => planIds.Contains(x.StudyPlanId))
+            .GroupBy(x => x.StudyPlanId)
+            .Select(g => new { PlanId = g.Key, Total = g.Count() })
+            .ToDictionaryAsync(x => x.PlanId, x => x.Total);
+
+        // completed items per plan
+        var completedItems = await (
+            from p in _db.Set<UserStudyItemProgress>()
+            join i in _db.Set<StudyPlanItem>()
+                on p.StudyPlanItemId equals i.Id
+            where p.UserId == userId
+                  && planIds.Contains(i.StudyPlanId)
+                  && p.IsCompleted == true
+            group p by i.StudyPlanId into g
+            select new
+            {
+                PlanId = g.Key,
+                Completed = g.Select(x => x.StudyPlanItemId).Distinct().Count()
+            }
+        ).ToDictionaryAsync(x => x.PlanId, x => x.Completed);
+
+        var result = new Dictionary<Guid, bool>();
+
+        foreach (var planId in planIds)
+        {
+            var total = totalItems.GetValueOrDefault(planId);
+            var completed = completedItems.GetValueOrDefault(planId);
+
+            result[planId] = total > 0 && completed == total;
+        }
+
+        return result;
+    }
 
     // =========================
     // ITEMS
@@ -53,6 +114,11 @@ public class StudyPlanRepository : IStudyPlanRepository
             .OrderBy(x => x.OrderIndex)
             .ToListAsync();
     }
+    public async Task<int> GetItemCountAsync(Guid planId)
+    {
+        return await _db.Set<StudyPlanItem>()
+            .CountAsync(x => x.StudyPlanId == planId);
+    }
 
     // =========================
     // ITEM PROGRESS
@@ -67,16 +133,14 @@ public class StudyPlanRepository : IStudyPlanRepository
 
     public async Task<List<UserStudyItemProgress>> GetItemProgressByPlanAsync(Guid userId, Guid studyPlanId)
     {
-        return await _db.Set<UserStudyItemProgress>()
-            .Where(x => x.UserId == userId)
-            .Where(x =>
-                _db.Set<StudyPlanItem>()
-                    .Any(i =>
-                        i.Id == x.StudyPlanItemId &&
-                        i.StudyPlanId == studyPlanId
-                    )
-            )
-            .ToListAsync();
+        return await (
+            from p in _db.Set<UserStudyItemProgress>()
+            join i in _db.Set<StudyPlanItem>()
+                on p.StudyPlanItemId equals i.Id
+            where p.UserId == userId
+                  && i.StudyPlanId == studyPlanId
+            select p
+        ).ToListAsync();
     }
 
     public async Task CreateItemProgressAsync(UserStudyItemProgress entity)
@@ -97,6 +161,32 @@ public class StudyPlanRepository : IStudyPlanRepository
                   && i.StudyPlanId == studyPlanId
             select p.Id
         ).AnyAsync();
+    }
+    
+    public async Task<bool> HasAccessToInPlanProblemAsync(Guid userId, Guid problemId)
+    {
+        // Kiểm tra xem bài tập này có nằm trong bất kỳ khóa học nào mà user đã mua hoặc khóa học miễn phí không
+        var planIdsContainingProblem = await _db.Set<StudyPlanItem>()
+            .Where(x => x.ProblemId == problemId)
+            .Select(x => x.StudyPlanId)
+            .Distinct()
+            .ToListAsync();
+
+        if (planIdsContainingProblem.Count == 0) return false;
+
+        var plans = await _db.Set<StudyPlan>()
+            .Where(x => planIdsContainingProblem.Contains(x.Id))
+            .ToListAsync();
+
+        foreach (var plan in plans)
+        {
+            if (!plan.IsPaid) return true; // Miễn phí thì có quyền truy cập
+            
+            var hasPurchased = await HasUserPurchasedPlanAsync(userId, plan.Id);
+            if (hasPurchased) return true; // Đã mua thì có quyền
+        }
+
+        return false;
     }
 
     // =========================
@@ -129,7 +219,28 @@ public class StudyPlanRepository : IStudyPlanRepository
     // =========================
     public async Task SaveChangesAsync()
     {
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            var entries = _db.ChangeTracker.Entries()
+                .Select(e => new
+                {
+                    Entity = e.Entity.GetType().Name,
+                    State = e.State.ToString()
+                });
+
+            var debugInfo = string.Join(", ", entries.Select(x => $"{x.Entity}:{x.State}"));
+
+            var inner = ex.InnerException?.Message;
+
+            throw new Exception(
+                $"DB ERROR: {inner ?? ex.Message} | ENTITIES: {debugInfo}",
+                ex
+            );
+        }
     }
 
     // =========================
@@ -183,5 +294,14 @@ public class StudyPlanRepository : IStudyPlanRepository
             .Include(x => x.StudyPlanItems)
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync();
+    }
+
+    public async Task<bool> HasUserPurchasedPlanAsync(Guid userId, Guid studyPlanId)
+    {
+        return await _db.Set<UserStudyPlanPurchase>()
+            .AnyAsync(x =>
+                x.UserId == userId &&
+                x.StudyPlanId == studyPlanId
+            );
     }
 }

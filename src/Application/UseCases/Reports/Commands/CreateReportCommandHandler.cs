@@ -136,7 +136,7 @@ public class CreateReportCommandHandler
                         ScopeType = "comment",
                         ScopeId = request.TargetId,
                         IsRead = false,
-                        CreatedAt = createdAt
+                        CreatedAt = DateTime.UtcNow
                     }, ct);
                 }
             }

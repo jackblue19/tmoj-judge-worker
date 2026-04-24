@@ -1,5 +1,5 @@
 using System;
-using WebAPI.Controllers.v1.ClassManagement;
+using Application.UseCases.Classes.Dtos;
 
 namespace WebAPI.Controllers.v1.Users;
 
@@ -36,7 +36,7 @@ public record SimpleUserDto(
 
 public record StudentProfileWithClassesResponse(
     UserDto Student,
-    List<ClassInstanceInfo> Classes,
+    List<ClassInstanceDto> Classes,
     int TotalClasses);
 
 public record TeacherSubjectInfo(
@@ -49,5 +49,5 @@ public record TeacherSubjectInfo(
 public record TeacherDetailResponse(
     UserDto Teacher,
     List<TeacherSubjectInfo> Subjects,
-    List<ClassInstanceInfo> Classes,
+    List<ClassInstanceDto> Classes,
     int TotalClasses);

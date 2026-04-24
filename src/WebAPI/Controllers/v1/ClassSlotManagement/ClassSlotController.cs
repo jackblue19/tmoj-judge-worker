@@ -1,4 +1,6 @@
 using Asp.Versioning;
+using Application.UseCases.ClassSlots.Commands;
+using Application.UseCases.ClassSlots.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Authorization;
@@ -43,16 +45,16 @@ public class ClassSlotController : ControllerBase
                 .OrderBy(s => s.SlotNo)
                 .ToListAsync(ct);
 
-            var result = slots.Select(s => new ClassSlotResponse(
+            var result = slots.Select(s => new ClassSlotDto(
                 s.Id, s.ClassSemesterId, s.SlotNo, s.Title, s.Description, s.Rules,
                 s.OpenAt, s.DueAt, s.CloseAt, s.Mode, s.ContestId, s.IsPublished,
                 s.CreatedAt, s.UpdatedAt,
-                (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).OrderBy(sp => sp.Ordinal).Select(sp => new SlotProblemResponse(
+                (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).OrderBy(sp => sp.Ordinal).Select(sp => new SlotProblemDto(
                     sp.ProblemId, sp.Problem.Title, sp.Problem.Slug,
                     sp.Ordinal, sp.Points, sp.IsRequired)).ToList()
             )).ToList();
 
-            return Ok(ApiResponse<List<ClassSlotResponse>>.Ok(result, "Slots fetched successfully"));
+            return Ok(ApiResponse<List<ClassSlotDto>>.Ok(result, "Slots fetched successfully"));
         }
         catch (Exception)
         {
@@ -67,7 +69,7 @@ public class ClassSlotController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(
     Guid semesterId,
-    [FromBody] CreateClassSlotRequest req,
+    [FromBody] CreateClassSlotBody req,
     CancellationToken ct)
     {
         try
@@ -77,71 +79,26 @@ public class ClassSlotController : ControllerBase
 
             var classSemester = await _db.ClassSemesters.FirstOrDefaultAsync(cs => cs.Id == semesterId, ct);
             if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
-            
+
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId)
                 return Forbid();
 
-            if (string.IsNullOrWhiteSpace(req.Title))
-                return BadRequest(new { Message = "Title is required." });
-
-            var mode = req.Mode?.ToLowerInvariant() ?? "problemset";
-            if (mode is not ("problemset" or "contest"))
-                return BadRequest(new { Message = "Mode must be 'problemset' or 'contest'." });
-
-            // Check unique slot_no within this instance
-            if (await _db.ClassSlots.AnyAsync(s => s.ClassSemesterId == semesterId && s.SlotNo == req.SlotNo, ct))
-                return Conflict(new { Message = $"SlotNo {req.SlotNo} already exists in this class instance." });
-
-            // Validate problem points (mỗi problem phải có Points, tổng <= 10)
-            if (req.Problems is { Count: > 0 })
-            {
-                var (ok, error) = ValidateSlotPoints(req.Problems.Select(p => p.Points));
-                if (!ok) return BadRequest(new { Message = error });
-            }
-
-            var slot = new ClassSlot
-            {
-                ClassSemesterId = semesterId,
-                SlotNo = req.SlotNo,
-                Title = req.Title.Trim(),
-                Description = req.Description?.Trim(),
-                Rules = req.Rules?.Trim(),
-                OpenAt = req.OpenAt?.ToUniversalTime(),
-                DueAt = req.DueAt?.ToUniversalTime(),
-                CloseAt = req.CloseAt?.ToUniversalTime(),
-                Mode = mode,
-                IsPublished = false,
-                CreatedBy = userId,
-                UpdatedBy = userId
-            };
-
-            _db.ClassSlots.Add(slot);
-            await _db.SaveChangesAsync(ct);
-
-            // Add problems
-            if (req.Problems is { Count: > 0 })
-            {
-                foreach (var p in req.Problems)
-                {
-                    if (!await _db.Problems.AnyAsync(pr => pr.Id == p.ProblemId, ct))
-                        return BadRequest(new { Message = $"Problem {p.ProblemId} not found." });
-
-                    _db.ClassSlotProblems.Add(new ClassSlotProblem
-                    {
-                        SlotId = slot.Id,
-                        ProblemId = p.ProblemId,
-                        Ordinal = p.Ordinal,
-                        Points = p.Points,
-                        IsRequired = p.IsRequired
-                    });
-                }
-            }
-
-            await _db.SaveChangesAsync(ct);
+            var slotId = await _mediator.Send(
+                new CreateClassSlotCommand(
+                    semesterId, req.SlotNo, req.Title, req.Description, req.Rules,
+                    req.OpenAt, req.DueAt, req.CloseAt, req.Mode, req.Problems), ct);
 
             return CreatedAtAction(nameof(GetAll), new { semesterId, version = "1.0" },
-                new { Message = "Assignment created successfully.", slot.Id, slot.SlotNo });
+                new { Message = "Assignment created successfully.", Id = slotId, SlotNo = req.SlotNo });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { Message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -156,7 +113,7 @@ public class ClassSlotController : ControllerBase
     [HttpPut("{slotId:guid}/due-date")]
     public async Task<IActionResult> SetDueDate(
         Guid semesterId, Guid slotId,
-        [FromBody] SetDueDateRequest req,
+        [FromBody] SetDueDateBody req,
         CancellationToken ct)
     {
         try
@@ -166,21 +123,18 @@ public class ClassSlotController : ControllerBase
 
             var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == semesterId, ct);
             if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
-            
+
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var slot = await _db.ClassSlots
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == semesterId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found in this instance." });
+            await _mediator.Send(
+                new SetClassSlotDueDateCommand(semesterId, slotId, req.DueAt, req.CloseAt), ct);
 
-            slot.DueAt = req.DueAt;
-            if (req.CloseAt.HasValue) slot.CloseAt = req.CloseAt.Value;
-            slot.UpdatedBy = userId;
-
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(new { Message = "Due date updated successfully.", slot.DueAt, slot.CloseAt });
+            return Ok(new { Message = "Due date updated successfully.", DueAt = req.DueAt, CloseAt = req.CloseAt });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { Message = "Slot not found." });
         }
         catch (Exception)
         {
@@ -205,25 +159,22 @@ public class ClassSlotController : ControllerBase
 
             var classSemester = await _db.ClassSemesters.AsNoTracking().FirstOrDefaultAsync(cs => cs.Id == semesterId, ct);
             if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
-            
+
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var slot = await _db.ClassSlots
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == semesterId, ct);
-
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
-
-            slot.IsPublished = !slot.IsPublished;
-            slot.UpdatedBy = userId;
-
-            await _db.SaveChangesAsync(ct);
+            var isPublished = await _mediator.Send(
+                new ToggleClassSlotPublishCommand(semesterId, slotId), ct);
 
             return Ok(new
             {
-                Message = slot.IsPublished ? "Slot published." : "Slot unpublished.",
-                IsPublished = slot.IsPublished
+                Message = isPublished ? "Slot published." : "Slot unpublished.",
+                IsPublished = isPublished
             });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { Message = "Slot not found." });
         }
         catch (Exception)
         {
@@ -254,7 +205,7 @@ public class ClassSlotController : ControllerBase
                 .Where(m => m.ClassSemesterId == semesterId && m.IsActive)
                 .ToListAsync(ct);
 
-            var result = new List<StudentSlotScoreResponse>();
+            var result = new List<StudentSlotScoreDto>();
 
             foreach (var m in members)
             {
@@ -302,7 +253,7 @@ public class ClassSlotController : ControllerBase
                             lastSubmittedAt = s.CreatedAt;
                     }
 
-                    return new ProblemScoreEntry(
+                    return new ProblemScoreDto(
                         sp.ProblemId,
                         sp.Problem.Title,
                         bestVerdict,
@@ -314,12 +265,12 @@ public class ClassSlotController : ControllerBase
                 var total = problemScores.Where(p => p.Score.HasValue).Sum(p => p.Score!.Value);
                 var solved = problemScores.Count(p => p.VerdictCode == "ac");
 
-                result.Add(new StudentSlotScoreResponse(
+                result.Add(new StudentSlotScoreDto(
                     m.UserId, m.User.DisplayName, m.User.AvatarUrl,
                     problemScores, total, solved));
             }
 
-            return Ok(ApiResponse<List<StudentSlotScoreResponse>>.Ok(
+            return Ok(ApiResponse<List<StudentSlotScoreDto>>.Ok(
                 result.OrderByDescending(r => r.TotalScore).ToList(),
                 "Scores fetched successfully"));
         }
@@ -357,25 +308,25 @@ public class ClassSlotController : ControllerBase
                     .ToListAsync(ct)
                 : new List<Submission>();
 
-            var result = new List<StudentSubmissionDetailResponse>();
+            var result = new List<StudentSubmissionDetailDto>();
 
             foreach (var s in submissions)
             {
                 var results = await _db.Results.AsNoTracking()
                     .Where(r => r.SubmissionId == s.Id)
                     .OrderBy(r => r.Id)
-                    .Select(r => new SubmissionResultEntry(
+                    .Select(r => new SubmissionResultDto(
                         r.Id, r.StatusCode, r.RuntimeMs, r.MemoryKb,
                         r.CheckerMessage, r.Input, r.ExpectedOutput, r.ActualOutput))
                     .ToListAsync(ct);
 
-                result.Add(new StudentSubmissionDetailResponse(
+                result.Add(new StudentSubmissionDetailDto(
                     s.Id, s.ProblemId, s.Problem.Title,
                     s.VerdictCode, s.FinalScore, s.TimeMs, s.MemoryKb,
                     s.StatusCode, s.CreatedAt, results));
             }
 
-            return Ok(ApiResponse<List<StudentSubmissionDetailResponse>>.Ok(
+            return Ok(ApiResponse<List<StudentSubmissionDetailDto>>.Ok(
                 result, "Submissions fetched successfully"));
         }
         catch (Exception)
@@ -391,7 +342,7 @@ public class ClassSlotController : ControllerBase
     [HttpPut("{slotId:guid}")]
     public async Task<IActionResult> Update(
         Guid semesterId, Guid slotId,
-        [FromBody] UpdateClassSlotRequest req,
+        [FromBody] UpdateClassSlotBody req,
         CancellationToken ct)
     {
         try
@@ -405,22 +356,15 @@ public class ClassSlotController : ControllerBase
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var slot = await _db.ClassSlots
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == semesterId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
+            await _mediator.Send(
+                new UpdateClassSlotCommand(semesterId, slotId, req.Title, req.Description, req.Rules,
+                    req.OpenAt, req.DueAt, req.CloseAt, req.IsPublished), ct);
 
-            if (req.Title is not null) slot.Title = req.Title.Trim();
-            if (req.Description is not null) slot.Description = req.Description.Trim();
-            if (req.Rules is not null) slot.Rules = req.Rules.Trim();
-            if (req.OpenAt.HasValue) slot.OpenAt = req.OpenAt.Value.ToUniversalTime();
-            if (req.DueAt.HasValue) slot.DueAt = req.DueAt.Value.ToUniversalTime();
-            if (req.CloseAt.HasValue) slot.CloseAt = req.CloseAt.Value.ToUniversalTime();
-            if (req.IsPublished.HasValue) slot.IsPublished = req.IsPublished.Value;
-            slot.UpdatedBy = userId;
-
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(new { Message = "Slot updated successfully.", slot.Id });
+            return Ok(new { Message = "Slot updated successfully.", Id = slotId });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { Message = "Slot not found." });
         }
         catch (Exception)
         {
@@ -448,19 +392,14 @@ public class ClassSlotController : ControllerBase
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var slot = await _db.ClassSlots
-                .Include(s => s.ClassSlotProblems)
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == semesterId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
-
-            // Remove associated problems first
-            if (slot.ClassSlotProblems?.Any() == true)
-                _db.ClassSlotProblems.RemoveRange(slot.ClassSlotProblems);
-
-            _db.ClassSlots.Remove(slot);
-            await _db.SaveChangesAsync(ct);
+            await _mediator.Send(
+                new DeleteClassSlotCommand(semesterId, slotId), ct);
 
             return Ok(new { Message = "Slot deleted successfully." });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { Message = "Slot not found." });
         }
         catch (Exception)
         {
@@ -475,7 +414,7 @@ public class ClassSlotController : ControllerBase
     [HttpPost("{slotId:guid}/problems")]
     public async Task<IActionResult> AddProblems(
         Guid semesterId, Guid slotId,
-        [FromBody] List<SlotProblemItem> problems,
+        [FromBody] List<SlotProblemBody> problems,
         CancellationToken ct)
     {
         try
@@ -489,48 +428,25 @@ public class ClassSlotController : ControllerBase
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var slot = await _db.ClassSlots
-                .Include(s => s.ClassSlotProblems)
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == semesterId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
-
             if (problems is not { Count: > 0 })
                 return BadRequest(new { Message = "At least one problem is required." });
 
-            var existing = (slot.ClassSlotProblems ?? new List<ClassSlotProblem>()).ToList();
-            var existingProblemIds = existing.Select(sp => sp.ProblemId).ToHashSet();
+            var problemItems = problems.Select(p =>
+                new SlotProblemItem(p.ProblemId, p.Ordinal ?? 0, p.Points, p.IsRequired))
+                .ToList();
 
-            // Validate: tất cả Points (cả existing + new chưa duplicate) phải có và tổng <= 10
-            var newToAdd = problems.Where(p => !existingProblemIds.Contains(p.ProblemId)).ToList();
-            var combinedPoints = existing.Select(sp => sp.Points)
-                .Concat(newToAdd.Select(p => p.Points));
-            var (ok, error) = ValidateSlotPoints(combinedPoints);
-            if (!ok) return BadRequest(new { Message = error });
-
-            var added = 0;
-            foreach (var p in problems)
-            {
-                if (existingProblemIds.Contains(p.ProblemId))
-                    continue; // skip duplicates
-
-                if (!await _db.Problems.AnyAsync(pr => pr.Id == p.ProblemId, ct))
-                    return BadRequest(new { Message = $"Problem {p.ProblemId} not found." });
-
-                _db.ClassSlotProblems.Add(new ClassSlotProblem
-                {
-                    SlotId = slot.Id,
-                    ProblemId = p.ProblemId,
-                    Ordinal = p.Ordinal,
-                    Points = p.Points,
-                    IsRequired = p.IsRequired
-                });
-                added++;
-            }
-
-            slot.UpdatedBy = userId;
-            await _db.SaveChangesAsync(ct);
+            var added = await _mediator.Send(
+                new AddSlotProblemsCommand(semesterId, slotId, problemItems), ct);
 
             return Ok(new { Message = $"{added} problem(s) added to slot.", Added = added });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -545,7 +461,7 @@ public class ClassSlotController : ControllerBase
     [HttpPut("{slotId:guid}/problems")]
     public async Task<IActionResult> UpdateProblems(
         Guid semesterId, Guid slotId,
-        [FromBody] List<SlotProblemItem> problems,
+        [FromBody] List<SlotProblemBody> problems,
         CancellationToken ct)
     {
         try
@@ -559,42 +475,25 @@ public class ClassSlotController : ControllerBase
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var slot = await _db.ClassSlots
-                .Include(s => s.ClassSlotProblems)
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == semesterId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
-
             if (problems is not { Count: > 0 })
                 return BadRequest(new { Message = "Problems payload is required." });
 
+            var problemItems = problems.Select(p =>
+                new SlotProblemUpdateItem(p.ProblemId, p.Ordinal ?? 0, p.Points, p.IsRequired))
+                .ToList();
 
-            var slotProblems = slot.ClassSlotProblems?.ToList() ?? new List<ClassSlotProblem>();
-            var updated = 0;
-
-
-            foreach (var p in problems)
-            {
-                var existing = slotProblems.FirstOrDefault(sp => sp.ProblemId == p.ProblemId);
-                if (existing != null)
-                {
-                    existing.Ordinal = p.Ordinal;
-                    existing.Points = p.Points;
-                    existing.IsRequired = p.IsRequired;
-                    updated++;
-                }
-            }
-
-            // Validate tổng Points sau khi update
-            var (ok, error) = ValidateSlotPoints(slotProblems.Select(sp => sp.Points));
-            if (!ok) return BadRequest(new { Message = error });
-
-            if (updated > 0)
-            {
-                slot.UpdatedBy = userId;
-                await _db.SaveChangesAsync(ct);
-            }
+            var updated = await _mediator.Send(
+                new UpdateSlotProblemsCommand(semesterId, slotId, problemItems), ct);
 
             return Ok(new { Message = $"{updated} problem(s) updated successfully.", Updated = updated });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -623,25 +522,17 @@ public class ClassSlotController : ControllerBase
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var slot = await _db.ClassSlots
-                .FirstOrDefaultAsync(s => s.Id == slotId && s.ClassSemesterId == semesterId, ct);
-            if (slot is null) return NotFound(new { Message = "Slot not found." });
-
             if (problemIds is not { Count: > 0 })
                 return BadRequest(new { Message = "At least one problem ID is required." });
 
-            var toRemove = await _db.ClassSlotProblems
-                .Where(sp => sp.SlotId == slotId && problemIds.Contains(sp.ProblemId))
-                .ToListAsync(ct);
+            var removed = await _mediator.Send(
+                new RemoveSlotProblemsCommand(semesterId, slotId, problemIds), ct);
 
-            if (toRemove.Count == 0)
-                return NotFound(new { Message = "None of the specified problems were found in this slot." });
-
-            _db.ClassSlotProblems.RemoveRange(toRemove);
-            slot.UpdatedBy = userId;
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(new { Message = $"{toRemove.Count} problem(s) removed from slot.", Removed = toRemove.Count });
+            return Ok(new { Message = $"{removed} problem(s) removed from slot.", Removed = removed });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -656,30 +547,6 @@ public class ClassSlotController : ControllerBase
         var idStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                  ?? User.FindFirst("sub")?.Value;
         return Guid.TryParse(idStr, out var id) ? id : null;
-    }
-
-    private const int MaxSlotPoints = 10;
-
-    /// <summary>
-    /// Validate điểm các problem trong slot:
-    /// - Mỗi problem phải có Points (không null)
-    /// - Tổng điểm tất cả problem trong slot không quá 10
-    /// </summary>
-    private static (bool Ok, string? Error) ValidateSlotPoints(IEnumerable<int?> allPoints)
-    {
-        var list = allPoints.ToList();
-
-        if (list.Any(p => !p.HasValue))
-            return (false, "Each problem must have Points (not null).");
-
-        if (list.Any(p => p!.Value < 0))
-            return (false, "Points must be non-negative.");
-
-        var total = list.Sum(p => p!.Value);
-        if (total > MaxSlotPoints)
-            return (false, $"Total points of problems in slot must not exceed {MaxSlotPoints}. Current total: {total}.");
-
-        return (true, null);
     }
 
     // ──────────────────────────────────────────
@@ -698,7 +565,7 @@ public class ClassSlotController : ControllerBase
                 new GetClassSlotRankingsQuery { ClassSlotId = classSlotId },
                 ct);
 
-            return Ok(ApiResponse<GetClassSlotRankingsResponse>.Ok(
+            return Ok(ApiResponse<ClassSlotRankingDto>.Ok(
                 result,
                 "Fetched class slot rankings successfully"
             ));
@@ -707,10 +574,33 @@ public class ClassSlotController : ControllerBase
         {
             return NotFound(new { message = "Class slot not found." });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(500, new { message = "An error occurred while fetching rankings." });
         }
     }
-
 }
+
+public record CreateClassSlotBody(
+    int SlotNo,
+    string Title,
+    string? Description,
+    string? Rules,
+    DateTime? OpenAt,
+    DateTime? DueAt,
+    DateTime? CloseAt,
+    string Mode,
+    List<CreateSlotProblemItem>? Problems);
+
+public record UpdateClassSlotBody(
+    string? Title,
+    string? Description,
+    string? Rules,
+    DateTime? OpenAt,
+    DateTime? DueAt,
+    DateTime? CloseAt,
+    bool? IsPublished);
+
+public record SetDueDateBody(DateTime DueAt, DateTime? CloseAt);
+
+public record SlotProblemBody(Guid ProblemId, int? Ordinal, int? Points, bool IsRequired);

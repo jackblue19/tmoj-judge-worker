@@ -1,4 +1,11 @@
 using Asp.Versioning;
+using Application.UseCases.Semesters.Commands.CreateSemester;
+using Application.UseCases.Semesters.Commands.DeleteSemester;
+using Application.UseCases.Semesters.Commands.UpdateSemester;
+using Application.UseCases.Semesters.Queries.GetSemester;
+using Application.UseCases.Semesters.Queries.GetAllSemesters;
+using Application.UseCases.Semesters.Queries.GetSemesterById;
+using Application.UseCases.Semesters.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using WebAPI.Models.Common;
 using System.IO;
 using Microsoft.AspNetCore.Http;
+using MediatR;
 
 namespace WebAPI.Controllers.v1.SemesterManagement;
 
@@ -17,10 +25,12 @@ namespace WebAPI.Controllers.v1.SemesterManagement;
 public class SemesterController : ControllerBase
 {
     private readonly TmojDbContext _db;
+    private readonly IMediator _mediator;
 
-    public SemesterController(TmojDbContext db)
+    public SemesterController(TmojDbContext db, IMediator mediator)
     {
         _db = db;
+        _mediator = mediator;
     }
 
     [HttpGet]
@@ -32,25 +42,10 @@ public class SemesterController : ControllerBase
     {
         try
         {
-            var query = _db.Semesters.AsNoTracking().Where(s => s.IsActive);
+            var result = await _mediator.Send(
+                new GetSemestersQuery(search, page, pageSize), ct);
 
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var s = search.Trim().ToLower();
-                query = query.Where(x => x.Code.ToLower().Contains(s) || x.Name.ToLower().Contains(s));
-            }
-
-            var totalCount = await query.CountAsync(ct);
-            var items = await query
-              .OrderByDescending(x => x.StartAt)
-              .Skip((page - 1) * pageSize)
-              .Take(pageSize)
-              .Select(x => new SemesterResponse(
-                  x.SemesterId, x.Code, x.Name, x.StartAt, x.EndAt, x.IsActive, x.CreatedAt))
-              .ToListAsync(ct);
-
-            return Ok(ApiResponse<SemesterListResponse>.Ok(
-                new SemesterListResponse(items, totalCount), "Semesters fetched successfully"));
+            return Ok(ApiResponse<SemesterListDto>.Ok(result, "Semesters fetched successfully"));
         }
         catch (Exception)
         {
@@ -63,14 +58,13 @@ public class SemesterController : ControllerBase
     {
         try
         {
-            var s = await _db.Semesters.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.SemesterId == id, ct);
+            var result = await _mediator.Send(new GetSemesterByIdQuery(id), ct);
 
-            if (s is null) return NotFound(new { Message = "Semester not found." });
-
-            return Ok(ApiResponse<SemesterResponse>.Ok(
-                new SemesterResponse(s.SemesterId, s.Code, s.Name, s.StartAt, s.EndAt, s.IsActive, s.CreatedAt),
-                "Semester fetched successfully"));
+            return Ok(ApiResponse<SemesterDto>.Ok(result, "Semester fetched successfully"));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { Message = "Semester not found." });
         }
         catch (Exception)
         {
@@ -80,39 +74,24 @@ public class SemesterController : ControllerBase
 
     [Authorize(Roles = "admin,manager")]
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateSemesterRequest req, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateSemesterCommand req, CancellationToken ct)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(req.Code) || string.IsNullOrWhiteSpace(req.Name))
-                return BadRequest(new { Message = "Code and Name are required." });
+            var semesterId = await _mediator.Send(req, ct);
 
-            if (await _db.Semesters.AnyAsync(s => s.Code == req.Code, ct))
-                return Conflict(new { Message = $"Semester code '{req.Code}' already exists." });
+            var result = await _mediator.Send(new GetSemesterByIdQuery(semesterId), ct);
 
-            if (req.StartAt >= req.EndAt)
-                return BadRequest(new { Message = "StartAt must be before EndAt." });
-
-            var hasOverlap = await _db.Semesters.AnyAsync(s =>
-                s.IsActive && s.StartAt <= req.EndAt && s.EndAt >= req.StartAt, ct);
-            if (hasOverlap)
-                return Conflict(new { Message = "The semester time range overlaps with an existing active semester." });
-
-            var semester = new Semester
-            {
-                Code = req.Code.Trim().ToUpperInvariant(),
-                Name = req.Name.Trim(),
-                StartAt = req.StartAt,
-                EndAt = req.EndAt
-            };
-
-            _db.Semesters.Add(semester);
-            await _db.SaveChangesAsync(ct);
-
-            return CreatedAtAction(nameof(GetById), new { id = semester.SemesterId },
-                ApiResponse<SemesterResponse>.Ok(
-                    new SemesterResponse(semester.SemesterId, semester.Code, semester.Name, semester.StartAt, semester.EndAt, semester.IsActive, semester.CreatedAt),
-                    "Semester created successfully"));
+            return CreatedAtAction(nameof(GetById), new { id = semesterId },
+                ApiResponse<SemesterDto>.Ok(result, "Semester created successfully"));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -122,35 +101,28 @@ public class SemesterController : ControllerBase
 
     [Authorize(Roles = "admin,manager")]
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSemesterRequest req, CancellationToken ct)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSemesterBody req, CancellationToken ct)
     {
         try
         {
-            var s = await _db.Semesters.FirstOrDefaultAsync(x => x.SemesterId == id, ct);
-            if (s is null) return NotFound(new { Message = "Semester not found." });
+            await _mediator.Send(
+                new UpdateSemesterCommand(id, req.Code, req.Name, req.StartAt, req.EndAt, req.IsActive), ct);
 
-            if (await _db.Semesters.AnyAsync(x => x.Code == req.Code && x.SemesterId != id, ct))
-                return Conflict(new { Message = $"Semester code '{req.Code}' already exists." });
+            var result = await _mediator.Send(new GetSemesterByIdQuery(id), ct);
 
-            if (req.StartAt >= req.EndAt)
-                return BadRequest(new { Message = "StartAt must be before EndAt." });
-
-            var hasOverlap = await _db.Semesters.AnyAsync(x =>
-                x.IsActive && x.SemesterId != id && x.StartAt <= req.EndAt && x.EndAt >= req.StartAt, ct);
-            if (hasOverlap)
-                return Conflict(new { Message = "The semester time range overlaps with an existing active semester." });
-
-            s.Code = req.Code.Trim().ToUpperInvariant();
-            s.Name = req.Name.Trim();
-            s.StartAt = req.StartAt;
-            s.EndAt = req.EndAt;
-            s.IsActive = req.IsActive;
-
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(ApiResponse<SemesterResponse>.Ok(
-                new SemesterResponse(s.SemesterId, s.Code, s.Name, s.StartAt, s.EndAt, s.IsActive, s.CreatedAt),
-                "Semester updated successfully"));
+            return Ok(ApiResponse<SemesterDto>.Ok(result, "Semester updated successfully"));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { Message = "Semester not found." });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -164,19 +136,17 @@ public class SemesterController : ControllerBase
     {
         try
         {
-            var s = await _db.Semesters.FirstOrDefaultAsync(x => x.SemesterId == id, ct);
-            if (s is null) return NotFound(new { Message = "Semester not found." });
-
-            // Check if any active classes are linked to this semester via ClassSemester junction table
-            var hasActiveClasses = await _db.ClassSemesters
-                .AnyAsync(cs => cs.SemesterId == id && cs.Class.IsActive, ct);
-            if (hasActiveClasses)
-                return BadRequest(new { Message = "Cannot delete semester because it is being used by active classes." });
-
-            s.IsActive = false;
-            await _db.SaveChangesAsync(ct);
+            await _mediator.Send(new DeleteSemesterCommand(id), ct);
 
             return Ok(new { Message = "Semester deleted successfully." });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { Message = "Semester not found." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -194,25 +164,10 @@ public class SemesterController : ControllerBase
     {
         try
         {
-            var query = _db.Semesters.AsNoTracking();
+            var result = await _mediator.Send(
+                new GetAllSemestersQuery(search, page, pageSize), ct);
 
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var s = search.Trim().ToLower();
-                query = query.Where(x => x.Code.ToLower().Contains(s) || x.Name.ToLower().Contains(s));
-            }
-
-            var totalCount = await query.CountAsync(ct);
-            var items = await query
-                .OrderByDescending(x => x.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(x => new SemesterResponse(
-                    x.SemesterId, x.Code, x.Name, x.StartAt, x.EndAt, x.IsActive, x.CreatedAt))
-                .ToListAsync(ct);
-
-            return Ok(ApiResponse<SemesterListResponse>.Ok(
-                new SemesterListResponse(items, totalCount), "Semesters fetched successfully"));
+            return Ok(ApiResponse<SemesterListDto>.Ok(result, "Semesters fetched successfully"));
         }
         catch (Exception)
         {
@@ -403,7 +358,7 @@ public class SemesterController : ControllerBase
         }
     }
 
-    private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string columnName)
+    private static string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string columnName)
     {
         if (headers.TryGetValue(columnName, out int colIdx))
         {
@@ -422,3 +377,5 @@ public class SemesterController : ControllerBase
         return string.Empty;
     }
 }
+
+public record UpdateSemesterBody(string Code, string Name, DateOnly StartAt, DateOnly EndAt, bool IsActive);

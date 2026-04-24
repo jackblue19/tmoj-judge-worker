@@ -366,6 +366,62 @@ public class UserController : ControllerBase
         }
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GetAllUsers(CancellationToken ct)
+    {
+        try
+        {
+            var users = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.DeletedAt == null && u.Status == true)
+                .OrderBy(u => u.DisplayName)
+                .Select(u => new SimpleUserDto(
+                    u.UserId,
+                    u.DisplayName,
+                    u.Email,
+                    u.AvatarUrl
+                ))
+                .ToListAsync(ct);
+
+            return Ok(ApiResponse<List<SimpleUserDto>>.Ok(users, "Users fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "An error occurred while fetching users." });
+        }
+    }
+
+    [HttpGet("email/{email}")]
+    public async Task<IActionResult> GetUserByEmail(string email, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return BadRequest(new { message = "Email is required." });
+
+        try
+        {
+            var normalizedEmail = email.Trim().ToLowerInvariant();
+            var user = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Email == normalizedEmail && u.DeletedAt == null && u.Status == true)
+                .Select(u => new SimpleUserDto(
+                    u.UserId,
+                    u.DisplayName,
+                    u.Email,
+                    u.AvatarUrl
+                ))
+                .FirstOrDefaultAsync(ct);
+
+            if (user == null)
+                return NotFound(new { message = "User not found." });
+
+            return Ok(ApiResponse<SimpleUserDto>.Ok(user, "User fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "An error occurred while fetching the user." });
+        }
+    }
+
     [HttpGet("role/{roleName}")]
     public async Task<IActionResult> ListAllUserByRole(string roleName, CancellationToken ct)
     {

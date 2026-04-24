@@ -222,6 +222,13 @@ public class ContestRepository : IContestRepository
             .AnyAsync(x => x.TeamId == teamId && x.UserId == userId);
     }
 
+    public async Task<bool> HasUserRegisteredAsync(Guid contestId, Guid userId)
+    {
+        return await _db.ContestTeams
+            .AnyAsync(ct => ct.ContestId == contestId &&
+                           ct.Team.TeamMembers.Any(tm => tm.UserId == userId));
+    }
+
     // =============================================
     // TEAM MEMBERS
     // =============================================

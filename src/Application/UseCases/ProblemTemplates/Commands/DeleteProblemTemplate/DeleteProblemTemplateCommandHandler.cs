@@ -15,17 +15,20 @@ public sealed class DeleteProblemTemplateCommandHandler
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IReadRepository<ProblemTemplate , Guid> _problemTemplateReadRepository;
+    private readonly IWriteRepository<ProblemTemplate , Guid> _problemTemplateWriteRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<DeleteProblemTemplateCommandHandler> _logger;
 
     public DeleteProblemTemplateCommandHandler(
         ICurrentUserService currentUser ,
         IReadRepository<ProblemTemplate , Guid> problemTemplateReadRepository ,
+        IWriteRepository<ProblemTemplate , Guid> problemTemplateWriteRepository ,
         IUnitOfWork unitOfWork ,
         ILogger<DeleteProblemTemplateCommandHandler> logger)
     {
         _currentUser = currentUser;
         _problemTemplateReadRepository = problemTemplateReadRepository;
+        _problemTemplateWriteRepository = problemTemplateWriteRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
@@ -60,12 +63,15 @@ public sealed class DeleteProblemTemplateCommandHandler
 
         try
         {
+            _problemTemplateWriteRepository.Update(entity);
             await _unitOfWork.SaveChangesAsync(ct);
+
             return entity.ToDto();
         }
         catch ( DbUpdateException ex )
         {
-            _logger.LogError(ex ,
+            _logger.LogError(
+                ex ,
                 "Database update failed while deleting problem template. CodeTemplateId={CodeTemplateId}" ,
                 request.CodeTemplateId);
 

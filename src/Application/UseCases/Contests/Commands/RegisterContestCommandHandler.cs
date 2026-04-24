@@ -219,6 +219,30 @@ public class RegisterContestCommandHandler
             throw new InvalidOperationException("ALREADY_JOINED");
 
         // ======================
+        // CHECK IF ANY MEMBER ALREADY REGISTERED
+        // ======================
+        var teamMembers = await _teamCustomRepo.GetTeamMembersAsync(teamId);
+        var memberIds = teamMembers.Select(tm => tm.UserId).ToList();
+
+        var alreadyRegisteredMembers = new List<Guid>();
+        foreach (var memberId in memberIds)
+        {
+            var hasRegistered = await _contestCustomRepo
+                .HasUserRegisteredAsync(request.ContestId, memberId);
+            if (hasRegistered)
+                alreadyRegisteredMembers.Add(memberId);
+        }
+
+        if (alreadyRegisteredMembers.Any())
+        {
+            var registeredUsers = await _userRepo
+                .GetUserDisplayByIdsAsync(alreadyRegisteredMembers);
+            throw new InvalidOperationException(
+                $"MEMBERS_ALREADY_REGISTERED:{JsonSerializer.Serialize(registeredUsers)}"
+            );
+        }
+
+        // ======================
         // INSERT CONTEST TEAM
         // ======================
         var entry = new ContestTeam

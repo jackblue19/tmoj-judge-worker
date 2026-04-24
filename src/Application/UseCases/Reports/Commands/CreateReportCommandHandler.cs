@@ -1,4 +1,4 @@
-﻿using Domain.Abstractions;
+using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 using Application.Common.Interfaces;
@@ -14,6 +14,7 @@ public class CreateReportCommandHandler
     private readonly IReadRepository<User, Guid> _userRepo;
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
     private readonly IReadRepository<ProblemDiscussion, Guid> _discussionRepo;
+    private readonly IWriteRepository<Notification, Guid> _notificationRepo;
     private readonly IUnitOfWork _uow;
     private readonly ICurrentUserService _currentUser;
 
@@ -23,6 +24,7 @@ public class CreateReportCommandHandler
         IReadRepository<User, Guid> userRepo,
         IReadRepository<DiscussionComment, Guid> commentRepo,
         IReadRepository<ProblemDiscussion, Guid> discussionRepo,
+        IWriteRepository<Notification, Guid> notificationRepo,
         IUnitOfWork uow,
         ICurrentUserService currentUser)
     {
@@ -31,6 +33,7 @@ public class CreateReportCommandHandler
         _userRepo = userRepo;
         _commentRepo = commentRepo;
         _discussionRepo = discussionRepo;
+        _notificationRepo = notificationRepo;
         _uow = uow;
         _currentUser = currentUser;
     }
@@ -119,9 +122,22 @@ public class CreateReportCommandHandler
             if (count >= 2)
             {
                 var comment = await _commentRepo.GetByIdAsync(request.TargetId, ct);
-                if (comment != null)
+                if (comment != null && comment.IsHidden != true)
                 {
                     comment.IsHidden = true;
+
+                    await _notificationRepo.AddAsync(new Notification
+                    {
+                        NotificationId = Guid.NewGuid(),
+                        UserId = comment.UserId,
+                        Title = "Bình luận bị tạm ẩn",
+                        Message = "Bình luận của bạn đã bị cộng đồng báo cáo nhiều lần và đang bị hệ thống tạm ẩn để chờ Ban Quản Trị xem xét.",
+                        Type = "system",
+                        ScopeType = "comment",
+                        ScopeId = request.TargetId,
+                        IsRead = false,
+                        CreatedAt = createdAt
+                    }, ct);
                 }
             }
         }

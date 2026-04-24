@@ -128,7 +128,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                 ScopeType = report.TargetType,
                 ScopeId = report.TargetId,
                 IsRead = false,
-                CreatedAt = now,
+                CreatedAt = DateTime.UtcNow,
                 CreatedBy = adminId
             }, ct);
         }
@@ -218,7 +218,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
                         Message = $"Tài khoản của bạn đã bị khóa do có quá nhiều nội dung vi phạm tiêu chuẩn cộng đồng ({total} vi phạm).",
                         Type = "system",
                         IsRead = false,
-                        CreatedAt = now,
+                        CreatedAt = DateTime.UtcNow,
                         CreatedBy = adminId
                     }, ct);
                 }

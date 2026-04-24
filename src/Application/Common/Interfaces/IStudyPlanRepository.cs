@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+using Domain.Entities;
 using System.Threading.Tasks;
 
 namespace Application.Common.Interfaces;
@@ -44,6 +44,7 @@ public interface IStudyPlanRepository
     // =========================
     Task<bool> IsUserEnrolledAsync(Guid userId, Guid studyPlanId);
     Task<bool> IsStudyPlanCompletedAsync(Guid userId, Guid studyPlanId);
+    Task<bool> HasAccessToInPlanProblemAsync(Guid userId, Guid problemId); // ✅ NEW
     Task DeleteItemProgressRangeAsync(List<UserStudyItemProgress> entities);
 
     // =========================

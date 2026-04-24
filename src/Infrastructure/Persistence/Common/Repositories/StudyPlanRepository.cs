@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
@@ -161,6 +161,32 @@ public class StudyPlanRepository : IStudyPlanRepository
                   && i.StudyPlanId == studyPlanId
             select p.Id
         ).AnyAsync();
+    }
+    
+    public async Task<bool> HasAccessToInPlanProblemAsync(Guid userId, Guid problemId)
+    {
+        // Kiểm tra xem bài tập này có nằm trong bất kỳ khóa học nào mà user đã mua hoặc khóa học miễn phí không
+        var planIdsContainingProblem = await _db.Set<StudyPlanItem>()
+            .Where(x => x.ProblemId == problemId)
+            .Select(x => x.StudyPlanId)
+            .Distinct()
+            .ToListAsync();
+
+        if (planIdsContainingProblem.Count == 0) return false;
+
+        var plans = await _db.Set<StudyPlan>()
+            .Where(x => planIdsContainingProblem.Contains(x.Id))
+            .ToListAsync();
+
+        foreach (var plan in plans)
+        {
+            if (!plan.IsPaid) return true; // Miễn phí thì có quyền truy cập
+            
+            var hasPurchased = await HasUserPurchasedPlanAsync(userId, plan.Id);
+            if (hasPurchased) return true; // Đã mua thì có quyền
+        }
+
+        return false;
     }
 
     // =========================

@@ -24,7 +24,7 @@ public interface IFavoriteRepository
     IQueryable<Submission> QuerySubmissions();
 
     IQueryable<Collection> QueryPublicCollections();
-    IQueryable<Collection> QueryCollections(); // ✅ Thêm hàm này để query tất cả
+    IQueryable<Collection> QueryCollections(); 
 
     Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
         Guid currentUserId,

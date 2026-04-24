@@ -1,20 +1,13 @@
-﻿using Ardalis.Specification;
+using Ardalis.Specification;
 using Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
-namespace Application.UseCases.Contests.Specs
+namespace Application.UseCases.Contests.Specs;
+
+public class ContestProblemSpec : Specification<ContestProblem>
 {
-    public class ContestProblemSpec : Specification<ContestProblem>
+    public ContestProblemSpec(Guid contestId)
     {
-        public ContestProblemSpec(Guid contestId)
-        {
-            Query.Where(x => x.ContestId == contestId)
-                 .Include(x => x.Problem);
-        }
+        Query.Where(x => x.ContestId == contestId)
+             .Include(x => x.Problem);
     }
 }

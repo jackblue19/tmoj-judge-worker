@@ -35,6 +35,9 @@ builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddScoped<IUserStudyPlanPurchaseRepository, UserStudyPlanPurchaseRepository>();
 builder.Services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
 builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
+builder.Services.AddScoped<ISemesterRepository, SemesterRepository>();
+builder.Services.AddScoped<IClassSlotRepository, ClassSlotRepository>();
+builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {

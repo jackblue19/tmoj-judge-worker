@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using WebAPI.Controllers.v1.ClassManagement;
+using Application.UseCases.Classes.Dtos;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Users;
@@ -244,7 +244,7 @@ public class UserController : ControllerBase
 
             var classes = await classQuery
                 .OrderByDescending(m => m.ClassSemester.CreatedAt)
-                .Select(m => new ClassInstanceInfo(
+                .Select(m => new ClassInstanceDto(
                     m.ClassSemester.Id, m.ClassSemester.Class.ClassCode,
                     m.ClassSemester.Semester.SemesterId, m.ClassSemester.Semester.Code,
                     m.ClassSemester.Subject.SubjectId, m.ClassSemester.Subject.Code,
@@ -252,7 +252,7 @@ public class UserController : ControllerBase
                     m.ClassSemester.Semester.StartAt, m.ClassSemester.Semester.EndAt,
                     (string?)null, (DateTime?)null, m.ClassSemester.CreatedAt,
                     m.ClassSemester.Teacher != null
-                        ? new ClassTeacherInfo(
+                        ? new ClassTeacherDto(
                             m.ClassSemester.Teacher.UserId,
                             m.ClassSemester.Teacher.DisplayName,
                             m.ClassSemester.Teacher.Email,
@@ -313,14 +313,14 @@ public class UserController : ControllerBase
             var classes = classSemesters
                 .Where(cs => cs.Semester != null && cs.Subject != null && cs.Class != null)
                 .OrderByDescending(cs => cs.CreatedAt)
-                .Select(cs => new ClassInstanceInfo(
+                .Select(cs => new ClassInstanceDto(
                     cs.Id, cs.Class.ClassCode,
                     cs.Semester.SemesterId, cs.Semester.Code,
                     cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
                     cs.Semester.StartAt, cs.Semester.EndAt,
                     null, null, cs.CreatedAt,
                     cs.Teacher != null
-                        ? new ClassTeacherInfo(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl)
+                        ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl)
                         : null,
                     cs.ClassMembers.Count(m => m.IsActive)))
                 .ToList();

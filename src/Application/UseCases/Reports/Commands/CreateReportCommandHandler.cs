@@ -126,18 +126,22 @@ public class CreateReportCommandHandler
                 {
                     comment.IsHidden = true;
 
-                    await _notificationRepo.AddAsync(new Notification
+                    // Chỉ bắn thông báo vào đúng thời điểm đạt mốc (count == 2) để tránh spam
+                    if (count == 2)
                     {
-                        NotificationId = Guid.NewGuid(),
-                        UserId = comment.UserId,
-                        Title = "Bình luận bị tạm ẩn",
-                        Message = "Bình luận của bạn đã bị cộng đồng báo cáo nhiều lần và đang bị hệ thống tạm ẩn để chờ Ban Quản Trị xem xét.",
-                        Type = "system",
-                        ScopeType = "comment",
-                        ScopeId = request.TargetId,
-                        IsRead = false,
-                        CreatedAt = DateTime.UtcNow
-                    }, ct);
+                        await _notificationRepo.AddAsync(new Notification
+                        {
+                            NotificationId = Guid.NewGuid(),
+                            UserId = comment.UserId,
+                            Title = "Bình luận bị tạm ẩn",
+                            Message = "Bình luận của bạn đã bị cộng đồng báo cáo nhiều lần và đang bị hệ thống tạm ẩn để chờ Ban Quản Trị xem xét.",
+                            Type = "system",
+                            ScopeType = "comment",
+                            ScopeId = request.TargetId,
+                            IsRead = false,
+                            CreatedAt = DateTime.UtcNow
+                        }, ct);
+                    }
                 }
             }
         }

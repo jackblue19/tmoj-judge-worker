@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.StudyProgress.Dtos;
 using MediatR;
 
@@ -40,9 +40,19 @@ public class GetMyStudyProgressHandler
             .ToList();
 
         // =========================
-        // 3. MAP ITEM -> PLAN (NO NAVIGATION)
+        // 3. MAP ITEM -> PLAN AND GET TITLES & COUNTS
         // =========================
         var mapping = await _repo.GetItemPlanMappingAsync(itemIds);
+        
+        var planIds = mapping.Values.Distinct().ToList();
+        var titles = await _repo.GetPlanTitlesAsync(planIds);
+        
+        // Dictionary to hold total items per plan
+        var totalItemsDict = new Dictionary<Guid, int>();
+        foreach (var pId in planIds)
+        {
+            totalItemsDict[pId] = await _repo.GetItemCountAsync(pId);
+        }
 
         // =========================
         // 4. GROUP BY PLAN
@@ -60,13 +70,8 @@ public class GetMyStudyProgressHandler
         foreach (var group in grouped)
         {
             var planId = group.Key;
-
-            var distinctItemIds = group
-                .Select(x => x.StudyPlanItemId)
-                .Distinct()
-                .ToList();
-
-            var totalItems = distinctItemIds.Count;
+            
+            var totalItems = totalItemsDict.GetValueOrDefault(planId, 0);
 
             var completedItems = group
                 .Where(x => x.IsCompleted == true)
@@ -81,7 +86,7 @@ public class GetMyStudyProgressHandler
             result.Add(new MyStudyPlanProgressItemDto
             {
                 StudyPlanId = planId,
-                Title = "", // ⚠️ optional: có thể fetch thêm nếu cần
+                Title = titles.GetValueOrDefault(planId, "Unknown Plan"), // ✅ Lấy tên plan
                 TotalItems = totalItems,
                 CompletedItems = completedItems,
                 ProgressPercent = percent,

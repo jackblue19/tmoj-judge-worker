@@ -1,4 +1,4 @@
-﻿using Ardalis.Specification;
+using Ardalis.Specification;
 using Domain.Entities;
 
 namespace Application.UseCases.Reports.Specs;
@@ -10,6 +10,6 @@ public class ReportByUserAndTargetSpec : Specification<ContentReport>
         Query.Where(x =>
             x.ReporterId == userId &&
             x.TargetId == targetId &&
-            x.TargetType.ToLower() == targetType.ToLower());
+            x.TargetType == targetType);
     }
 }

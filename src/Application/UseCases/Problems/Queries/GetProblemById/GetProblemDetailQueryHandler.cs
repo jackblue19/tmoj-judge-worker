@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Problems.Constants;
 using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Specifications;
@@ -13,13 +13,16 @@ public sealed class GetProblemDetailQueryHandler
 {
     private readonly ICurrentUserService _currentUser;
     private readonly IReadRepository<Problem , Guid> _readRepository;
+    private readonly IStudyPlanRepository _studyPlanRepository; // ✅ NEW
 
     public GetProblemDetailQueryHandler(
         ICurrentUserService currentUser ,
-        IReadRepository<Problem , Guid> readRepository)
+        IReadRepository<Problem , Guid> readRepository,
+        IStudyPlanRepository studyPlanRepository) // ✅ NEW
     {
         _currentUser = currentUser;
         _readRepository = readRepository;
+        _studyPlanRepository = studyPlanRepository; // ✅ NEW
     }
 
     public async Task<ProblemDetailDto> Handle(
@@ -40,6 +43,18 @@ public sealed class GetProblemDetailQueryHandler
 
         var isAdmin = Roles.AdminRoles.Any(role => _currentUser.IsInRole(role));
 
+        // ✅ Thử lấy bài in-plan nếu user đã mua khóa học chứa bài đó
+        var inPlanResult = await _readRepository.FirstOrDefaultAsync(
+            new ProblemInPlanDetailSpec(request.ProblemId) ,
+            ct);
+
+        if (inPlanResult is not null)
+        {
+            var hasAccess = await _studyPlanRepository.HasAccessToInPlanProblemAsync(currentUserId, request.ProblemId);
+            if (hasAccess) return inPlanResult;
+        }
+
+        // Dùng quyền Admin hoặc Owner để truy cập bài Private
         var managementResult = await _readRepository.FirstOrDefaultAsync(
             new ProblemManagementDetailSpec(
                 request.ProblemId ,

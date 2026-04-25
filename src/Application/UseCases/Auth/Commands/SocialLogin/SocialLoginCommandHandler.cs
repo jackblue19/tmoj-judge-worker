@@ -74,6 +74,9 @@ public class SocialLoginCommandHandler : IRequestHandler<SocialLoginCommand, Aut
             await _repo.SaveAsync(ct);
         }
 
+        if (!user.Status)
+            throw new UnauthorizedAccessException("Your account has been locked.");
+
         var response = await _authBuilder.BuildAuthResponseAsync(user, request.IpAddress, request.UserAgent, ct);
         await _mediator.Publish(new DailyLoginEvent(user.UserId), ct);
         return response;

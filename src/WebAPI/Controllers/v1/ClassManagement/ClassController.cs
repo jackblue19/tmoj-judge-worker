@@ -59,7 +59,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     // POST api/v1/class  →  Create Class (Manager)
     // ──────────────────────────────────────────
-    [Authorize(Roles = "admin,manager")]
+    [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateClassBody req, CancellationToken ct)
     {

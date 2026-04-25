@@ -1,4 +1,3 @@
-using Infrastructure.Configurations.Auth;
 using Asp.Versioning;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -36,6 +35,7 @@ using Application.UseCases.Classes.Queries.GetClassInviteCode;
 using Application.UseCases.Classes.Queries.GetAvailableStudents;
 using Application.UseCases.Classes.Queries.GetClassContests;
 using Application.UseCases.Classes.Queries.GetClassContestById;
+using Application.UseCases.Auth.Hasher;
 
 namespace WebAPI.Controllers.v1.ClassManagement;
 

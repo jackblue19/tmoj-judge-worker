@@ -1,9 +1,8 @@
-using System;
 using Application.UseCases.Classes.Dtos;
 
-namespace WebAPI.Controllers.v1.Users;
+namespace Application.UseCases.Users.Dtos;
 
-public record UserProfileResponse(
+public record UserProfileDto(
     Guid UserId,
     string Email,
     string FirstName,
@@ -14,6 +13,7 @@ public record UserProfileResponse(
     bool EmailVerified,
     bool Status,
     DateTime CreatedAt);
+
 public record UserDto(
     Guid UserId,
     string Email,
@@ -24,7 +24,7 @@ public record UserDto(
     string? RollNumber,
     string? MemberCode,
     string? AvatarUrl,
-    bool emailVerified,
+    bool EmailVerified,
     bool Status,
     string? Role);
 
@@ -34,20 +34,26 @@ public record SimpleUserDto(
     string Email,
     string? AvatarUrl);
 
-public record StudentProfileWithClassesResponse(
+public record StudentProfileWithClassesDto(
     UserDto Student,
     List<ClassInstanceDto> Classes,
     int TotalClasses);
 
-public record TeacherSubjectInfo(
+public record TeacherSubjectInfoDto(
     Guid SubjectId,
     string Code,
     string Name,
     string? Description,
     int ClassCount);
 
-public record TeacherDetailResponse(
+public record TeacherDetailDto(
     UserDto Teacher,
-    List<TeacherSubjectInfo> Subjects,
+    List<TeacherSubjectInfoDto> Subjects,
     List<ClassInstanceDto> Classes,
     int TotalClasses);
+
+public record ImportStudentItem(
+    string FullName,
+    string Email,
+    string? RollNumber,
+    string? MemberCode);

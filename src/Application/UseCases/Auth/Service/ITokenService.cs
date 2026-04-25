@@ -1,4 +1,4 @@
-﻿namespace Application.UseCases.Auth;
+﻿namespace Application.UseCases.Auth.Service;
 
 /// <summary>
 /// Này là sample cho Tuấn

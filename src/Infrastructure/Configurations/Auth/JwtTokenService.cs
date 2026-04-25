@@ -1,4 +1,5 @@
-﻿using Application.UseCases.Auth;
+﻿using Application.UseCases.Auth.Options;
+using Application.UseCases.Auth.Service;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System;

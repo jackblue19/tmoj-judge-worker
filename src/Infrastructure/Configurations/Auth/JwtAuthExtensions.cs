@@ -1,15 +1,15 @@
-using Application.UseCases.Auth;
+using Application.Common.Interfaces;
+using Application.UseCases.Auth.Hasher;
+using Application.UseCases.Auth.Options;
+using Application.UseCases.Auth.Service;
+using Infrastructure.Persistence.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Infrastructure.Configurations.Auth;
 
@@ -24,9 +24,10 @@ public static class JwtAuthExtensions
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer();
 
-        services.AddSingleton<ITokenService , JwtTokenService>();
-        services.AddSingleton<IRefreshTokenService , RefreshTokenService>();
-        services.AddSingleton<IPasswordHasher , Pbkdf2PasswordHasher>();
+        services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddScoped<IAuthRepository, AuthRepository>();
 
         services.AddAuthorization();
         return services;

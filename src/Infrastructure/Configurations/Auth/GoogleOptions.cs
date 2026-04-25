@@ -1,8 +1,2 @@
-namespace Infrastructure.Configurations.Auth;
-
-public class GoogleOptions
-{
-    public string ClientId { get; set; } = null!;
-    public string ClientSecret { get; set; } = null!;
-    public List<string> AllowedDomains { get; set; } = new();
-}
+// Class moved to Application.UseCases.Auth.GoogleOptions
+// Kept as empty file for build compatibility

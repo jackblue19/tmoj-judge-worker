@@ -1,13 +1,2 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Infrastructure.Configurations.Auth;
-
-public interface IPasswordHasher
-{
-    string Hash(string password);
-    bool Verify(string password , string passwordHash);
-}
+// Interface moved to Application.UseCases.Auth.IPasswordHasher
+// Kept as empty file for build compatibility

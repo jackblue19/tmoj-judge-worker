@@ -8,26 +8,16 @@ using System.Threading.Tasks;
 
 namespace Application.UseCases.Announcements.Commands.CreateAnnouncement;
 
-public class CreateAnnouncementCommand : IRequest<Guid>
-{
-    public string Title { get; set; } = null!;
-    public string Content { get; set; } = null!;
-    public int DurationHours { get; set; } = 72; // Mặc định 3 ngày
-    public bool Pinned { get; set; }
-    public string? ScopeType { get; set; }
-    public Guid? ScopeId { get; set; }
-}
-
-public class CreateAnnouncementCommandHandler : IRequestHandler<CreateAnnouncementCommand, Guid>
+public class CreateAnnouncementHandler : IRequestHandler<CreateAnnouncementCommand, Guid>
 {
     private readonly IAnnouncementRepository _repo;
     private readonly ICurrentUserService _currentUser;
-    private readonly ILogger<CreateAnnouncementCommandHandler> _logger;
+    private readonly ILogger<CreateAnnouncementHandler> _logger;
 
-    public CreateAnnouncementCommandHandler(
+    public CreateAnnouncementHandler(
         IAnnouncementRepository repo,
         ICurrentUserService currentUser,
-        ILogger<CreateAnnouncementCommandHandler> logger)
+        ILogger<CreateAnnouncementHandler> logger)
     {
         _repo = repo;
         _currentUser = currentUser;

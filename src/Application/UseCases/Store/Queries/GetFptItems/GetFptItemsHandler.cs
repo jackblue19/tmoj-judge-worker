@@ -8,8 +8,6 @@ using System.Threading.Tasks;
 
 namespace Application.UseCases.Store.Queries.GetFptItems;
 
-public record GetFptItemsQuery() : IRequest<List<FptItemDto>>;
-
 public class GetFptItemsHandler : IRequestHandler<GetFptItemsQuery, List<FptItemDto>>
 {
     private readonly IFptItemRepository _itemRepo;

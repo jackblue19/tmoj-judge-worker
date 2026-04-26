@@ -1,4 +1,7 @@
 using Application.UseCases.Store.Commands.BuyFptItem;
+using Application.UseCases.Store.Commands.CreateFptItem;
+using Application.UseCases.Store.Queries.GetFptItems;
+using Application.UseCases.Store.Queries.GetMyInventory;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +22,24 @@ public class StoreController : ControllerBase
     public StoreController(IMediator mediator)
     {
         _mediator = mediator;
+    }
+
+    /// <summary>
+    /// API Admin: Đăng món đồ mới vào cửa hàng
+    /// </summary>
+    [HttpPost("items")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> CreateItem([FromBody] CreateFptItemCommand command)
+    {
+        try
+        {
+            var itemId = await _mediator.Send(command);
+            return Ok(new { itemId, message = "Đã đăng món đồ mới thành công!" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -50,7 +71,7 @@ public class StoreController : ControllerBase
     [HttpGet("items")]
     public async Task<IActionResult> GetItems()
     {
-        var items = await _mediator.Send(new Application.UseCases.Store.Queries.GetFptItems.GetFptItemsQuery());
+        var items = await _mediator.Send(new GetFptItemsQuery());
         return Ok(items);
     }
 
@@ -62,7 +83,7 @@ public class StoreController : ControllerBase
     {
         try
         {
-            var inventory = await _mediator.Send(new Application.UseCases.Store.Queries.GetMyInventory.GetMyInventoryQuery());
+            var inventory = await _mediator.Send(new GetMyInventoryQuery());
             return Ok(inventory);
         }
         catch (UnauthorizedAccessException)

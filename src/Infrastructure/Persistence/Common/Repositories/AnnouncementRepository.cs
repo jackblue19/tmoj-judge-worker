@@ -20,11 +20,14 @@ public class AnnouncementRepository : IAnnouncementRepository
 
     public async Task<List<Announcement>> GetActiveAnnouncementsAsync()
     {
-        // Lấy các tin mới nhất, ưu tiên tin được Ghim (Pinned)
+        var nowString = DateTime.UtcNow.ToString("O");
+        
+        // Lấy các tin mà ngày hết hạn (lưu trong Target) chưa tới
         return await _db.Announcements
+            .Where(a => string.IsNullOrEmpty(a.Target) || a.Target.CompareTo(nowString) > 0)
             .OrderByDescending(a => a.Pinned)
             .ThenByDescending(a => a.CreatedAt)
-            .Take(10) // Chỉ lấy 10 tin mới nhất cho News Feed
+            .Take(10)
             .ToListAsync();
     }
 

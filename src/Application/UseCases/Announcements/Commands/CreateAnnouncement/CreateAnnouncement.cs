@@ -11,7 +11,7 @@ public class CreateAnnouncementCommand : IRequest<Guid>
 {
     public string Title { get; set; } = null!;
     public string Content { get; set; } = null!;
-    public string Target { get; set; } = "all";
+    public int DurationHours { get; set; } = 72; // Mặc định 3 ngày
     public bool Pinned { get; set; }
     public string? ScopeType { get; set; }
     public Guid? ScopeId { get; set; }
@@ -38,7 +38,8 @@ public class CreateAnnouncementCommandHandler : IRequestHandler<CreateAnnounceme
             AuthorId = _currentUser.UserId,
             Title = request.Title,
             Content = request.Content,
-            Target = request.Target,
+            // Lưu ngày hết hạn vào trường Target dưới dạng chuỗi ISO để so sánh
+            Target = DateTime.UtcNow.AddHours(request.DurationHours).ToString("O"),
             Pinned = request.Pinned,
             ScopeType = request.ScopeType,
             ScopeId = request.ScopeId,

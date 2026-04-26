@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.Common.Pagination;
 using Application.UseCases.Reports.Dtos;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -67,7 +67,7 @@ namespace Infrastructure.Persistence.Common.Repositories
         {
             var query = _db.ContentReports
                 .AsNoTracking()
-                .Where(x => EF.Functions.ILike(x.Status, "pending"));
+                .Where(x => EF.Functions.ILike(x.Status ?? "", "pending"));
 
             if (cursorCreatedAt.HasValue && cursorId.HasValue)
             {
@@ -138,7 +138,7 @@ namespace Infrastructure.Persistence.Common.Repositories
 
             if (!string.IsNullOrEmpty(status))
             {
-                query = query.Where(x => x.Status.ToLower() == status.ToLower());
+                query = query.Where(x => (x.Status ?? "").ToLower() == status.ToLower());
             }
 
             var grouped = await query

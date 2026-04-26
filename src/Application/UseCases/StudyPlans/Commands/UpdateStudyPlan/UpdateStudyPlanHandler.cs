@@ -59,6 +59,7 @@ public class UpdateStudyPlanHandler : IRequestHandler<UpdateStudyPlanCommand, bo
         plan.IsPublic = request.IsPublic;
         plan.IsPaid = request.IsPaid;
         plan.Price = request.Price;
+        plan.ImageUrl = request.ImageUrl;
 
         _repo.Update(plan);
         await _repo.SaveChangesAsync();

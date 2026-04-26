@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using Domain.Entities;
@@ -2090,6 +2090,11 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("is_public");
             entity.Property(e => e.Title)
                 .HasColumnName("title");
+            entity.Property(e => e.ImageUrl)
+                .HasColumnName("image_url");
+            entity.Property(e => e.EnrollmentCount)
+                .HasColumnName("enrollment_count")
+                .HasDefaultValue(0);
             entity.HasOne(d => d.Creator)
                 .WithMany(p => p.StudyPlans)
                 .HasForeignKey(d => d.CreatorId)

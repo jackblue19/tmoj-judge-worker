@@ -85,6 +85,13 @@ public class EnrollStudyPlanHandler : IRequestHandler<EnrollStudyPlanCommand, Un
         }
 
         await _repo.SaveChangesAsync();
+        
+        // =========================
+        // UPDATE ENROLLMENT COUNT
+        // =========================
+        plan.EnrollmentCount++;
+        _repo.Update(plan);
+        await _repo.SaveChangesAsync();
 
         // =========================
         // SEND NOTIFICATION

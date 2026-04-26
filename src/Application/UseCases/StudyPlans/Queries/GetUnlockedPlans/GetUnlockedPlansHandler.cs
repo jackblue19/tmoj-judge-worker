@@ -61,7 +61,9 @@ public class GetUnlockedPlansHandler
 
                     // 🔥 FIX NULLABLE HERE
                     IsCompleted = isCompleted,
-                    IsUnlocked = isUnlocked
+                    IsUnlocked = isUnlocked,
+                    ImageUrl = plan.ImageUrl,
+                    EnrollmentCount = plan.EnrollmentCount
                 });
             }
         }

@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
 using MediatR;
 using Microsoft.AspNetCore.Http;
@@ -82,6 +82,10 @@ public class GetStudyPlanDetailHandler
             Id = plan.Id,
             Title = plan.Title,
             Description = plan.Description,
+            Price = plan.Price,
+            IsPaid = plan.IsPaid,
+            ImageUrl = plan.ImageUrl,
+            EnrollmentCount = plan.EnrollmentCount,
             Items = resultItems
         };
     }

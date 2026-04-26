@@ -1,6 +1,7 @@
 using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -13,48 +14,59 @@ public class BroadcastNotificationCommandHandler : IRequestHandler<BroadcastNoti
     private readonly IUserRepository _userRepo;
     private readonly INotificationRepository _notificationRepo;
     private readonly ICurrentUserService _currentUser;
+    private readonly ILogger<BroadcastNotificationCommandHandler> _logger;
 
     public BroadcastNotificationCommandHandler(
         IUserRepository userRepo,
         INotificationRepository notificationRepo,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        ILogger<BroadcastNotificationCommandHandler> logger)
     {
         _userRepo = userRepo;
         _notificationRepo = notificationRepo;
         _currentUser = currentUser;
+        _logger = logger;
     }
 
     public async Task<int> Handle(BroadcastNotificationCommand request, CancellationToken ct)
     {
-        var adminId = _currentUser.UserId;
-        
-        // 1. Get targets
-        var userIds = await _userRepo.GetUserIdsByRoleAsync(request.TargetRole);
-
-        if (userIds.Count == 0) return 0;
-
-        // 2. Create notifications
-        var now = DateTime.UtcNow;
-        foreach (var userId in userIds)
+        try 
         {
-            await _notificationRepo.AddAsync(new Notification
+            var adminId = _currentUser.UserId;
+            
+            // 1. Get targets
+            var userIds = await _userRepo.GetUserIdsByRoleAsync(request.TargetRole);
+
+            if (userIds.Count == 0) return 0;
+
+            // 2. Create notifications
+            var now = DateTime.UtcNow;
+            foreach (var userId in userIds)
             {
-                NotificationId = Guid.NewGuid(),
-                UserId = userId,
-                Title = request.Title,
-                Message = request.Message,
-                Type = request.Type,
-                ScopeType = request.ScopeType,
-                ScopeId = request.ScopeId,
-                IsRead = false,
-                CreatedAt = now,
-                CreatedBy = adminId
-            }, ct);
+                await _notificationRepo.AddAsync(new Notification
+                {
+                    NotificationId = Guid.NewGuid(),
+                    UserId = userId,
+                    Title = request.Title,
+                    Message = request.Message,
+                    Type = request.Type,
+                    ScopeType = request.ScopeType,
+                    ScopeId = request.ScopeId,
+                    IsRead = false,
+                    CreatedAt = now,
+                    CreatedBy = adminId
+                }, ct);
+            }
+
+            // 3. Save
+            await _notificationRepo.SaveChangesAsync(ct);
+
+            return userIds.Count;
         }
-
-        // 3. Save
-        await _notificationRepo.SaveChangesAsync(ct);
-
-        return userIds.Count;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ERROR broadcasting notification to Role={Role}", request.TargetRole);
+            throw;
+        }
     }
 }

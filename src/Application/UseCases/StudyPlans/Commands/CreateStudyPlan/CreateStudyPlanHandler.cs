@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Commands.CreateStudyPlan;
 using Domain.Entities;
 using MediatR;
@@ -54,6 +54,8 @@ public class CreateStudyPlanHandler : IRequestHandler<CreateStudyPlanCommand, Gu
             IsPublic = request.IsPublic,
             IsPaid = request.IsPaid,
             Price = request.Price,
+            ImageUrl = request.ImageUrl,
+            EnrollmentCount = 0,
 
             CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
         };

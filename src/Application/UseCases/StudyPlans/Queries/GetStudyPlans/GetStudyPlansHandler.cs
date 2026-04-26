@@ -41,8 +41,7 @@ public class GetStudyPlansHandler
                 Title = p.Title,
                 Order = 0,
                 ProblemCount = problemCount,
-
-                // ❌ FIX: remove fake data
+                Price = p.Price,
                 IsCompleted = false,
                 IsUnlocked = !p.IsPaid // tạm basic rule: free = unlocked
             });

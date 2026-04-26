@@ -1,4 +1,4 @@
-﻿namespace Application.UseCases.StudyPlans.Dtos;
+namespace Application.UseCases.StudyPlans.Dtos;
 
 public class StudyPlanDetailDto
 {
@@ -7,6 +7,8 @@ public class StudyPlanDetailDto
     public string? Description { get; set; }
     public decimal Price { get; set; }      // thêm
     public bool IsPaid { get; set; }
+    public string? ImageUrl { get; set; }
+    public int EnrollmentCount { get; set; }
 
     public List<StudyPlanItemDto> Items { get; set; } = new();
 }

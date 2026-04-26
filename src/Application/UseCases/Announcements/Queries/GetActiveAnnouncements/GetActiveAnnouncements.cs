@@ -1,6 +1,7 @@
 using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,31 +24,41 @@ public class AnnouncementDto
 public class GetActiveAnnouncementsHandler : IRequestHandler<GetActiveAnnouncementsQuery, List<AnnouncementDto>>
 {
     private readonly IAnnouncementRepository _repo;
+    private readonly ILogger<GetActiveAnnouncementsHandler> _logger;
 
-    public GetActiveAnnouncementsHandler(IAnnouncementRepository repo)
+    public GetActiveAnnouncementsHandler(IAnnouncementRepository repo, ILogger<GetActiveAnnouncementsHandler> logger)
     {
         _repo = repo;
+        _logger = logger;
     }
 
     public async Task<List<AnnouncementDto>> Handle(GetActiveAnnouncementsQuery request, CancellationToken ct)
     {
-        var announcements = await _repo.GetActiveAnnouncementsAsync();
-        
-        var dtos = new List<AnnouncementDto>();
-        foreach (var a in announcements)
+        try 
         {
-            dtos.Add(new AnnouncementDto
+            var announcements = await _repo.GetActiveAnnouncementsAsync();
+            
+            var dtos = new List<AnnouncementDto>();
+            foreach (var a in announcements)
             {
-                AnnouncementId = a.AnnouncementId,
-                Title = a.Title,
-                Content = a.Content,
-                Pinned = a.Pinned,
-                ScopeType = a.ScopeType,
-                ScopeId = a.ScopeId,
-                CreatedAt = a.CreatedAt
-            });
-        }
+                dtos.Add(new AnnouncementDto
+                {
+                    AnnouncementId = a.AnnouncementId,
+                    Title = a.Title,
+                    Content = a.Content,
+                    Pinned = a.Pinned,
+                    ScopeType = a.ScopeType,
+                    ScopeId = a.ScopeId,
+                    CreatedAt = a.CreatedAt
+                });
+            }
 
-        return dtos;
+            return dtos;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ERROR fetching active announcements");
+            throw;
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
 using MediatR;
 
@@ -44,7 +44,9 @@ public class GetStudyPlansHandler
                 IsPaid = p.IsPaid,    // ✅ thêm
                 ProblemCount = problemCount,
                 IsCompleted = false,
-                IsUnlocked = !p.IsPaid // tạm basic rule: free = unlocked
+                IsUnlocked = !p.IsPaid, // tạm basic rule: free = unlocked
+                ImageUrl = p.ImageUrl,
+                EnrollmentCount = p.EnrollmentCount
             });
         }
 

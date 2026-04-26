@@ -57,7 +57,7 @@ public class CreateStudyPlanHandler : IRequestHandler<CreateStudyPlanCommand, Gu
             ImageUrl = request.ImageUrl,
             EnrollmentCount = 0,
 
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
         };
 
         await _repo.CreateAsync(plan);

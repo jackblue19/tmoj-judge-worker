@@ -22,13 +22,16 @@ public class AnnouncementRepository : IAnnouncementRepository
     {
         var nowString = DateTime.UtcNow.ToString("O");
         
-        // Lấy các tin mà ngày hết hạn (lưu trong Target) chưa tới
-        return await _db.Announcements
-            .Where(a => string.IsNullOrEmpty(a.Target) || a.Target.CompareTo(nowString) > 0)
+        // Lấy hết tin ra bộ nhớ để lọc cho an toàn (vì bảng này ít dữ liệu)
+        var all = await _db.Announcements
             .OrderByDescending(a => a.Pinned)
             .ThenByDescending(a => a.CreatedAt)
-            .Take(10)
             .ToListAsync();
+
+        return all
+            .Where(a => a.Target == "all" || (a.Target != null && string.Compare(a.Target, nowString) > 0))
+            .Take(10)
+            .ToList();
     }
 
     public async Task<Announcement?> GetByIdAsync(Guid id)

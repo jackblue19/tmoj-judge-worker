@@ -39,7 +39,10 @@ public class CreateAnnouncementCommandHandler : IRequestHandler<CreateAnnounceme
         try 
         {
             var userId = _currentUser.UserId;
-            if (userId == Guid.Empty) userId = Guid.Parse("10919393-ba32-4a23-854e-8c6a0a7ef43b"); // Dự phòng ID admin từ ảnh bác chụp
+            if (userId == Guid.Empty) 
+            {
+                throw new UnauthorizedAccessException("Bạn cần đăng nhập với quyền Admin để tạo tin tức.");
+            }
 
             var announcement = new Announcement
             {

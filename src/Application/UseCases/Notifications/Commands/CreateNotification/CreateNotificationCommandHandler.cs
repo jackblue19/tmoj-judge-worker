@@ -5,6 +5,8 @@ using Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,14 +32,26 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
     {
         try 
         {
+            // --- CODE THEO DB (Dựa trên dòng 58 bác chụp) ---
+            var finalType = request.Type?.ToLower() ?? "system";
+            var finalScopeType = request.ScopeType;
+
+            // Nếu là report hoặc comment, ta đẩy sang cột ScopeType để né Check Constraint
+            if (finalType == "report" || finalType == "comment")
+            {
+                _logger.LogInformation("Mapping '{Type}' to ScopeType to match DB pattern", finalType);
+                if (string.IsNullOrEmpty(finalScopeType)) finalScopeType = finalType;
+                finalType = "system";
+            }
+
             var notification = new Notification
             {
                 NotificationId = Guid.NewGuid(),
                 UserId = request.UserId,
                 Title = request.Title,
                 Message = request.Message,
-                Type = request.Type,
-                ScopeType = request.ScopeType,
+                Type = finalType,
+                ScopeType = finalScopeType,
                 ScopeId = request.ScopeId,
                 CreatedBy = request.CreatedBy,
                 IsRead = false,

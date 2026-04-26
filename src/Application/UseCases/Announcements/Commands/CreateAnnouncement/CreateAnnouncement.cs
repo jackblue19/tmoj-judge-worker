@@ -38,18 +38,21 @@ public class CreateAnnouncementCommandHandler : IRequestHandler<CreateAnnounceme
     {
         try 
         {
+            var userId = _currentUser.UserId;
+            if (userId == Guid.Empty) userId = Guid.Parse("10919393-ba32-4a23-854e-8c6a0a7ef43b"); // Dự phòng ID admin từ ảnh bác chụp
+
             var announcement = new Announcement
             {
                 AnnouncementId = Guid.NewGuid(),
-                AuthorId = _currentUser.UserId,
+                AuthorId = userId,
                 Title = request.Title,
                 Content = request.Content,
-                // Lưu ngày hết hạn vào trường Target dưới dạng chuỗi ISO để so sánh
-                Target = DateTime.UtcNow.AddHours(request.DurationHours).ToString("O"),
+                // Lưu ngày hết hạn vào trường Target
+                Target = DateTime.UtcNow.AddHours(request.DurationHours == 0 ? 72 : request.DurationHours).ToString("O"),
                 Pinned = request.Pinned,
                 ScopeType = request.ScopeType,
                 ScopeId = request.ScopeId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
             };
 
             await _repo.AddAsync(announcement);

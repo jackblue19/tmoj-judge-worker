@@ -4,6 +4,8 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -34,6 +36,16 @@ public class BroadcastNotificationCommandHandler : IRequestHandler<BroadcastNoti
         {
             var adminId = _currentUser.UserId;
             
+            // --- CODE THEO DB (Dòng 58) ---
+            var finalType = request.Type?.ToLower() ?? "system";
+            var finalScopeType = request.ScopeType;
+
+            if (finalType == "report" || finalType == "comment")
+            {
+                if (string.IsNullOrEmpty(finalScopeType)) finalScopeType = finalType;
+                finalType = "system";
+            }
+
             // 1. Get targets
             var userIds = await _userRepo.GetUserIdsByRoleAsync(request.TargetRole);
 
@@ -49,8 +61,8 @@ public class BroadcastNotificationCommandHandler : IRequestHandler<BroadcastNoti
                     UserId = userId,
                     Title = request.Title,
                     Message = request.Message,
-                    Type = request.Type,
-                    ScopeType = request.ScopeType,
+                    Type = finalType,
+                    ScopeType = finalScopeType,
                     ScopeId = request.ScopeId,
                     IsRead = false,
                     CreatedAt = now,

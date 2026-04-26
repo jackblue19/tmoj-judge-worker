@@ -13,5 +13,5 @@ public class StudyPlanDto
     public bool IsCompleted { get; set; }
     public bool IsUnlocked { get; set; }
     public string? ImageUrl { get; set; }
-    public int EnrollmentCount { get; set; }
+    public int? EnrollmentCount { get; set; }
 }

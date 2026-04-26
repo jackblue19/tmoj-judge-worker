@@ -88,7 +88,8 @@ public class EnrollStudyPlanHandler : IRequestHandler<EnrollStudyPlanCommand, Un
         
         // =========================
         // UPDATE ENROLLMENT COUNT
-        // =========================
+        // Tăng số lượng người tham gia (tự động)
+        if (plan.EnrollmentCount == null) plan.EnrollmentCount = 0;
         plan.EnrollmentCount++;
         _repo.Update(plan);
         await _repo.SaveChangesAsync();

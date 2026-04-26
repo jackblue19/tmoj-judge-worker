@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -22,6 +22,7 @@ public partial class Announcement
     public Guid? ScopeId { get; set; }
 
     public DateTime CreatedAt { get; set; }
+    public DateTime? EndAt { get; set; }
 
     public virtual User? Author { get; set; }
 }

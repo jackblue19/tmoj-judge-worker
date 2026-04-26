@@ -35,7 +35,7 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
             ScopeId = request.ScopeId,
             CreatedBy = request.CreatedBy,
             IsRead = false,
-            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+            CreatedAt = DateTime.UtcNow
         };
 
         await _writeRepo.AddAsync(notification, cancellationToken);

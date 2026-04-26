@@ -1,5 +1,6 @@
 using Application.DTOs.NotificationDTOs;
 using Application.UseCases.Notifications.Commands;
+using Application.UseCases.Notifications.Commands.BroadcastNotification;
 using Application.UseCases.Notifications.Commands.CreateNotification;
 using Application.UseCases.Notifications.Commands.DeleteNotification;
 using Application.UseCases.Notifications.Commands.MarkNotificationAsRead;
@@ -56,6 +57,22 @@ namespace WebAPI.Controllers
                 .SendAsync("ReceiveNotification", notification);
 
             return Ok(notification);
+        }
+
+        // ==================================
+        // BROADCAST (ADMIN)
+        // POST api/notification/broadcast
+        // ==================================
+        [HttpPost("broadcast")]
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+        public async Task<IActionResult> Broadcast(
+            [FromBody] BroadcastNotificationCommand command)
+        {
+            var count = await _mediator.Send(command);
+            return Ok(new { 
+                message = "Broadcast sent successfully", 
+                targetCount = count 
+            });
         }
 
 

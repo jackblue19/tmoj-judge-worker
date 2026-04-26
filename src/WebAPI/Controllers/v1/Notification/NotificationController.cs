@@ -52,9 +52,16 @@ namespace WebAPI.Controllers
 
             var notification = await _mediator.Send(command);
 
-            // SignalR realtime
-            await _hub.Clients.User(request.UserId.ToString())
-                .SendAsync("ReceiveNotification", notification);
+            // SignalR realtime - bọc lại để tránh lỗi 500 nếu SignalR tèo
+            try 
+            {
+                await _hub.Clients.User(request.UserId.ToString())
+                    .SendAsync("ReceiveNotification", notification);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"SignalR Error: {ex.Message}");
+            }
 
             return Ok(notification);
         }

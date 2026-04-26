@@ -69,6 +69,8 @@ public static class InfrastructureRegistration
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUserManagementRepository, UserManagementRepository>();
         services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
+        services.AddScoped<IFptItemRepository, FptItemRepository>();
+        services.AddScoped<IUserInventoryRepository, UserInventoryRepository>();
         return services;
     }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -156,4 +156,6 @@ public partial class User
 
     public virtual ICollection<UserStudyItemProgress> UserStudyItemProgresses { get; set; }
     = new List<UserStudyItemProgress>();
+
+    public virtual ICollection<UserInventory> UserInventories { get; set; } = new List<UserInventory>();
 }

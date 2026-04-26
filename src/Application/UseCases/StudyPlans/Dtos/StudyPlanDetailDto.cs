@@ -8,7 +8,7 @@ public class StudyPlanDetailDto
     public decimal Price { get; set; }      // thêm
     public bool IsPaid { get; set; }
     public string? ImageUrl { get; set; }
-    public int EnrollmentCount { get; set; }
+    public int? EnrollmentCount { get; set; }
 
     public List<StudyPlanItemDto> Items { get; set; } = new();
 }

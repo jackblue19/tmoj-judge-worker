@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Payments.Dtos;
 using MediatR;
 
@@ -9,13 +9,16 @@ namespace Application.UseCases.Payments.Queries.VnPayReturn
     {
         private readonly IVnPayService _vnPayService;
         private readonly IPaymentRepository _paymentRepo;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 
         public VnPayReturnHandler(
             IVnPayService vnPayService,
-            IPaymentRepository paymentRepo)
+            IPaymentRepository paymentRepo,
+            Microsoft.Extensions.Configuration.IConfiguration config)
         {
             _vnPayService = vnPayService;
             _paymentRepo = paymentRepo;
+            _config = config;
         }
 
         public async Task<VnPayReturnResult> Handle(
@@ -24,7 +27,8 @@ namespace Application.UseCases.Payments.Queries.VnPayReturn
         {
             var query = request.Query;
 
-            var frontendUrl = "http://localhost:3000/payment-result";
+            var frontendUrl = _config["Payment:FrontendReturnUrl"] 
+                ?? "http://localhost:3000/payment-result";
 
             // ❗ Không throw, luôn redirect
             if (!_vnPayService.ValidateSignature(query))

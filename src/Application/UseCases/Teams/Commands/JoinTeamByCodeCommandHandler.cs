@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
@@ -15,6 +15,7 @@ public class JoinTeamByCodeCommandHandler
     private readonly IContestStatusService _contestStatus; // 🔥 ADD
     private readonly IUserRepository _userRepo; // 🔥 ADD
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _uow;
 
     public JoinTeamByCodeCommandHandler(
@@ -25,6 +26,7 @@ public class JoinTeamByCodeCommandHandler
         IContestStatusService contestStatus, // 🔥 ADD
         IUserRepository userRepo, // 🔥 ADD
         ICurrentUserService currentUser,
+        INotificationRepository notificationRepo,
         IUnitOfWork uow)
     {
         _repo = repo;
@@ -34,6 +36,7 @@ public class JoinTeamByCodeCommandHandler
         _contestStatus = contestStatus; // 🔥 ADD
         _userRepo = userRepo; // 🔥 ADD
         _currentUser = currentUser;
+        _notificationRepo = notificationRepo;
         _uow = uow;
     }
 
@@ -115,5 +118,24 @@ public class JoinTeamByCodeCommandHandler
         _teamWriteRepo.Update(team);
 
         await _uow.SaveChangesAsync(ct);
+
+        // =========================
+        // 8. NOTIFY LEADER
+        // =========================
+        await _notificationRepo.AddAsync(new Notification
+        {
+            NotificationId = Guid.NewGuid(),
+            UserId = team.LeaderId,
+            Title = "Thành viên mới gia nhập",
+            Message = $"Có thành viên mới đã gia nhập nhóm '{team.TeamName}' qua mã mời.",
+            Type = "system",
+            ScopeType = "team",
+            ScopeId = team.Id,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = userId
+        }, ct);
+
+        await _notificationRepo.SaveChangesAsync(ct);
     }
 }

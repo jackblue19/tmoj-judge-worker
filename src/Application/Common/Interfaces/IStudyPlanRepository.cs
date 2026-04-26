@@ -11,6 +11,8 @@ public interface IStudyPlanRepository
     Task<List<StudyPlan>> GetAllAsync();
     Task<Guid> CreateAsync(StudyPlan entity);
     Task<StudyPlan?> GetByIdAsync(Guid id);
+    void Update(StudyPlan entity);
+    void Delete(StudyPlan entity);
     Task<List<StudyPlan>> GetByCreatorAsync(Guid creatorId);
     Task<Dictionary<Guid, string>> GetPlanTitlesAsync(List<Guid> planIds);
     Task<Dictionary<Guid, bool>> GetCompletedPlansAsync(Guid userId, List<Guid> planIds);
@@ -25,6 +27,7 @@ public interface IStudyPlanRepository
     // ITEMS
     // =========================
     Task AddItemAsync(StudyPlanItem entity);
+    void RemoveItem(StudyPlanItem entity);
 
     Task<int> GetItemCountAsync(Guid planId);
     Task<List<StudyPlanItem>> GetItemsByPlanIdAsync(Guid studyPlanId);

@@ -31,4 +31,14 @@ public class NotificationRepository : INotificationRepository
             .Where(n => n.UserId == userId && !n.IsRead)
             .CountAsync(cancellationToken);
     }
+
+    public async Task AddAsync(Notification entity, CancellationToken cancellationToken = default)
+    {
+        await _context.Notifications.AddAsync(entity, cancellationToken);
+    }
+
+    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await _context.SaveChangesAsync(cancellationToken);
+    }
 }

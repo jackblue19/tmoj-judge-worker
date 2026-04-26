@@ -9,8 +9,6 @@ using System.Threading.Tasks;
 
 namespace Application.UseCases.Store.Queries.GetMyInventory;
 
-public record GetMyInventoryQuery() : IRequest<List<UserInventoryDto>>;
-
 public class GetMyInventoryHandler : IRequestHandler<GetMyInventoryQuery, List<UserInventoryDto>>
 {
     private readonly IUserInventoryRepository _inventoryRepo;

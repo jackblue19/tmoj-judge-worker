@@ -12,6 +12,11 @@ public sealed class ProblemDetailDto
     public string? VisibilityCode { get; init; }
     public string? ScoringCode { get; init; }
 
+    public string? ProblemMode { get; init; }
+    public string? ProblemSource { get; init; }
+    public int UsedCount { get; init; }
+    public Guid? OriginId { get; init; }
+
     public string? DescriptionMd { get; init; }
     public decimal? AcceptancePercent { get; init; }
     public int? DisplayIndex { get; init; }
@@ -34,7 +39,6 @@ public sealed class ProblemDetailDto
     public string? StatementFileName { get; init; }
     public string? StatementAccessUrl { get; init; }
 
-    // management-side convenience
     public Guid? PrimaryTestsetId { get; init; }
 
     public IReadOnlyList<ProblemTagDto> Tags { get; init; } = [];

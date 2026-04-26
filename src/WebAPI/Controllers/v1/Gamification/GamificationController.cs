@@ -1,4 +1,4 @@
-﻿using Application.Common.Events;
+using Application.Common.Events;
 using Application.UseCases.Gamification.Commands.CreateBadge;
 using Application.UseCases.Gamification.Commands.DeleteBadge;
 using Application.UseCases.Gamification.Commands.UpdateBadge;
@@ -16,6 +16,7 @@ using Application.UseCases.Gamification.Queries.GetMyRewardHistory;
 using Application.UseCases.Gamification.Queries.GetMyStreak;
 using Application.UseCases.Gamification.Queries.GetBadgeRules;
 using Application.UseCases.Gamification.Queries.GetContestRanking;
+using Application.UseCases.Gamification.Queries.GetDailyActivities;
 
 
 using Asp.Versioning;
@@ -76,6 +77,16 @@ public class GamificationController : ControllerBase
         return Ok(await _mediator.Send(new GetMyRewardHistoryQuery(), ct));
     }
 
+    [HttpGet("daily-activities")]
+    [Authorize]
+    public async Task<IActionResult> GetDailyActivities(
+        [FromQuery] int? year,
+        CancellationToken ct)
+    {
+        return Ok(await _mediator.Send(
+            new GetDailyActivitiesQuery { Year = year }, ct));
+    }
+
     // =====================================================
     // LEADERBOARD
     // =====================================================
@@ -109,8 +120,16 @@ public class GamificationController : ControllerBase
     // BADGE MANAGEMENT (ADMIN)
     // =====================================================
 
+    [HttpGet("badges/all")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetAllBadges(CancellationToken ct)
+    {
+        return Ok(await _mediator.Send(
+            new Application.UseCases.Gamification.Queries.GetAllBadges.GetAllBadgesQuery(), ct));
+    }
+
     [HttpPost("badges")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> CreateBadge(
         [FromBody] CreateBadgeCommand command,
         CancellationToken ct)
@@ -125,7 +144,7 @@ public class GamificationController : ControllerBase
     }
 
     [HttpPut("badges/{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> UpdateBadge(
         Guid id,
         [FromBody] UpdateBadgeCommand command,
@@ -142,7 +161,7 @@ public class GamificationController : ControllerBase
     }
 
     [HttpDelete("badges/{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> DeleteBadge(Guid id, CancellationToken ct)
     {
         var success = await _mediator.Send(
@@ -160,7 +179,7 @@ public class GamificationController : ControllerBase
 
     // CREATE RULE
     [HttpPost("badge-rules")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> CreateBadgeRule(
         [FromBody] CreateBadgeRuleCommand command,
         CancellationToken ct)
@@ -176,7 +195,7 @@ public class GamificationController : ControllerBase
 
     // GET ALL RULES
     [HttpGet("badge-rules")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> GetBadgeRules(CancellationToken ct)
     {
         var result = await _mediator.Send(new GetBadgeRulesQuery(), ct);
@@ -185,7 +204,7 @@ public class GamificationController : ControllerBase
 
     // UPDATE RULE
     [HttpPut("badge-rules/{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> UpdateBadgeRule(
         Guid id,
         [FromBody] UpdateBadgeRuleCommand command,
@@ -203,7 +222,7 @@ public class GamificationController : ControllerBase
 
     // DELETE (DISABLE) RULE
     [HttpDelete("badge-rules/{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> DeleteBadgeRule(Guid id, CancellationToken ct)
     {
         var success = await _mediator.Send(

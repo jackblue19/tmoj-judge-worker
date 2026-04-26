@@ -222,6 +222,13 @@ public class ContestRepository : IContestRepository
             .AnyAsync(x => x.TeamId == teamId && x.UserId == userId);
     }
 
+    public async Task<bool> HasUserRegisteredAsync(Guid contestId, Guid userId)
+    {
+        return await _db.ContestTeams
+            .AnyAsync(ct => ct.ContestId == contestId &&
+                           ct.Team.TeamMembers.Any(tm => tm.UserId == userId));
+    }
+
     // =============================================
     // TEAM MEMBERS
     // =============================================
@@ -251,8 +258,9 @@ public class ContestRepository : IContestRepository
     // =============================================
     public async Task<Contest?> GetActiveContestByTeamIdAsync(Guid teamId)
     {
+        var now = DateTime.UtcNow;
         return await _db.ContestTeams
-            .Where(ct => ct.TeamId == teamId)
+            .Where(ct => ct.TeamId == teamId && ct.Contest.EndAt > now)
             .Select(ct => ct.Contest)
             .OrderByDescending(c => c.StartAt)
             .FirstOrDefaultAsync();
@@ -282,6 +290,7 @@ public class ContestRepository : IContestRepository
                 ContestId = ct.ContestId,
                 TeamId = ct.Team.Id,
                 TeamName = ct.Team.TeamName,
+                TeamAvatarUrl = ct.Team.AvatarUrl,
                 LeaderId = ct.Team.LeaderId,
                 TeamSize = ct.Team.TeamSize,
                 MemberCount = ct.Team.TeamMembers.Count(),
@@ -293,6 +302,9 @@ public class ContestRepository : IContestRepository
                 {
                     UserId = m.UserId,
                     UserName = m.User.Username,
+                    DisplayName = m.User.DisplayName,
+                    Email = m.User.Email,
+                    AvatarUrl = m.User.AvatarUrl,
                     JoinedAt = m.JoinedAt
                 }).ToList()
             })

@@ -1,4 +1,4 @@
-﻿using Domain.Entities;
+using Domain.Entities;
 
 namespace Application.Common.Interfaces
 {
@@ -10,5 +10,8 @@ namespace Application.Common.Interfaces
         Task<bool> ExistsAsync(Guid paymentId);
         Task UpdateAsync(Payment payment);
         Task SaveChangesAsync();
+        
+        Task<(List<Payment> Items, int TotalItems)> GetMyPaymentHistoryAsync(Guid userId, int page, int pageSize);
+        Task<(List<Payment> Items, int TotalItems)> GetAllPaymentHistoryAsync(int page, int pageSize);
     }
 }

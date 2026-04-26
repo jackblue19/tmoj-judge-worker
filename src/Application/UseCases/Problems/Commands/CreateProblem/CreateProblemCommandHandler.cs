@@ -4,6 +4,7 @@ using Application.UseCases.Problems.Dtos;
 using Application.UseCases.Problems.Helpers;
 using Application.UseCases.Problems.Mappings;
 using Domain.Abstractions;
+using Domain.Constants;
 using Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -52,10 +53,15 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
 
         ProblemCommandGuard.ValidateStatementInput(request.DescriptionMd , request.StatementFile);
 
-        var statusCode = ProblemCommandGuard.NormalizeStatusCode(request.StatusCode);
         var difficulty = ProblemCommandGuard.NormalizeDifficulty(request.Difficulty);
-        var visibilityCode = ProblemCommandGuard.NormalizeVisibilityCode(request.VisibilityCode);
         var normalizedTagIds = ProblemCommandGuard.NormalizeTagIds(request.TagIds);
+
+        // hardcode backend
+        const string visibilityCode = "public";
+        const string statusCode = "published";
+
+        var problemMode = NormalizeProblemMode(request.ProblemMode);
+        var problemSource = ProblemSourceCodes.Origin;
 
         var slugExists = await _problemRepository.SlugExistsAsync(slug! , null , ct);
         if ( slugExists )
@@ -75,7 +81,14 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
             ScoringCode = request.ScoringCode?.Trim() ,
             TimeLimitMs = request.TimeLimitMs ,
             MemoryLimitKb = request.MemoryLimitKb ,
-            PublishedAt = statusCode == "published" ? now : null ,
+
+            // new fields
+            ProblemMode = problemMode ,
+            ProblemSource = problemSource ,
+            UsedCount = 0 ,
+            OriginId = null ,
+
+            PublishedAt = now ,
             IsActive = true ,
             CreatedAt = now ,
             CreatedBy = _currentUser.UserId.Value ,
@@ -118,7 +131,7 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
                         cancellationToken: ct);
 
                     entity.DescriptionMd = null;
-                    entity.StatementSourceCode = sourceCode; // r2_pdf
+                    entity.StatementSourceCode = sourceCode;
                     entity.StatementFileId = fileId;
                     entity.StatementFileName = normalizedStatementFileName;
                     entity.StatementContentType = contentType;
@@ -176,5 +189,20 @@ public sealed class CreateProblemCommandHandler : IRequestHandler<CreateProblemC
             _logger.LogError(ex , "Unexpected error while creating problem. Slug={Slug}" , slug);
             throw new InvalidOperationException("Unexpected error occurred while creating problem.");
         }
+    }
+
+    private static string NormalizeProblemMode(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant();
+
+        if ( string.IsNullOrWhiteSpace(normalized) )
+            return ProblemModeCodes.Pro;
+
+        return normalized switch
+        {
+            ProblemModeCodes.Amateur => ProblemModeCodes.Amateur,
+            ProblemModeCodes.Pro => ProblemModeCodes.Pro,
+            _ => throw new ArgumentException("Problem mode must be 'amateur' or 'pro'.")
+        };
     }
 }

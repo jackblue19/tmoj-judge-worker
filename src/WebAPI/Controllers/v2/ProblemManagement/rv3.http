@@ -1,0 +1,376 @@
+
+@baseUrl = https://localhost:7210
+@apiVersion = 2
+# @problemId = a656debb-1523-4db8-a4e0-0085587d593d
+@problemId = 7fdae111-ef83-4c98-a22d-c9eb0f83d7d7
+@originProblemId = a656debb-1523-4db8-a4e0-0085587d593d
+@codeTemplateId = 260563cf-4852-4326-b939-1fdc5cd87910
+@runtimeId = 892e81ee-989b-4578-a85a-ef4ed31c2564
+@tagId1 = a5de0b42-5e4a-4082-8e89-fe26493ae730
+@tagId2 = 4711504f-b817-40f6-a048-1a3644e452d0
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMDkxOTM5My1iYTMyLTRhMjMtODU0ZS04YzZhMGE3ZWY0ZDgiLCJqdGkiOiI2MmUxMzkwNWY5MWY0ODc0ODUwODcxMmFmOWJjMjJlMSIsImlhdCI6MTc3NjkzMDQxOCwibmFtZSI6IkFkbWluIFBvd2VyZnVsIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjEwOTE5MzkzLWJhMzItNGEyMy04NTRlLThjNmEwYTdlZjRkOCIsIm5iZiI6MTc3NjkzMDQxOCwiZXhwIjoxNzc3NTM1MjE4LCJpc3MiOiJmcHR1LXRtb2otYXBpIiwiYXVkIjoidG1vai11c2VycyJ9.mdePyBDcSFSjs6k4GuTlHqH5uIqqJeebx49YWOW-uiU
+
+### =========================================================
+### NOTES
+### - All create/update endpoints below are multipart/form-data because controller uses [FromForm]
+### - For array fields like TagIds, repeat the same form key multiple times
+### - For requests with statementFile, comment out descriptionMd fields
+### - For requests with descriptionMd, do not send statementFile
+### =========================================================
+
+### 1) CREATE PROBLEM (normal) - markdown mode
+POST {{baseUrl}}/api/v{{apiVersion}}/Problems
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=CreateProblemBoundary
+
+--CreateProblemBoundary
+Content-Disposition: form-data; name="Title"
+
+Two Sum Basic
+--CreateProblemBoundary
+Content-Disposition: form-data; name="Slug"
+
+two-sum-basic
+--CreateProblemBoundary
+Content-Disposition: form-data; name="Difficulty"
+
+easy
+--CreateProblemBoundary
+Content-Disposition: form-data; name="TypeCode"
+
+algorithm
+--CreateProblemBoundary
+Content-Disposition: form-data; name="ScoringCode"
+
+acm
+--CreateProblemBoundary
+Content-Disposition: form-data; name="TimeLimitMs"
+
+1000
+--CreateProblemBoundary
+Content-Disposition: form-data; name="MemoryLimitKb"
+
+262144
+--CreateProblemBoundary
+Content-Disposition: form-data; name="DescriptionMd"
+
+Given an array of integers, return indices of two numbers such that they add up to target.
+--CreateProblemBoundary
+Content-Disposition: form-data; name="ProblemMode"
+
+pro
+--CreateProblemBoundary
+Content-Disposition: form-data; name="TagIds"
+
+{{tagId1}}
+--CreateProblemBoundary
+Content-Disposition: form-data; name="TagIds"
+
+{{tagId2}}
+--CreateProblemBoundary--
+
+### 2) CREATE IN-PLAN PROBLEM - markdown mode
+POST {{baseUrl}}/api/v1/study-plans/problem/in-plan
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=CreateInPlanBoundary
+
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="Title"
+
+Two Sum Lesson 1
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="Slug"
+
+two-sum-lesson-1
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="Difficulty"
+
+easy
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="TypeCode"
+
+algorithm
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="ScoringCode"
+
+acm
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="TimeLimitMs"
+
+1000
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="MemoryLimitKb"
+
+262144
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="DescriptionMd"
+
+Solve Two Sum but only implement the function body.
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="ProblemMode"
+
+amateur
+--CreateInPlanBoundary
+Content-Disposition: form-data; name="TagIds"
+
+{{tagId1}}
+--CreateInPlanBoundary--
+
+### 3) DONATE PROBLEM - markdown mode
+POST {{baseUrl}}/api/v{{apiVersion}}/Problems/donate
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=DonateBoundary
+
+--DonateBoundary
+Content-Disposition: form-data; name="Title"
+
+Binary Search Donation
+--DonateBoundary
+Content-Disposition: form-data; name="Slug"
+
+binary-search-donation-v2
+--DonateBoundary
+Content-Disposition: form-data; name="Difficulty"
+
+easy
+--DonateBoundary
+Content-Disposition: form-data; name="TypeCode"
+
+algorithm
+--DonateBoundary
+Content-Disposition: form-data; name="ScoringCode"
+
+acm
+--DonateBoundary
+Content-Disposition: form-data; name="TimeLimitMs"
+
+1000
+--DonateBoundary
+Content-Disposition: form-data; name="MemoryLimitKb"
+
+262144
+--DonateBoundary
+Content-Disposition: form-data; name="DescriptionMd"
+
+Implement binary search on a sorted array.
+--DonateBoundary
+Content-Disposition: form-data; name="ProblemMode"
+
+amateur
+--DonateBoundary
+Content-Disposition: form-data; name="TagIds"
+
+{{tagId1}}
+--DonateBoundary--
+
+### 4) GET PROBLEM DETAIL
+GET {{baseUrl}}/api/v{{apiVersion}}/Problems/{{problemId}}
+Authorization: Bearer {{authToken}}
+
+### 5) UPDATE PROBLEM - markdown mode
+PUT {{baseUrl}}/api/v{{apiVersion}}/Problems/{{problemId}}/content
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=UpdateProblemBoundary
+
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="Title"
+
+Two Sum Updated
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="Slug"
+
+binary-search-donation-updated
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="Difficulty"
+
+easy
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="TypeCode"
+
+algorithm
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="ScoringCode"
+
+acm
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="TimeLimitMs"
+
+1500
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="MemoryLimitKb"
+
+262144
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="DescriptionMd"
+
+Updated description for Two Sum problem.
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="ProblemMode"
+
+pro
+--UpdateProblemBoundary
+Content-Disposition: form-data; name="TagIds"
+
+{{tagId1}}
+--UpdateProblemBoundary--
+
+### 6) GET ALL PUBLIC PROBLEMS
+GET {{baseUrl}}/api/v{{apiVersion}}/Problems/public?page=1&pageSize=10&search=two&difficulty=easy
+
+### 7) CREATE PROBLEM TEMPLATE
+POST {{baseUrl}}/api/v{{apiVersion}}/ProblemTemplates/{{problemId}}/templates
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "runtimeId": "{{runtimeId}}",
+  "templateCode": "#include <bits/stdc++.h>\\nusing namespace std;\\n\\nclass Solution {\\npublic:\\n    int solve(vector<int>& a) {\\n        __USER_CODE__\\n    }\\n};",
+  "injectionPoint": "âsjdnsa",
+  "solutionSignature": "int solve(vector<int>& a)",
+  "version": 1
+}
+
+### 8) GET PROBLEM TEMPLATES
+GET {{baseUrl}}/api/v{{apiVersion}}/ProblemTemplates/{{problemId}}/templates
+
+###
+PUT {{baseUrl}}/api/v{{apiVersion}}/ProblemTemplates/templates/{{codeTemplateId}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "templateCode": "#include <bits/stdc++.h>\\nusing namespace std;\\n\\nclass Solution {\\npublic:\\n    int solve(vector<int>& a) {\\n        __USER_CODE__\\n    }\\n};\\n// updated",
+  "injectionPoint": "__USER_CODEzzzzzzzzzz_-",
+  "solutionSignature": "int solve(vector<int>& a)",
+  "isActive": true
+}
+### 10) DELETE PROBLEM TEMPLATE (soft delete)
+DELETE {{baseUrl}}/api/v{{apiVersion}}/ProblemTemplates/templates/{{codeTemplateId}}
+Authorization: Bearer {{authToken}}
+
+### 11) GET PROBLEM BANKS
+GET {{baseUrl}}/api/v{{apiVersion}}/Problems/banks?page=1&pageSize=10&search=binary&difficulty=easy
+Authorization: Bearer {{authToken}}
+
+### 12) CREATE VIRTUAL PROBLEM - JSON
+POST {{baseUrl}}/api/v{{apiVersion}}/Problems/virtual
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "originProblemId": "{{originProblemId}}",
+  "slug": "two-sum-basic-virtual-custom",
+  "title": "Two Sum Basic Virtual",
+  "visibilityCode": "private"
+}
+
+### 13) CREATE VIRTUAL PROBLEM - auto generate slug
+POST {{baseUrl}}/api/v{{apiVersion}}/Problems/virtual
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "originProblemSlug": "two-sum-basic",
+  "title": "Two Sum Basic Virtual Auto",
+  "visibilityCode": "private"
+}
+
+### 14) CREATE REMIX PROBLEM - form-data, markdown mode
+POST {{baseUrl}}/api/v{{apiVersion}}/Problems/remix
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=RemixBoundary
+
+--RemixBoundary
+Content-Disposition: form-data; name="OriginProblemId"
+
+{{originProblemId}}
+--RemixBoundary
+Content-Disposition: form-data; name="Title"
+
+Two Sum Remix Advanced
+--RemixBoundary
+Content-Disposition: form-data; name="Slug"
+
+two-sum-remix-advanced
+--RemixBoundary
+Content-Disposition: form-data; name="Difficulty"
+
+medium
+--RemixBoundary
+Content-Disposition: form-data; name="TypeCode"
+
+algorithm
+--RemixBoundary
+Content-Disposition: form-data; name="VisibilityCode"
+
+public
+--RemixBoundary
+Content-Disposition: form-data; name="ScoringCode"
+
+acm
+--RemixBoundary
+Content-Disposition: form-data; name="TimeLimitMs"
+
+1500
+--RemixBoundary
+Content-Disposition: form-data; name="MemoryLimitKb"
+
+262144
+--RemixBoundary
+Content-Disposition: form-data; name="DescriptionMd"
+
+Updated statement for remix.
+--RemixBoundary
+Content-Disposition: form-data; name="ProblemMode"
+
+amateur
+--RemixBoundary
+Content-Disposition: form-data; name="TagIds"
+
+{{tagId1}}
+--RemixBoundary--
+
+### 15) CREATE PROBLEM WITH STATEMENT FILE (.md or .pdf) - example multipart file upload
+# Note: replace local file path below to a real file in your machine.
+POST {{baseUrl}}/api/v{{apiVersion}}/Problems
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=CreateWithFileBoundary
+
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="Title"
+
+Problem With File
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="Slug"
+
+problem-with-file
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="Difficulty"
+
+easy
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="TypeCode"
+
+algorithm
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="ScoringCode"
+
+acm
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="TimeLimitMs"
+
+1000
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="MemoryLimitKb"
+
+262144
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="ProblemMode"
+
+pro
+--CreateWithFileBoundary
+Content-Disposition: form-data; name="StatementFile"; filename="sample.md"
+Content-Type: text/markdown
+
+< ./sample.md
+--CreateWithFileBoundary--

@@ -8,8 +8,8 @@ public class StudyPlanDto
     public int Order { get; set; }
     public int ProblemCount { get; set; }
 
-    public int? Price { get; set; }
-
+    public decimal Price { get; set; }      
+    public bool IsPaid { get; set; }
     public bool IsCompleted { get; set; }
     public bool IsUnlocked { get; set; }
 }

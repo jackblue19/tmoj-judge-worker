@@ -1,14 +1,27 @@
-using Application.Abstractions.Outbound.Services;
-using Application.UseCases.Auth;
+using Application.UseCases.Users.Commands.AdminUpdateUser;
+using Application.UseCases.Users.Commands.AssignRole;
+using Application.UseCases.Users.Commands.CreateUser;
+using Application.UseCases.Users.Commands.DeleteAvatar;
+using Application.UseCases.Users.Commands.DeleteUser;
+using Application.UseCases.Users.Commands.ImportStudents;
+using Application.UseCases.Users.Commands.SetAccountStatus;
+using Application.UseCases.Users.Commands.UpdateMyProfile;
+using Application.UseCases.Users.Commands.UploadAvatar;
+using Application.UseCases.Users.Dtos;
+using Application.UseCases.Users.Queries.GetActiveUsers;
+using Application.UseCases.Users.Queries.GetMe;
+using Application.UseCases.Users.Queries.GetStudentDetail;
+using Application.UseCases.Users.Queries.GetTeacherDetail;
+using Application.UseCases.Users.Queries.GetUserByEmail;
+using Application.UseCases.Users.Queries.GetUserProfile;
+using Application.UseCases.Users.Queries.ListAllUsers;
+using Application.UseCases.Users.Queries.ListUsersByRole;
+using Application.UseCases.Users.Queries.ListUsersByStatus;
 using Asp.Versioning;
-using Domain.Entities;
-using Infrastructure.Configurations.Auth;
-using Infrastructure.Persistence.Scaffolded.Context;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using WebAPI.Controllers.v1.ClassManagement;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Users;
@@ -16,77 +29,30 @@ namespace WebAPI.Controllers.v1.Users;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-//[Authorize]
 public class UserController : ControllerBase
 {
-    private readonly TmojDbContext _db;
-    private readonly IPasswordHasher _passwordHasher;
-    private readonly ICloudinaryService _cloudinary;
+    private readonly IMediator _mediator;
 
-    public UserController(TmojDbContext db, IPasswordHasher passwordHasher, ICloudinaryService cloudinary)
-    {
-        _db = db;
-        _passwordHasher = passwordHasher;
-        _cloudinary = cloudinary;
-    }
+    public UserController(IMediator mediator) => _mediator = mediator;
 
-    [Authorize(Roles = "admin")]
+    [Authorize(Roles = "admin,manager")]
     [HttpPost]
-    public async Task<IActionResult> Create(
-        [FromBody] CreateUserRequest req ,
-        CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateUserCommand req, CancellationToken ct)
     {
         try
         {
-            var email = req.Email.ToLowerInvariant();
-            if ( await _db.Users.AnyAsync(u => u.Email == email , ct) )
-            {
-                return BadRequest(new { Message = "Email already exists" });
-            }
-
-            // 1 User = 1 Role (use User.RoleId directly)
-            Guid? roleId = null;
-            if ( req.Roles != null && req.Roles.Any() )
-            {
-                // Take the first role (1:1 relationship)
-                var roleCode = req.Roles.First().ToLowerInvariant();
-                var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == roleCode, ct);
-                if (role != null)
-                    roleId = role.RoleId;
-            }
-            
-            if (roleId == null)
-            {
-                var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student" , ct);
-                if ( studentRole != null )
-                    roleId = studentRole.RoleId;
-            }
-
-            var user = new User
-            {
-                FirstName = req.FirstName ,
-                LastName = req.LastName ,
-                Email = email ,
-                Password = _passwordHasher.Hash(req.Password) ,
-                Username = req.Username ?? (email.Split('@')[0] + Random.Shared.Next(1000 , 9999).ToString()) ,
-                DisplayName = $"{req.LastName} {req.FirstName}" ,
-                LanguagePreference = "vi" ,
-                Status = true ,
-                EmailVerified = true,
-                RoleId = roleId
-            };
-
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(new { Message = "User created successfully" , UserId = user.UserId });
+            var userId = await _mediator.Send(req, ct);
+            return Ok(new { Message = "User created successfully", UserId = userId });
         }
-        catch ( Exception )
+        catch (InvalidOperationException ex)
         {
-            return StatusCode(500 , new { Message = "An error occurred while creating the user. Please try again later." });
+            return BadRequest(new { Message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while creating the user." });
         }
     }
-
 
     [Authorize(Roles = "admin,manager")]
     [HttpGet("list-all")]
@@ -94,35 +60,12 @@ public class UserController : ControllerBase
     {
         try
         {
-            var users = await _db.Users
-                .Include(u => u.Role)
-                .Select(u => new UserDto(
-                    u.UserId,
-                    u.Email,
-                    u.FirstName,
-                    u.LastName,
-                    u.DisplayName,
-                    u.Username,
-                    u.RollNumber,
-                    u.MemberCode,
-                    u.AvatarUrl,
-                    u.EmailVerified,
-                    u.Status,
-                    u.Role != null ? u.Role.RoleCode : null
-                ))
-                .ToListAsync(ct);
-
-            return Ok(ApiResponse<List<UserDto>>.Ok(
-                users,
-                "Users list fetched successfully"
-            ));
+            var users = await _mediator.Send(new ListAllUsersQuery(), ct);
+            return Ok(ApiResponse<List<UserDto>>.Ok(users, "Users list fetched successfully"));
         }
         catch (Exception)
         {
-            return StatusCode(500, new
-            {
-                Message = "An error occurred while fetching the users list. Please try again later."
-            });
+            return StatusCode(500, new { Message = "An error occurred while fetching the users list." });
         }
     }
 
@@ -130,88 +73,36 @@ public class UserController : ControllerBase
     [HttpGet("me")]
     public async Task<IActionResult> GetMe(CancellationToken ct)
     {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized(new { Message = "Unauthorized access." });
+
         try
         {
-            var userIdStr =
-                User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                ?? User.FindFirst("sub")?.Value;
-
-            if (string.IsNullOrEmpty(userIdStr) ||
-                !Guid.TryParse(userIdStr, out var userId))
-            {
-                return Unauthorized(new { Message = "Unauthorized access." });
-            }
-
-            var user = await _db.Users
-                .Where(u => u.UserId == userId && u.DeletedAt == null)
-                .Include(u => u.Role)
-                .Select(u => new UserDto(
-                    u.UserId,
-                    u.Email,
-                    u.FirstName,
-                    u.LastName,
-                    u.DisplayName,
-                    u.Username,
-                    u.RollNumber,
-                    u.MemberCode,
-                    u.AvatarUrl,
-                    u.EmailVerified,
-                    u.Status,
-                    u.Role != null ? u.Role.RoleCode : null
-                ))
-                .FirstOrDefaultAsync(ct);
-
-            if (user == null)
-                return NotFound(new { Message = "User not found." });
-
-            return Ok(ApiResponse<UserDto>.Ok(
-                user,
-                "Profile fetched successfully"
-            ));
+            var user = await _mediator.Send(new GetMeQuery(userId.Value), ct);
+            if (user == null) return NotFound(new { Message = "User not found." });
+            return Ok(ApiResponse<UserDto>.Ok(user, "Profile fetched successfully"));
         }
         catch (Exception)
         {
-            return StatusCode(500, new
-            {
-                Message = "An error occurred while fetching your profile. Please try again later."
-            });
+            return StatusCode(500, new { Message = "An error occurred while fetching your profile." });
         }
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetProfile(Guid id, CancellationToken ct)
     {
         try
         {
-            var user = await _db.Users
-                .Where(u => u.UserId == id && u.DeletedAt == null)
-                .Select(u => new Auth.UserProfileResponse(
-                    u.UserId,
-                    u.Email,
-                    u.FirstName,
-                    u.LastName,
-                    u.DisplayName,
-                    u.Username,
-                    u.AvatarUrl,
-                    u.EmailVerified,
-                    u.Status,
-                    u.CreatedAt
-                ))
-                .FirstOrDefaultAsync(ct);
-
-            if ( user == null ) return NotFound(new { Message = "User not found." });
-
-            return Ok(ApiResponse<Auth.UserProfileResponse>.Ok(user , "User profile fetched successfully"));
+            var user = await _mediator.Send(new GetUserProfileQuery(id), ct);
+            if (user == null) return NotFound(new { Message = "User not found." });
+            return Ok(ApiResponse<UserProfileDto>.Ok(user, "User profile fetched successfully"));
         }
-        catch ( Exception )
+        catch (Exception)
         {
-            return StatusCode(500 , new { Message = "An error occurred while fetching the user profile. Please try again later." });
+            return StatusCode(500, new { Message = "An error occurred while fetching the user profile." });
         }
     }
 
-    // ──────────────────────────────────────────
-    // GET api/v1/user/students/{id}  →  Student profile with joined classes (filter by semester/subject)
-    // ──────────────────────────────────────────
     [HttpGet("students/{id:guid}")]
     public async Task<IActionResult> GetStudentDetail(
         Guid id,
@@ -221,48 +112,9 @@ public class UserController : ControllerBase
     {
         try
         {
-            var student = await _db.Users.AsNoTracking()
-                .Include(u => u.Role)
-                .Where(u => u.UserId == id && u.DeletedAt == null)
-                .Select(u => new UserDto(
-                    u.UserId, u.Email, u.FirstName, u.LastName,
-                    u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
-                    u.AvatarUrl, u.EmailVerified, u.Status,
-                    u.Role != null ? u.Role.RoleCode : null))
-                .FirstOrDefaultAsync(ct);
-
-            if (student == null)
-                return NotFound(new { Message = "Student not found." });
-
-            var classQuery = _db.ClassMembers.AsNoTracking()
-                .Where(m => m.UserId == id && m.IsActive);
-
-            if (semesterId.HasValue)
-                classQuery = classQuery.Where(m => m.ClassSemester.SemesterId == semesterId.Value);
-            if (subjectId.HasValue)
-                classQuery = classQuery.Where(m => m.ClassSemester.SubjectId == subjectId.Value);
-
-            var classes = await classQuery
-                .OrderByDescending(m => m.ClassSemester.CreatedAt)
-                .Select(m => new ClassInstanceInfo(
-                    m.ClassSemester.Id, m.ClassSemester.Class.ClassCode,
-                    m.ClassSemester.Semester.SemesterId, m.ClassSemester.Semester.Code,
-                    m.ClassSemester.Subject.SubjectId, m.ClassSemester.Subject.Code,
-                    m.ClassSemester.Subject.Name, m.ClassSemester.Subject.Description,
-                    m.ClassSemester.Semester.StartAt, m.ClassSemester.Semester.EndAt,
-                    (string?)null, (DateTime?)null, m.ClassSemester.CreatedAt,
-                    m.ClassSemester.Teacher != null
-                        ? new ClassTeacherInfo(
-                            m.ClassSemester.Teacher.UserId,
-                            m.ClassSemester.Teacher.DisplayName,
-                            m.ClassSemester.Teacher.Email,
-                            m.ClassSemester.Teacher.AvatarUrl)
-                        : null,
-                    m.ClassSemester.ClassMembers.Count(cm => cm.IsActive)))
-                .ToListAsync(ct);
-
-            var result = new StudentProfileWithClassesResponse(student, classes, classes.Count);
-            return Ok(ApiResponse<StudentProfileWithClassesResponse>.Ok(result, "Student profile fetched successfully"));
+            var result = await _mediator.Send(new GetStudentDetailQuery(id, semesterId, subjectId), ct);
+            if (result == null) return NotFound(new { Message = "Student not found." });
+            return Ok(ApiResponse<StudentProfileWithClassesDto>.Ok(result, "Student profile fetched successfully"));
         }
         catch (Exception)
         {
@@ -270,9 +122,6 @@ public class UserController : ControllerBase
         }
     }
 
-    // ──────────────────────────────────────────
-    // GET api/v1/user/teachers/{id}  →  Teacher detail with subjects and taught classes (filter by semester/subject)
-    // ──────────────────────────────────────────
     [HttpGet("teachers/{id:guid}")]
     public async Task<IActionResult> GetTeacherDetail(
         Guid id,
@@ -282,63 +131,9 @@ public class UserController : ControllerBase
     {
         try
         {
-            var teacher = await _db.Users.AsNoTracking()
-                .Include(u => u.Role)
-                .Where(u => u.UserId == id && u.DeletedAt == null)
-                .Select(u => new UserDto(
-                    u.UserId, u.Email, u.FirstName, u.LastName,
-                    u.DisplayName, u.Username, u.RollNumber, u.MemberCode,
-                    u.AvatarUrl, u.EmailVerified, u.Status,
-                    u.Role != null ? u.Role.RoleCode : null))
-                .FirstOrDefaultAsync(ct);
-
-            if (teacher == null)
-                return NotFound(new { Message = "Teacher not found." });
-
-            var query = _db.ClassSemesters.AsNoTracking()
-                .Include(cs => cs.Class)
-                .Include(cs => cs.Semester)
-                .Include(cs => cs.Subject)
-                .Include(cs => cs.Teacher)
-                .Include(cs => cs.ClassMembers)
-                .Where(cs => cs.TeacherId == id);
-
-            if (semesterId.HasValue)
-                query = query.Where(cs => cs.SemesterId == semesterId.Value);
-            if (subjectId.HasValue)
-                query = query.Where(cs => cs.SubjectId == subjectId.Value);
-
-            var classSemesters = await query.ToListAsync(ct);
-
-            var classes = classSemesters
-                .Where(cs => cs.Semester != null && cs.Subject != null && cs.Class != null)
-                .OrderByDescending(cs => cs.CreatedAt)
-                .Select(cs => new ClassInstanceInfo(
-                    cs.Id, cs.Class.ClassCode,
-                    cs.Semester.SemesterId, cs.Semester.Code,
-                    cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
-                    cs.Semester.StartAt, cs.Semester.EndAt,
-                    null, null, cs.CreatedAt,
-                    cs.Teacher != null
-                        ? new ClassTeacherInfo(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl)
-                        : null,
-                    cs.ClassMembers.Count(m => m.IsActive)))
-                .ToList();
-
-            var subjects = classSemesters
-                .Where(cs => cs.Subject != null)
-                .GroupBy(cs => cs.Subject.SubjectId)
-                .Select(g => new TeacherSubjectInfo(
-                    g.Key,
-                    g.First().Subject.Code,
-                    g.First().Subject.Name,
-                    g.First().Subject.Description,
-                    g.Count()))
-                .OrderBy(s => s.Code)
-                .ToList();
-
-            var result = new TeacherDetailResponse(teacher, subjects, classes, classes.Count);
-            return Ok(ApiResponse<TeacherDetailResponse>.Ok(result, "Teacher detail fetched successfully"));
+            var result = await _mediator.Send(new GetTeacherDetailQuery(id, semesterId, subjectId), ct);
+            if (result == null) return NotFound(new { Message = "Teacher not found." });
+            return Ok(ApiResponse<TeacherDetailDto>.Ok(result, "Teacher detail fetched successfully"));
         }
         catch (Exception)
         {
@@ -347,22 +142,53 @@ public class UserController : ControllerBase
     }
 
     [Authorize(Roles = "admin")]
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         try
         {
-            var user = await _db.Users.FindAsync(new object[] { id }, ct);
-            if (user == null) return NotFound(new { Message = "User not found." });
-
-            _db.Users.Remove(user);
-            await _db.SaveChangesAsync(ct);
-
+            await _mediator.Send(new DeleteUserCommand(id), ct);
             return Ok(new { Message = "Account deleted successfully." });
         }
-        catch ( Exception )
+        catch (KeyNotFoundException ex)
         {
-            return StatusCode(500 , new { Message = "An error occurred while deleting the account. Please try again later." });
+            return NotFound(new { Message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while deleting the account." });
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAllUsers(CancellationToken ct)
+    {
+        try
+        {
+            var users = await _mediator.Send(new GetActiveUsersQuery(), ct);
+            return Ok(ApiResponse<List<SimpleUserDto>>.Ok(users, "Users fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "An error occurred while fetching users." });
+        }
+    }
+
+    [HttpGet("email/{email}")]
+    public async Task<IActionResult> GetUserByEmail(string email, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return BadRequest(new { message = "Email is required." });
+
+        try
+        {
+            var user = await _mediator.Send(new GetUserByEmailQuery(email), ct);
+            if (user == null) return NotFound(new { message = "User not found." });
+            return Ok(ApiResponse<SimpleUserDto>.Ok(user, "User fetched successfully"));
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { message = "An error occurred while fetching the user." });
         }
     }
 
@@ -374,53 +200,19 @@ public class UserController : ControllerBase
 
         try
         {
-            var normalizedRoleName = roleName.Trim().ToLowerInvariant();
-
-            var role = await _db.Roles
-                .AsNoTracking()
-                .FirstOrDefaultAsync(r => r.RoleCode.ToLower() == normalizedRoleName, ct);
-
-            if (role == null)
-                return NotFound(new { message = "Role name not found." });
-
-            // Query users via direct User.RoleId (1:1 with Role)
-            var users = await _db.Users
-                .AsNoTracking()
-                .Include(u => u.Role)
-                .Where(u => u.RoleId == role.RoleId)
-                .OrderBy(u => u.DisplayName)
-                .Select(u => new UserDto(
-                    u.UserId,
-                    u.Email,
-                    u.FirstName,
-                    u.LastName,
-                    u.DisplayName,
-                    u.Username,
-                    u.RollNumber,
-                    u.MemberCode,
-                    u.AvatarUrl,
-                    u.EmailVerified,
-                    u.Status,
-                    u.Role != null ? u.Role.RoleCode : null
-                ))
-                .ToListAsync(ct);
-
+            var users = await _mediator.Send(new ListUsersByRoleQuery(roleName), ct);
             return Ok(ApiResponse<List<UserDto>>.Ok(users, "Users fetched successfully"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception)
         {
-            //_logger.LogError(ex, "Error fetching users by role {RoleName}", roleName);
-
-            return StatusCode(500, new
-            {
-                message = "An error occurred while fetching users."
-            });
+            return StatusCode(500, new { message = "An error occurred while fetching users." });
         }
     }
 
-    // ──────────────────────────────────────────
-    // GET api/v1/User/import/template
-    // ──────────────────────────────────────────
     [Authorize(Roles = "admin")]
     [HttpGet("import/template")]
     public IActionResult DownloadImportTemplate()
@@ -430,14 +222,7 @@ public class UserController : ControllerBase
             using var workbook = new ClosedXML.Excel.XLWorkbook();
             var worksheet = workbook.Worksheets.Add("Template");
 
-            var headers = new List<string>
-        {
-            "FullName",
-            "Email",
-            "RollNumber",
-            "MemberCode"
-        };
-
+            var headers = new List<string> { "FullName", "Email", "RollNumber", "MemberCode" };
             for (int i = 0; i < headers.Count; i++)
             {
                 var cell = worksheet.Cell(1, i + 1);
@@ -446,19 +231,15 @@ public class UserController : ControllerBase
                 cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
             }
 
-            // Sample row
             worksheet.Cell(2, 1).Value = "Nguyen Van A";
             worksheet.Cell(2, 2).Value = "nguyenva@domain.com";
             worksheet.Cell(2, 3).Value = "SE123456";
             worksheet.Cell(2, 4).Value = "A_NV";
-
             worksheet.Columns().AdjustToContents();
 
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
-            var content = stream.ToArray();
-
-            return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Student_Import_Template.xlsx");
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Student_Import_Template.xlsx");
         }
         catch (Exception ex)
         {
@@ -466,10 +247,6 @@ public class UserController : ControllerBase
         }
     }
 
-    // ──────────────────────────────────────────
-    // POST api/v1/User/import
-    // Admin import sinh viên hàng loạt từ Excel
-    // ──────────────────────────────────────────
     [Authorize(Roles = "admin")]
     [HttpPost("import")]
     public async Task<IActionResult> ImportStudents(IFormFile file, CancellationToken ct)
@@ -479,144 +256,26 @@ public class UserController : ControllerBase
 
         try
         {
-            int successCount = 0;
-            int failedCount = 0;
-            var errors = new List<string>();
-            int totalProcessed = 0;
-
-            using var stream = new MemoryStream();
-            await file.CopyToAsync(stream, ct);
-            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
-            var worksheet = workbook.Worksheet(1);
-            var rows = worksheet.RowsUsed().Skip(1); // skip header
-
-            var headerRow = worksheet.Row(1);
-            var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var cell in headerRow.CellsUsed())
+            var students = ParseImportFile(file);
+            var result = await _mediator.Send(new ImportStudentsCommand(students), ct);
+            return Ok(ApiResponse<object>.Ok(new
             {
-                headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
-            }
-
-            foreach (var row in rows)
-            {
-                totalProcessed++;
-                try
-                {
-                    string fullName = GetCellString(row, headers, "FullName");
-                    string email = GetCellString(row, headers, "Email");             
-                    string rollNumber = GetCellString(row, headers, "RollNumber");
-                    string memberCode = GetCellString(row, headers, "MemberCode");
-
-                    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
-                    {
-                        errors.Add($"Row {row.RowNumber()}: Missing Email or FullName.");
-                        failedCount++;
-                        continue;
-                    }
-
-                    email = email.Trim().ToLowerInvariant();
-                    var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
-
-                    if (user == null)
-                    {
-                        var names = SplitFullName(fullName);
-
-                        // Use User.RoleId directly (1:1 with Role)
-                        Guid? studentRoleId = null;
-                        var studentRole = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "student", ct);
-                        if (studentRole != null)
-                            studentRoleId = studentRole.RoleId;
-
-                        // Default password = MemberCode, fallback to RollNumber, then email prefix
-                        var defaultPassword = !string.IsNullOrWhiteSpace(memberCode) ? memberCode.Trim()
-                            : !string.IsNullOrWhiteSpace(rollNumber) ? rollNumber.Trim()
-                            : email.Split('@')[0];
-
-                        user = new User
-                        {
-                            FirstName = names.FirstName,
-                            LastName = names.LastName,
-                            Email = email,
-                            Password = _passwordHasher.Hash(defaultPassword),
-                            Username = email.Split('@')[0] + "_" + Guid.NewGuid().ToString("N").Substring(0, 4),
-                            DisplayName = fullName,
-                            RollNumber = rollNumber,
-                            MemberCode = memberCode,
-                            Status = true,
-                            EmailVerified = true,
-                            LanguagePreference = "en",
-                            RoleId = studentRoleId,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        };
-
-                        _db.Users.Add(user);
-                        await _db.SaveChangesAsync(ct);
-                        successCount++;
-                    }
-                    else
-                    {
-                        // User đã tồn tại — bỏ qua, không tạo mới
-                        successCount++;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Row {row.RowNumber()}: {ex.Message}");
-                    failedCount++;
-                }
-            }
-
-            var result = new
-            {
-                TotalProcessed = totalProcessed,
-                SuccessCount = successCount,
-                FailedCount = failedCount,
-                Errors = errors
-            };
-
-            return Ok(ApiResponse<object>.Ok(result, "Import processed successfully"));
+                result.TotalProcessed,
+                result.SuccessCount,
+                result.FailedCount,
+                result.Errors
+            }, "Import processed successfully"));
         }
         catch (Exception ex)
         {
             return StatusCode(500, new { Message = "An error occurred while importing: " + ex.Message });
         }
-    } 
-
-
-    private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string columnName)
-    {
-        if (headers.TryGetValue(columnName, out int colIdx))
-        {
-            return row.Cell(colIdx).GetValue<string>()?.Trim() ?? string.Empty;
-        }
-        return string.Empty;
     }
-
-    private (string LastName, string FirstName) SplitFullName(string fullName)
-    {
-        if (string.IsNullOrWhiteSpace(fullName))
-            return ("Unknown", "Unknown");
-
-        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1)
-        {
-            return (parts[0], parts[0]);
-        }
-
-        string lastName = parts[0];
-        string firstName = string.Join(" ", parts.Skip(1));
-        return (lastName, firstName);
-    }
-
-    // ──────────────────────────────────────────
-    //  Avatar Upload / Delete
-    // ──────────────────────────────────────────
 
     [Authorize]
     [HttpPut("me/avatar")]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(5_000_000)] // 5 MB
+    [RequestSizeLimit(5_000_000)]
     public async Task<IActionResult> UploadAvatar(IFormFile file, CancellationToken ct)
     {
         if (file == null || file.Length == 0)
@@ -628,34 +287,19 @@ public class UserController : ControllerBase
             return BadRequest(new { Message = $"Invalid file type. Allowed: {string.Join(", ", allowedExtensions)}" });
 
         var userId = GetUserId();
-        if (userId == Guid.Empty)
-            return Unauthorized(new { Message = "Unauthorized access." });
+        if (userId == null) return Unauthorized(new { Message = "Unauthorized access." });
 
         try
         {
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.DeletedAt == null, ct);
-            if (user == null)
-                return NotFound(new { Message = "User not found." });
-
-            if (TryGetAvatarIdFromUrl(user.AvatarUrl, out var existingAvatarId))
-            {
-                await _cloudinary.ReplaceAvatarAsync(existingAvatarId, file.OpenReadStream(), ext, ct);
-                user.AvatarUrl = _cloudinary.GetAvatarUrl(existingAvatarId);
-            }
-            else
-            {
-                var avatarId = await _cloudinary.UploadAvatarAsync(file.OpenReadStream(), ext, ct);
-                user.AvatarUrl = _cloudinary.GetAvatarUrl(avatarId);
-            }
-
-            user.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(ApiResponse<object>.Ok(new { AvatarUrl = user.AvatarUrl }, "Avatar uploaded successfully."));
+            var avatarUrl = await _mediator.Send(new UploadAvatarCommand(userId.Value, file.OpenReadStream(), ext), ct);
+            return Ok(ApiResponse<object>.Ok(new { AvatarUrl = avatarUrl }, "Avatar uploaded successfully."));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
         }
         catch (Exception)
         {
-            //_logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
             return StatusCode(500, new { Message = "An error occurred while uploading the avatar." });
         }
     }
@@ -665,140 +309,106 @@ public class UserController : ControllerBase
     public async Task<IActionResult> DeleteAvatar(CancellationToken ct)
     {
         var userId = GetUserId();
-        if (userId == Guid.Empty)
-            return Unauthorized(new { Message = "Unauthorized access." });
+        if (userId == null) return Unauthorized(new { Message = "Unauthorized access." });
 
         try
         {
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.DeletedAt == null, ct);
-            if (user == null)
-                return NotFound(new { Message = "User not found." });
-
-            if (string.IsNullOrEmpty(user.AvatarUrl))
-                return BadRequest(new { Message = "No avatar to delete." });
-
-            if (TryGetAvatarIdFromUrl(user.AvatarUrl, out var avatarId))
-            {
-                await _cloudinary.DeleteAvatarAsync(avatarId, ct);
-            }
-
-            user.AvatarUrl = null;
-            user.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
+            await _mediator.Send(new DeleteAvatarCommand(userId.Value), ct);
             return Ok(ApiResponse<object>.Ok(null!, "Avatar deleted successfully."));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
         }
         catch (Exception)
         {
-            //_logger.LogError(ex, "Error deleting avatar for user {UserId}", userId);
             return StatusCode(500, new { Message = "An error occurred while deleting the avatar." });
         }
     }
 
-    // ──────────────────────────────────────────
-    // Administrative Actions (Moved from AuthController)
-    // ──────────────────────────────────────────
-
     [Authorize(Roles = "admin")]
-    [HttpPut("{id}/lock")]
+    [HttpPut("{id:guid}/lock")]
     public async Task<IActionResult> LockAccount(Guid id, CancellationToken ct)
     {
-        var user = await _db.Users.FindAsync(new object[] { id }, ct);
-        if (user == null) return NotFound();
-        user.Status = false;
-        await _db.SaveChangesAsync(ct);
-        return Ok(new { Message = "Account locked." });
+        try
+        {
+            await _mediator.Send(new SetAccountStatusCommand(id, false), ct);
+            return Ok(new { Message = "Account locked." });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     [Authorize(Roles = "admin")]
-    [HttpPut("{id}/unlock")]
+    [HttpPut("{id:guid}/unlock")]
     public async Task<IActionResult> UnlockAccount(Guid id, CancellationToken ct)
     {
-        var user = await _db.Users.FindAsync(new object[] { id }, ct);
-        if (user == null) return NotFound();
-        user.Status = true;
-        await _db.SaveChangesAsync(ct);
-        return Ok(new { Message = "Account unlocked." });
+        try
+        {
+            await _mediator.Send(new SetAccountStatusCommand(id, true), ct);
+            return Ok(new { Message = "Account unlocked." });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     [Authorize(Roles = "admin")]
     [HttpGet("locked")]
     public async Task<IActionResult> ListLockedAccounts(CancellationToken ct)
     {
-        var users = await _db.Users.Where(u => u.Status == false)
-            .Select(u => new Auth.UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
-            .ToListAsync(ct);
-        return Ok(ApiResponse<List<Auth.UserProfileResponse>>.Ok(users, "List of locked accounts"));
+        var users = await _mediator.Send(new ListUsersByStatusQuery(false), ct);
+        return Ok(ApiResponse<List<UserProfileDto>>.Ok(users, "List of locked accounts"));
     }
 
     [Authorize(Roles = "admin")]
     [HttpGet("unlocked")]
     public async Task<IActionResult> ListUnlockedAccounts(CancellationToken ct)
     {
-        var users = await _db.Users.Where(u => u.Status == true)
-            .Select(u => new Auth.UserProfileResponse(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
-            .ToListAsync(ct);
-        return Ok(ApiResponse<List<Auth.UserProfileResponse>>.Ok(users, "List of active accounts"));
+        var users = await _mediator.Send(new ListUsersByStatusQuery(true), ct);
+        return Ok(ApiResponse<List<UserProfileDto>>.Ok(users, "List of active accounts"));
     }
 
     [Authorize(Roles = "admin")]
-    [HttpPut("{id}/role")]
+    [HttpPut("{id:guid}/role")]
     public async Task<IActionResult> UpdateRole(Guid id, [FromBody] AssignRoleRequest req, CancellationToken ct)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id, ct);
-        if (user == null) return NotFound(new { Message = "User not found." });
-
-        var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.ToLowerInvariant(), ct);
-        if (role == null) return BadRequest(new { Message = "Role not found." });
-
-        if (user.RoleId != role.RoleId)
+        try
         {
-            user.RoleId = role.RoleId;
-            await _db.SaveChangesAsync(ct);
+            await _mediator.Send(new AssignRoleCommand(id, req.RoleCode), ct);
+            return Ok(new { Message = $"Role {req.RoleCode} assigned." });
         }
-
-        return Ok(new { Message = $"Role {req.RoleCode} assigned." });
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
     }
 
-    // ──────────────────────────────────────────
-    // PUT api/v1/user/{id}  →  Admin update user (cannot change Email, MemberCode, RollNumber)
-    // ──────────────────────────────────────────
     [Authorize(Roles = "admin")]
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> AdminUpdateUser(Guid id, [FromBody] AdminUpdateUserRequest req, CancellationToken ct)
     {
         try
         {
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == id && u.DeletedAt == null, ct);
-            if (user == null) return NotFound(new { Message = "User not found." });
-
-            if (!string.IsNullOrWhiteSpace(req.FirstName))
-                user.FirstName = req.FirstName.Trim();
-            if (!string.IsNullOrWhiteSpace(req.LastName))
-                user.LastName = req.LastName.Trim();
-            if (!string.IsNullOrWhiteSpace(req.Username))
-            {
-                var usernameNorm = req.Username.Trim().ToLowerInvariant();
-                var taken = await _db.Users.AnyAsync(u => u.Username == usernameNorm && u.UserId != id, ct);
-                if (taken) return Conflict(new { Message = "Username is already taken." });
-                user.Username = usernameNorm;
-            }
-            if (req.DisplayName != null)
-                user.DisplayName = req.DisplayName.Trim();
-            if (!string.IsNullOrWhiteSpace(req.Password))
-                user.Password = _passwordHasher.Hash(req.Password);
-            if (!string.IsNullOrWhiteSpace(req.RoleCode))
-            {
-                var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleCode == req.RoleCode.Trim().ToLowerInvariant(), ct);
-                if (role == null) return BadRequest(new { Message = "Role not found." });
-                user.RoleId = role.RoleId;
-            }
-            if (req.Status.HasValue)
-                user.Status = req.Status.Value;
-
-            user.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(ApiResponse<object>.Ok(new { user.UserId }, "User updated successfully."));
+            await _mediator.Send(new AdminUpdateUserCommand(
+                id, req.FirstName, req.LastName, req.Username,
+                req.DisplayName, req.Password, req.RoleCode, req.Status), ct);
+            return Ok(ApiResponse<object>.Ok(new { UserId = id }, "User updated successfully."));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -806,35 +416,22 @@ public class UserController : ControllerBase
         }
     }
 
-    // ──────────────────────────────────────────
-    // PUT api/v1/user/me  →  User updates own profile (cannot change Email, Username, Role, RollNumber, MemberCode)
-    // ──────────────────────────────────────────
     [Authorize]
     [HttpPut("me")]
     public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateMyProfileRequest req, CancellationToken ct)
     {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized(new { Message = "Unauthorized access." });
+
         try
         {
-            var userId = GetUserId();
-            if (userId == Guid.Empty)
-                return Unauthorized(new { Message = "Unauthorized access." });
-
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.DeletedAt == null, ct);
-            if (user == null) return NotFound(new { Message = "User not found." });
-
-            if (!string.IsNullOrWhiteSpace(req.FirstName))
-                user.FirstName = req.FirstName.Trim();
-            if (!string.IsNullOrWhiteSpace(req.LastName))
-                user.LastName = req.LastName.Trim();
-            if (req.DisplayName != null)
-                user.DisplayName = req.DisplayName.Trim();
-            if (!string.IsNullOrWhiteSpace(req.Password))
-                user.Password = _passwordHasher.Hash(req.Password);
-
-            user.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-
-            return Ok(ApiResponse<object>.Ok(new { user.UserId }, "Profile updated successfully."));
+            await _mediator.Send(new UpdateMyProfileCommand(
+                userId.Value, req.FirstName, req.LastName, req.DisplayName, req.Password), ct);
+            return Ok(ApiResponse<object>.Ok(new { UserId = userId }, "Profile updated successfully."));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
         }
         catch (Exception)
         {
@@ -842,31 +439,55 @@ public class UserController : ControllerBase
         }
     }
 
-    private Guid GetUserId()
+    private Guid? GetUserId()
     {
-        var v =
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            User.FindFirstValue("sub") ??
-            User.FindFirstValue("user_id") ??
-            User.FindFirstValue("uid");
-
-        return Guid.TryParse(v, out var id) ? id : Guid.Empty;
+        var v = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        return Guid.TryParse(v, out var id) ? id : null;
     }
 
-    private bool TryGetAvatarIdFromUrl(string? avatarUrl, out Guid avatarId)
+    private static List<ImportStudentItem> ParseImportFile(IFormFile file)
     {
-        avatarId = Guid.Empty;
-        if (string.IsNullOrWhiteSpace(avatarUrl)) return false;
+        var items = new List<ImportStudentItem>();
+        using var stream = new MemoryStream();
+        file.CopyTo(stream);
+        using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+        var worksheet = workbook.Worksheet(1);
 
-        if (Guid.TryParse(avatarUrl, out avatarId)) return true;
+        var headers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cell in worksheet.Row(1).CellsUsed())
+            headers[cell.GetValue<string>().Trim()] = cell.Address.ColumnNumber;
 
-        var fileName = avatarUrl.Split('/').LastOrDefault();
-        if (fileName != null)
+        foreach (var row in worksheet.RowsUsed().Skip(1))
         {
-            var idString = Path.GetFileNameWithoutExtension(fileName);
-            return Guid.TryParse(idString, out avatarId);
+            string GetCell(string col) => headers.TryGetValue(col, out int idx)
+                ? row.Cell(idx).GetValue<string>()?.Trim() ?? string.Empty
+                : string.Empty;
+
+            var fullName = GetCell("FullName");
+            var email = GetCell("Email");
+            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(email))
+                continue;
+
+            items.Add(new ImportStudentItem(fullName, email, GetCell("RollNumber"), GetCell("MemberCode")));
         }
 
-        return false;
+        return items;
     }
 }
+
+public record AdminUpdateUserRequest(
+    string? FirstName,
+    string? LastName,
+    string? Username,
+    string? DisplayName,
+    string? Password,
+    string? RoleCode,
+    bool? Status);
+
+public record UpdateMyProfileRequest(
+    string? FirstName,
+    string? LastName,
+    string? DisplayName,
+    string? Password);
+
+public record AssignRoleRequest(string RoleCode);

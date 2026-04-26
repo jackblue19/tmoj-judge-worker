@@ -1,4 +1,4 @@
-﻿using Ardalis.Specification;
+using Ardalis.Specification;
 using Domain.Entities;
 
 namespace Application.UseCases.Reports.Specs;
@@ -11,7 +11,7 @@ public class AllReportsSpec : Specification<ContentReport>
         {
             Query.Where(x =>
                 x.Status != null &&
-                string.Equals(x.Status, status, StringComparison.OrdinalIgnoreCase)
+                x.Status == status
             );
         }
 

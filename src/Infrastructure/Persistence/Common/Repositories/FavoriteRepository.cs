@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Favorite.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -317,6 +317,12 @@ public class FavoriteRepository : IFavoriteRepository
             .Where(x => x.IsVisibility == true);
     }
 
+    public IQueryable<Collection> QueryCollections()
+    {
+        return _db.Set<Collection>()
+            .AsNoTracking();
+    }
+
     public async Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
         Guid currentUserId,
         int page,
@@ -386,7 +392,8 @@ public class FavoriteRepository : IFavoriteRepository
                         ProblemId = ci.ProblemId,
                         ProblemTitle = ci.Problem != null ? ci.Problem.Title : null,
                         ContestId = ci.ContestId,
-                        ContestTitle = ci.Contest != null ? ci.Contest.Title : null
+                        ContestTitle = ci.Contest != null ? ci.Contest.Title : null,
+                        IsPrivate = ci.Problem != null && ci.Problem.VisibilityCode != "public" // ✅ Map cờ IsPrivate
                     })
                     .ToList()
             })

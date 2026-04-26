@@ -14,16 +14,18 @@ public sealed class PublicProblemsCountSpec : Specification<Problem>
 
         if ( !string.IsNullOrWhiteSpace(search) )
         {
-            var keyword = search.Trim();
+            var keyword = search.Trim().ToLower();
+
             Query.Where(x =>
-                x.Title.Contains(keyword) ||
-                (x.Slug != null && x.Slug.Contains(keyword)));
+                (x.Title != null && x.Title.ToLower().Contains(keyword)) ||
+                (x.Slug != null && x.Slug.ToLower().Contains(keyword)));
         }
 
         if ( !string.IsNullOrWhiteSpace(difficulty) )
         {
-            var normalizedDifficulty = difficulty.Trim();
-            Query.Where(x => x.Difficulty == normalizedDifficulty);
+            Query.Where(x => x.Difficulty == difficulty);
         }
+
+        Query.AsNoTracking();
     }
 }

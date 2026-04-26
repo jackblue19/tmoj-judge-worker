@@ -66,6 +66,8 @@ public static class InfrastructureRegistration
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IVnPayService, VnPayService>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IUserManagementRepository, UserManagementRepository>();
         return services;
     }
 

@@ -26,6 +26,7 @@ public interface IContestRepository
     // =============================================
     Task<bool> IsTeamJoinedAsync(Guid contestId, Guid teamId);
     Task<bool> IsUserInTeamAsync(Guid userId, Guid teamId);
+    Task<bool> HasUserRegisteredAsync(Guid contestId, Guid userId);
     Task<List<Guid>> GetTeamMemberIdsAsync(Guid teamId);
 
     // =============================================

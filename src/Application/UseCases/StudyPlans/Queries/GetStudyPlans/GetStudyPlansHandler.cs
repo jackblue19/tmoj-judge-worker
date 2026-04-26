@@ -40,8 +40,9 @@ public class GetStudyPlansHandler
                 Id = p.Id,
                 Title = p.Title,
                 Order = 0,
+                Price = p.Price,      // ✅ thêm
+                IsPaid = p.IsPaid,    // ✅ thêm
                 ProblemCount = problemCount,
-                Price = p.Price,
                 IsCompleted = false,
                 IsUnlocked = !p.IsPaid // tạm basic rule: free = unlocked
             });

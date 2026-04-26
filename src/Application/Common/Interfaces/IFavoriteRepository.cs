@@ -1,4 +1,4 @@
-﻿using Application.UseCases.Favorite.Dtos;
+using Application.UseCases.Favorite.Dtos;
 using Domain.Entities;
 
 public interface IFavoriteRepository
@@ -24,6 +24,7 @@ public interface IFavoriteRepository
     IQueryable<Submission> QuerySubmissions();
 
     IQueryable<Collection> QueryPublicCollections();
+    IQueryable<Collection> QueryCollections(); 
 
     Task<(List<PublicCollectionDto> Items, int Total)> GetPublicCollectionsAsync(
         Guid currentUserId,

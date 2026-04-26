@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,5 +15,8 @@ namespace Application.UseCases.Favorite.Dtos
 
         public Guid? ContestId { get; set; }
         public string? ContestTitle { get; set; }
+        
+        // ✅ NEW: Frontend cần để biết hiển thị ổ khóa
+        public bool IsPrivate { get; set; }
     }
 }

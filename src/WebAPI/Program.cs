@@ -5,6 +5,8 @@ using Application.UseCases.Contests.Queries;
 using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
 using Infrastructure;
 using Infrastructure.Configurations.Auth;
+using Application.UseCases.Auth.Commands.ConfirmEmail;
+using Application.UseCases.Auth.Options;
 using Infrastructure.ExternalServices;
 using Infrastructure.Persistence.Common.Repositories;
 using Infrastructure.Persistence.Repositories;
@@ -35,6 +37,9 @@ builder.Services.AddScoped<ITeamRepository, TeamRepository>();
 builder.Services.AddScoped<IUserStudyPlanPurchaseRepository, UserStudyPlanPurchaseRepository>();
 builder.Services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
 builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
+builder.Services.AddScoped<ISemesterRepository, SemesterRepository>();
+builder.Services.AddScoped<IClassSlotRepository, ClassSlotRepository>();
+builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {
@@ -69,8 +74,9 @@ builder.Services.AddExternalServices(builder.Configuration);
 
 //  jwt sample settings (rcm nen dung)
 builder.Services.AddTraditionalJwtAuth(builder.Configuration);
-builder.Services.Configure<GoogleOptions>(builder.Configuration.GetSection("Authentication:Google"));
-builder.Services.Configure<GithubOptions>(builder.Configuration.GetSection("Authentication:Github"));
+builder.Services.Configure<Application.UseCases.Auth.Options.GoogleOptions>(builder.Configuration.GetSection("Authentication:Google"));
+builder.Services.Configure<Application.UseCases.Auth.Options.GithubOptions>(builder.Configuration.GetSection("Authentication:Github"));
+builder.Services.AddScoped<ConfirmEmailCommandHandler>();
 
 //  wrap + problem details + rate limit
 builder.Services.AddControllers(options =>

@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Teams.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
@@ -18,6 +18,7 @@ public class AddTeamMemberCommandHandler
     private readonly IContestStatusService _contestStatus;
     private readonly IUserRepository _userRepo;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _uow;
 
     public AddTeamMemberCommandHandler(
@@ -30,6 +31,7 @@ public class AddTeamMemberCommandHandler
         IContestStatusService contestStatus,
         IUserRepository userRepo,
         ICurrentUserService currentUser,
+        INotificationRepository notificationRepo,
         IUnitOfWork uow)
     {
         _teamRepo = teamRepo;
@@ -41,6 +43,7 @@ public class AddTeamMemberCommandHandler
         _contestStatus = contestStatus;
         _userRepo = userRepo;
         _currentUser = currentUser;
+        _notificationRepo = notificationRepo;
         _uow = uow;
     }
 
@@ -127,6 +130,25 @@ public class AddTeamMemberCommandHandler
         _teamWriteRepo.Update(team);
 
         await _uow.SaveChangesAsync(ct);
+
+        // ======================
+        // 9. SEND NOTIFICATION
+        // ======================
+        await _notificationRepo.AddAsync(new Notification
+        {
+            NotificationId = Guid.NewGuid(),
+            UserId = request.UserId,
+            Title = "Bạn đã được thêm vào nhóm",
+            Message = $"Bạn đã được thêm vào nhóm '{team.TeamName}'",
+            Type = "system",
+            ScopeType = "team",
+            ScopeId = team.Id,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = currentUserId
+        }, ct);
+
+        await _notificationRepo.SaveChangesAsync(ct);
 
         return request.UserId;
     }

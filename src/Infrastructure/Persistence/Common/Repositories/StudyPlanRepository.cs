@@ -30,6 +30,16 @@ public class StudyPlanRepository : IStudyPlanRepository
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 
+    public void Update(StudyPlan entity)
+    {
+        _db.Set<StudyPlan>().Update(entity);
+    }
+
+    public void Delete(StudyPlan entity)
+    {
+        _db.Set<StudyPlan>().Remove(entity);
+    }
+
     public async Task<List<StudyPlan>> GetByCreatorAsync(Guid creatorId)
     {
         return await _db.Set<StudyPlan>()
@@ -105,6 +115,11 @@ public class StudyPlanRepository : IStudyPlanRepository
     public async Task AddItemAsync(StudyPlanItem entity)
     {
         await _db.Set<StudyPlanItem>().AddAsync(entity);
+    }
+
+    public void RemoveItem(StudyPlanItem entity)
+    {
+        _db.Set<StudyPlanItem>().Remove(entity);
     }
 
     public async Task<List<StudyPlanItem>> GetItemsByPlanIdAsync(Guid studyPlanId)

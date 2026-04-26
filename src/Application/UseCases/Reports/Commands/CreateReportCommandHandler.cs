@@ -14,7 +14,7 @@ public class CreateReportCommandHandler
     private readonly IReadRepository<User, Guid> _userRepo;
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
     private readonly IReadRepository<ProblemDiscussion, Guid> _discussionRepo;
-    private readonly IWriteRepository<Notification, Guid> _notificationRepo;
+    private readonly INotificationRepository _notificationRepo;
     private readonly IUnitOfWork _uow;
     private readonly ICurrentUserService _currentUser;
 
@@ -24,7 +24,7 @@ public class CreateReportCommandHandler
         IReadRepository<User, Guid> userRepo,
         IReadRepository<DiscussionComment, Guid> commentRepo,
         IReadRepository<ProblemDiscussion, Guid> discussionRepo,
-        IWriteRepository<Notification, Guid> notificationRepo,
+        INotificationRepository notificationRepo,
         IUnitOfWork uow,
         ICurrentUserService currentUser)
     {

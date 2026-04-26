@@ -21,7 +21,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
 
     private readonly IReadRepository<User, Guid> _userRepo;
     private readonly IWriteRepository<User, Guid> _userWriteRepo;
-    private readonly IWriteRepository<Notification, Guid> _notificationRepo;
+    private readonly INotificationRepository _notificationRepo;
 
     private readonly IUnitOfWork _uow;
     private readonly IMediator _mediator;
@@ -36,7 +36,7 @@ public class ApproveReportCommandHandler : IRequestHandler<ApproveReportCommand,
         IProblemDiscussionRepository discussionRepo,
         IReadRepository<User, Guid> userRepo,
         IWriteRepository<User, Guid> userWriteRepo,
-        IWriteRepository<Notification, Guid> notificationRepo,
+        INotificationRepository notificationRepo,
         IUnitOfWork uow,
         IMediator mediator,
         ICurrentUserService currentUser)

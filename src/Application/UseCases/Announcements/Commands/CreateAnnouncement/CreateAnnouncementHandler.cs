@@ -45,7 +45,7 @@ public class CreateAnnouncementHandler : IRequestHandler<CreateAnnouncementComma
                 Pinned = request.Pinned,
                 ScopeType = request.ScopeType,
                 ScopeId = request.ScopeId,
-                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
             };
 
             await _repo.AddAsync(announcement);

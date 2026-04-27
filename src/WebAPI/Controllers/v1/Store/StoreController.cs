@@ -1,7 +1,13 @@
 using Application.UseCases.Store.Commands.BuyFptItem;
 using Application.UseCases.Store.Commands.CreateFptItem;
+using Application.UseCases.Store.Commands.UpdateFptItem;
+using Application.UseCases.Store.Commands.DeleteFptItem;
+using Application.UseCases.Store.Commands.UpdateUserInventory;
+using Application.UseCases.Store.Commands.DeleteUserInventory;
 using Application.UseCases.Store.Queries.GetFptItems;
+using Application.UseCases.Store.Queries.GetFptItemDetail;
 using Application.UseCases.Store.Queries.GetMyInventory;
+using Application.UseCases.Store.Queries.GetUserInventoryDetail;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -40,6 +46,39 @@ public class StoreController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// API Admin: Cập nhật thông tin món đồ
+    /// </summary>
+    [HttpPut("items/{id}")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> UpdateItem(Guid id, [FromBody] UpdateFptItemCommand command)
+    {
+        if (id != command.ItemId) return BadRequest("ID mismatch");
+        var result = await _mediator.Send(command);
+        return result ? Ok("Cập nhật thành công") : NotFound();
+    }
+
+    /// <summary>
+    /// API Admin: Xóa món đồ khỏi shop
+    /// </summary>
+    [HttpDelete("items/{id}")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> DeleteItem(Guid id)
+    {
+        var result = await _mediator.Send(new DeleteFptItemCommand(id));
+        return result ? Ok("Đã xóa món đồ") : NotFound();
+    }
+
+    /// <summary>
+    /// Lấy chi tiết món đồ trong shop
+    /// </summary>
+    [HttpGet("items/{id}")]
+    public async Task<IActionResult> GetItemDetail(Guid id)
+    {
+        var item = await _mediator.Send(new GetFptItemDetailQuery(id));
+        return item != null ? Ok(item) : NotFound();
     }
 
     /// <summary>
@@ -94,5 +133,42 @@ public class StoreController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Xem chi tiết một món đồ trong kho cá nhân
+    /// </summary>
+    [HttpGet("my-inventory/{id}")]
+    public async Task<IActionResult> GetInventoryDetail(Guid id)
+    {
+        var result = await _mediator.Send(new GetUserInventoryDetailQuery(id));
+        return result != null ? Ok(result) : NotFound();
+    }
+
+    /// <summary>
+    /// Trang bị hoặc Tháo bỏ vật phẩm
+    /// </summary>
+    [HttpPatch("my-inventory/{id}/equip")]
+    public async Task<IActionResult> EquipItem(Guid id, [FromBody] bool isEquipped)
+    {
+        try
+        {
+            var result = await _mediator.Send(new UpdateUserInventoryCommand(id, isEquipped));
+            return result ? Ok("Thực hiện thành công") : NotFound();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Xóa/Bỏ vật phẩm khỏi kho đồ
+    /// </summary>
+    [HttpDelete("my-inventory/{id}")]
+    public async Task<IActionResult> DeleteInventory(Guid id)
+    {
+        var result = await _mediator.Send(new DeleteUserInventoryCommand(id));
+        return result ? Ok("Đã bỏ vật phẩm") : NotFound();
     }
 }

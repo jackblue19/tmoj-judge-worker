@@ -41,4 +41,10 @@ public class FptItemRepository : IFptItemRepository
         _context.FptItems.Update(entity);
         await Task.CompletedTask;
     }
+
+    public async Task DeleteAsync(FptItem entity)
+    {
+        _context.FptItems.Remove(entity);
+        await Task.CompletedTask;
+    }
 }

@@ -29,6 +29,7 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
         item.PriceCoin = request.PriceCoin;
         item.ImageUrl = request.ImageUrl;
         item.DurationDays = request.DurationDays;
+        item.StockQuantity = request.StockQuantity;
         item.MetaJson = request.MetaJson;
         item.IsActive = request.IsActive;
 

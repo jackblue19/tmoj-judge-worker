@@ -20,6 +20,7 @@ public partial class FptItem
     public string? MetaJson { get; set; } // Map với jsonb
 
     public int? DurationDays { get; set; }
+    public int StockQuantity { get; set; } // Số lượng hàng trong kho (cho đồ thật)
 
     public bool IsActive { get; set; }
 

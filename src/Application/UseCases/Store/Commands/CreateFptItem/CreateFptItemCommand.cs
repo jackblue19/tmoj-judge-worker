@@ -10,5 +10,6 @@ public record CreateFptItemCommand(
     decimal PriceCoin,
     string? ImageUrl,
     int? DurationDays,
+    int StockQuantity,
     string? MetaJson
 ) : IRequest<Guid>;

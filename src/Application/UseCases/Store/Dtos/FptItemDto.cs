@@ -11,6 +11,7 @@ public class FptItemDto
     public decimal PriceCoin { get; set; }
     public string? ImageUrl { get; set; }
     public int? DurationDays { get; set; }
+    public int StockQuantity { get; set; }
     public string? MetaJson { get; set; }
 }
 

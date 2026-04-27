@@ -11,6 +11,7 @@ public record UpdateFptItemCommand(
     decimal PriceCoin,
     string? ImageUrl,
     int? DurationDays,
+    int StockQuantity,
     string? MetaJson,
     bool IsActive
 ) : IRequest<bool>;

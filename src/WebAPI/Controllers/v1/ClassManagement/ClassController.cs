@@ -1279,9 +1279,16 @@ public class ClassController : ControllerBase
         {
             return BadRequest(new { Message = ex.Message });
         }
-        catch (Exception)
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
         {
-            return StatusCode(500, new { Message = "An error occurred while creating the contest." });
+            var inner = ex.InnerException?.Message ?? ex.Message;
+            if (inner.Contains("unique") || inner.Contains("duplicate") || inner.Contains("_key"))
+                return Conflict(new { Message = "A contest with the same slug already exists." });
+            return StatusCode(500, new { Message = "Database error while creating the contest.", Detail = inner });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = "An error occurred while creating the contest.", Detail = ex.Message });
         }
     }
 
@@ -1407,6 +1414,92 @@ public class ClassController : ControllerBase
         }
     }
 
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{classSemesterId}/contests/{contestId}/submit
+    // ──────────────────────────────────────────
+    [HttpPost("{classSemesterId:guid}/contests/{contestId:guid}/submit")]
+    [Authorize]
+    public async Task<IActionResult> SubmitContest(
+        Guid classSemesterId,
+        Guid contestId,
+        [FromBody] ClassContestSubmitBody req,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var slot = await _db.ClassSlots
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+
+            if (slot is null)
+                return NotFound(new { Message = "Contest not found in this class." });
+
+            var command = new Application.UseCases.Contests.Commands.SubmitContestCommand
+            {
+                ContestId = contestId,
+                ContestProblemId = req.ContestProblemId,
+                Code = req.Code,
+                Language = req.Language,
+                ClassSlotId = slot.Id
+            };
+
+            var submissionId = await _mediator.Send(command, ct);
+            return Ok(ApiResponse<object>.Ok(new { submissionId }, "Submitted successfully"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+        catch (Exception ex) when (ex.Message is "CONTEST_ENDED" or "Contest has not started")
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { Message = ex.Message });
+        }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/class/{classSemesterId}/contests/{contestId}/scoreboard
+    // ──────────────────────────────────────────
+    [HttpGet("{classSemesterId:guid}/contests/{contestId:guid}/scoreboard")]
+    public async Task<IActionResult> GetContestScoreboard(
+        Guid classSemesterId,
+        Guid contestId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var slotExists = await _db.ClassSlots
+                .AsNoTracking()
+                .AnyAsync(s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+
+            if (!slotExists)
+                return NotFound(new { Message = "Contest not found in this class." });
+
+            var result = await _mediator.Send(
+                new Application.UseCases.Contests.Queries.GetContestLeaderboardQuery { ContestId = contestId }, ct);
+
+            return Ok(ApiResponse<object>.Ok(result, "Fetched scoreboard successfully"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { Message = "An error occurred while fetching the scoreboard." });
+        }
+    }
+
     // ── Helpers ───────────────────────────────
 
     private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string colName)
@@ -1440,3 +1533,4 @@ public record CreateContestBody(
     List<ContestProblemItem>? Problems,
     int? SlotNo, string? SlotTitle);
 public record ExtendContestBody(DateTime NewEndAt);
+public record ClassContestSubmitBody(Guid ContestProblemId, string Code, string Language = "cpp");

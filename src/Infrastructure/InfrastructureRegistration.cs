@@ -16,6 +16,8 @@ using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Infrastructure.Services;
+using Infrastructure.ExternalServices.Mailing;
 
 namespace Infrastructure;
 
@@ -72,6 +74,7 @@ public static class InfrastructureRegistration
         services.AddScoped<IFptItemRepository, FptItemRepository>();
         services.AddScoped<IUserInventoryRepository, UserInventoryRepository>();
         services.AddScoped<IRankingRepository, RankingRepository>();
+        services.AddScoped<ISystemSettingsService, SystemSettingsService>();
         return services;
     }
 

@@ -1,12 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
 using Application.Abstractions.Outbound.Services;
 using Infrastructure.Configurations.Auth;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using brevo_csharp.Api;
-using brevo_csharp.Model;
+using System.Threading;
 
 namespace Infrastructure.ExternalServices.Mailing;
 
@@ -21,26 +16,23 @@ public class EmailService : IEmailService
 
     public async System.Threading.Tasks.Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
     {
-        if (!brevo_csharp.Client.Configuration.Default.ApiKey.ContainsKey("api-key"))
+        using var client = new System.Net.Mail.SmtpClient(_settings.Host)
         {
-            brevo_csharp.Client.Configuration.Default.ApiKey.Add("api-key", _settings.BrevoApiKey);
-        }
-        else
+            Port = _settings.Port,
+            Credentials = new System.Net.NetworkCredential(_settings.Email, _settings.Password),
+            EnableSsl = true,
+        };
+
+        var mailMessage = new System.Net.Mail.MailMessage
         {
-            brevo_csharp.Client.Configuration.Default.ApiKey["api-key"] = _settings.BrevoApiKey;
-        }
+            From = new System.Net.Mail.MailAddress(_settings.FromEmail, _settings.DisplayName),
+            Subject = subject,
+            Body = body,
+            IsBodyHtml = true,
+        };
 
-        var apiInstance = new TransactionalEmailsApi();
+        mailMessage.To.Add(to);
 
-        var sendSmtpEmail = new SendSmtpEmail(
-            sender: new SendSmtpEmailSender(email: _settings.FromEmail, name: _settings.DisplayName),
-            to: new List<SendSmtpEmailTo> { new SendSmtpEmailTo(email: to) },
-            htmlContent: body,
-            subject: subject
-        );
-
-        // Tạm thời tắt gửi mail theo yêu cầu:
-        // await apiInstance.SendTransacEmailAsync(sendSmtpEmail);
-        await System.Threading.Tasks.Task.CompletedTask;
+        await client.SendMailAsync(mailMessage);
     }
 }

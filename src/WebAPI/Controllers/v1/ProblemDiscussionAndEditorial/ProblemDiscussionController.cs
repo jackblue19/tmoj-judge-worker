@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.Common.Pagination;
 using Application.UseCases.DiscussionComments.Dtos;
 using Application.UseCases.ProblemDiscussions.Commands;
@@ -63,6 +63,26 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
 
             return Ok(ApiResponse<DiscussionResponseDto>
                 .Ok(discussion, "Fetched discussion successfully"));
+        }
+ 
+        // GET my discussions
+        [HttpGet("/api/v{version:apiVersion}/discussions/me")]
+        [Authorize]
+        public async Task<ActionResult<CursorPaginationDto<DiscussionResponseDto>>> GetMyDiscussions(
+            [FromServices] ICurrentUserService currentUserService,
+            [FromQuery] DateTime? cursorCreatedAt,
+            [FromQuery] Guid? cursorId,
+            [FromQuery] int pageSize = 10,
+            CancellationToken ct = default)
+        {
+            var userId = currentUserService.UserId;
+            if (userId == null || userId == Guid.Empty) return Unauthorized();
+
+            var result = await _mediator.Send(
+                new GetMyDiscussionsQuery(userId.Value, cursorCreatedAt, cursorId, pageSize), ct);
+
+            return Ok(ApiResponse<CursorPaginationDto<DiscussionResponseDto>>
+                .Ok(result, "Fetched your discussions successfully"));
         }
 
         // POST create discussion

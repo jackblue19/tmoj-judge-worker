@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.Common.Pagination;
 using Application.UseCases.DiscussionComments.Dtos;
 using Application.UseCases.ProblemDiscussions.Dtos;
@@ -34,6 +34,62 @@ namespace Infrastructure.Persistence.Common.Repositories
             query = query
                 .OrderByDescending(x => x.IsPinned)
                 .ThenByDescending(x => x.CreatedAt ?? DateTime.MinValue)
+                .ThenByDescending(x => x.Id);
+
+            if (cursorCreatedAt.HasValue && cursorId.HasValue)
+            {
+                query = query.Where(x =>
+                    (x.CreatedAt ?? DateTime.MinValue) < cursorCreatedAt.Value ||
+                    ((x.CreatedAt ?? DateTime.MinValue) == cursorCreatedAt.Value &&
+                     x.Id.CompareTo(cursorId.Value) < 0));
+            }
+
+            var list = await query
+                .Take(pageSize + 1)
+                .Select(x => new DiscussionResponseDto
+                {
+                    Id = x.Id,
+                    ProblemId = x.ProblemId,
+                    UserId = x.UserId,
+                    UserDisplayName = x.User != null
+                        ? (x.User.DisplayName ?? x.User.Username ?? "Anonymous")
+                        : "Anonymous",
+                    UserAvatarUrl = x.User != null ? x.User.AvatarUrl : null,
+                    Title = x.Title,
+                    Content = x.Content,
+                    IsPinned = x.IsPinned ?? false,
+                    IsLocked = x.IsLocked ?? false,
+                    CreatedAt = x.CreatedAt ?? DateTime.MinValue
+                })
+                .ToListAsync();
+
+            var hasMore = list.Count > pageSize;
+            if (hasMore) list.RemoveAt(pageSize);
+
+            var last = list.LastOrDefault();
+
+            return new CursorPaginationDto<DiscussionResponseDto>
+            {
+                Items = list,
+                NextCursorCreatedAt = last?.CreatedAt,
+                NextCursorId = last?.Id,
+                HasMore = hasMore
+            };
+        }
+
+        public async Task<CursorPaginationDto<DiscussionResponseDto>> GetPagedByUserAsync(
+            Guid userId,
+            DateTime? cursorCreatedAt,
+            Guid? cursorId,
+            int pageSize)
+        {
+            var query = _db.ProblemDiscussions
+                .AsNoTracking()
+                .Include(d => d.User)
+                .Where(d => d.UserId == userId);
+
+            query = query
+                .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
                 .ThenByDescending(x => x.Id);
 
             if (cursorCreatedAt.HasValue && cursorId.HasValue)

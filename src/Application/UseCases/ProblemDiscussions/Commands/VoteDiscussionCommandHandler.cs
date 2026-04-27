@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.ProblemDiscussions.Specs;
 using Domain.Abstractions;
 using Domain.Entities;
@@ -9,7 +9,7 @@ namespace Application.UseCases.ProblemDiscussions.Commands;
 public class VoteDiscussionCommandHandler
     : IRequestHandler<VoteDiscussionCommand, bool>
 {
-    private readonly IReadRepository<ProblemDiscussion, Guid> _discussionRepo;
+    private readonly IProblemDiscussionRepository _discussionRepo;
     private readonly IReadRepository<ContentReport, Guid> _voteReadRepo;
     private readonly IWriteRepository<ContentReport, Guid> _voteWriteRepo;
     private readonly ICurrentUserService _currentUser;
@@ -18,7 +18,7 @@ public class VoteDiscussionCommandHandler
     private const string VOTE_TYPE = "discussion_vote";
 
     public VoteDiscussionCommandHandler(
-        IReadRepository<ProblemDiscussion, Guid> discussionRepo,
+        IProblemDiscussionRepository discussionRepo,
         IReadRepository<ContentReport, Guid> voteReadRepo,
         IWriteRepository<ContentReport, Guid> voteWriteRepo,
         ICurrentUserService currentUser,
@@ -38,9 +38,9 @@ public class VoteDiscussionCommandHandler
             throw new UnauthorizedAccessException("User not authenticated");
 
         // ===============================
-        // GET DISCUSSION
+        // GET DISCUSSION 
         // ===============================
-        var discussion = await _discussionRepo.GetByIdAsync(request.DiscussionId, ct);
+        var discussion = await _discussionRepo.GetEntityByIdAsync(request.DiscussionId);
         if (discussion == null)
             throw new Exception("Discussion not found");
 
@@ -49,57 +49,59 @@ public class VoteDiscussionCommandHandler
             throw new Exception("You cannot vote your own discussion");
 
         // ===============================
-        // FIND EXISTING VOTE (SPEC)
+        // FIND EXISTING VOTE
         // ===============================
         var spec = new DiscussionVoteByUserSpec(userId.Value, request.DiscussionId);
+        var existingVote = (await _voteReadRepo.ListAsync(spec, ct)).FirstOrDefault();
 
-        var existingVote = (await _voteReadRepo.ListAsync(spec, ct))
-            .FirstOrDefault();
+        int oldVoteValue = 0;
+        if (existingVote != null)
+        {
+            int.TryParse(existingVote.Reason, out oldVoteValue);
+        }
+
+        int newVoteValue = request.VoteType;
+
+        // Nếu vote giống hệt cũ thì coi như muốn gỡ vote (Toggle)
+        if (existingVote != null && oldVoteValue == newVoteValue)
+        {
+            newVoteValue = 0;
+        }
 
         // ===============================
-        // UNVOTE
+        // UPDATE DISCUSSION SCORE
         // ===============================
-        if (request.VoteType == 0)
+        // Hiệu số thay đổi: (Giá trị mới) - (Giá trị cũ)
+        discussion.VoteCount += (newVoteValue - oldVoteValue);
+
+        // ===============================
+        // SAVE VOTE RECORD
+        // ===============================
+        if (newVoteValue == 0)
         {
             if (existingVote != null)
                 _voteWriteRepo.Remove(existingVote);
-
-            await _uow.SaveChangesAsync(ct);
-            return true;
-        }
-
-        // ===============================
-        // NEW VOTE
-        // ===============================
-        if (existingVote == null)
-        {
-            var vote = new ContentReport
-            {
-                Id = Guid.NewGuid(),
-                ReporterId = userId.Value,
-                TargetId = request.DiscussionId,
-                TargetType = VOTE_TYPE,
-                Reason = request.VoteType.ToString(),
-                Status = "pending", 
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _voteWriteRepo.AddAsync(vote, ct);
         }
         else
         {
-            // ===============================
-            // TOGGLE LOGIC
-            // ===============================
-            if (existingVote.Reason == request.VoteType.ToString())
+            if (existingVote == null)
             {
-                _voteWriteRepo.Remove(existingVote);
+                var vote = new ContentReport
+                {
+                    Id = Guid.NewGuid(),
+                    ReporterId = userId.Value,
+                    TargetId = request.DiscussionId,
+                    TargetType = VOTE_TYPE,
+                    Reason = newVoteValue.ToString(),
+                    Status = "voted", 
+                    CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                };
+                await _voteWriteRepo.AddAsync(vote, ct);
             }
             else
             {
-                existingVote.Reason = request.VoteType.ToString();
-                existingVote.CreatedAt = DateTime.UtcNow;
-
+                existingVote.Reason = newVoteValue.ToString();
+                existingVote.CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
                 _voteWriteRepo.Update(existingVote);
             }
         }

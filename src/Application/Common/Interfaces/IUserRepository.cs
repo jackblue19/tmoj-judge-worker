@@ -1,5 +1,8 @@
 using Domain.Entities;
 using Application.UseCases.Contests.Dtos;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Application.Common.Interfaces;
 
@@ -19,4 +22,6 @@ public interface IUserRepository
         DateTime end);
 
     Task<List<Guid>> GetUserIdsByRoleAsync(string? roleName);
+
+    Task<User?> GetUserWithSettingsAsync(Guid userId);
 }

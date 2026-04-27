@@ -31,4 +31,23 @@ public class UserInventoryRepository : IUserInventoryRepository
             .OrderByDescending(x => x.AcquiredAt)
             .ToListAsync();
     }
+
+    public async Task<UserInventory?> GetByIdAsync(Guid inventoryId)
+    {
+        return await _context.UserInventories
+            .Include(x => x.Item)
+            .FirstOrDefaultAsync(x => x.InventoryId == inventoryId);
+    }
+
+    public async Task UpdateAsync(UserInventory entity)
+    {
+        _context.UserInventories.Update(entity);
+        await Task.CompletedTask;
+    }
+
+    public async Task DeleteAsync(UserInventory entity)
+    {
+        _context.UserInventories.Remove(entity);
+        await Task.CompletedTask;
+    }
 }

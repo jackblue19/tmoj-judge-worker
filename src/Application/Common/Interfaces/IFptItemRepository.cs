@@ -10,4 +10,5 @@ public interface IFptItemRepository
     Task<List<FptItem>> GetAllActiveAsync();
     Task AddAsync(FptItem entity);
     Task UpdateAsync(FptItem entity);
+    Task DeleteAsync(FptItem entity);
 }

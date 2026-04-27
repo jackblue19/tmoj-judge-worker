@@ -71,6 +71,7 @@ public static class InfrastructureRegistration
         services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
         services.AddScoped<IFptItemRepository, FptItemRepository>();
         services.AddScoped<IUserInventoryRepository, UserInventoryRepository>();
+        services.AddScoped<IRankingRepository, RankingRepository>();
         return services;
     }
 

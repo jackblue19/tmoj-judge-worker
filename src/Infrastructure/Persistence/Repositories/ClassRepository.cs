@@ -628,17 +628,20 @@ public class ClassRepository : IClassRepository
 
         var contest = new Contest
         {
+            Id = Guid.NewGuid(),
             Title = title.Trim(),
-            Slug = slug?.Trim(),
+            Slug = string.IsNullOrWhiteSpace(slug) ? null : slug.Trim(),
             DescriptionMd = descriptionMd?.Trim(),
             VisibilityCode = "private",
-            ContestType = "class",
+            ContestType = "acm",
             AllowTeams = false,
-            StartAt = startAt,
-            EndAt = endAt,
-            FreezeAt = freezeAt,
+            StartAt = DateTime.SpecifyKind(startAt, DateTimeKind.Utc),
+            EndAt = DateTime.SpecifyKind(endAt, DateTimeKind.Utc),
+            FreezeAt = freezeAt.HasValue ? DateTime.SpecifyKind(freezeAt.Value, DateTimeKind.Utc) : null,
             Rules = rules?.Trim(),
+            Status = "published",
             IsActive = true,
+            CreatedAt = DateTime.UtcNow,
             CreatedBy = createdBy
         };
         _db.Contests.Add(contest);
@@ -706,7 +709,7 @@ public class ClassRepository : IClassRepository
         if (newEndAt <= contest.EndAt)
             throw new ArgumentException("New end time must be after current end time.");
 
-        contest.EndAt = newEndAt;
+        contest.EndAt = DateTime.SpecifyKind(newEndAt, DateTimeKind.Utc);
         await _db.SaveChangesAsync(ct);
     }
 

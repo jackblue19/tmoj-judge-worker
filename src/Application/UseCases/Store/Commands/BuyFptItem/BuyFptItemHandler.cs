@@ -46,8 +46,15 @@ public class BuyFptItemHandler : IRequestHandler<BuyFptItemCommand, Guid>
             throw new Exception($"Số dư không đủ. Bạn cần thêm {item.PriceCoin - wallet.Balance} Coin nữa.");
         }
 
+        if (item.StockQuantity <= 0)
+        {
+            throw new Exception("Vật phẩm này đã hết hàng.");
+        }
+
         wallet.Balance -= item.PriceCoin;
         wallet.UpdatedAt = DateTime.UtcNow;
+        item.StockQuantity -= 1;
+        
         await _walletRepo.UpdateAsync(wallet);
 
         var inventory = new UserInventory

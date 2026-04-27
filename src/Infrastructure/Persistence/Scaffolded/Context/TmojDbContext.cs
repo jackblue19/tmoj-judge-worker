@@ -243,6 +243,7 @@ public partial class TmojDbContext : DbContext
                 .HasColumnType("jsonb")
                 .HasColumnName("meta_json");
             entity.Property(e => e.DurationDays).HasColumnName("duration_days");
+            entity.Property(e => e.StockQuantity).HasColumnName("stock_quantity");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");

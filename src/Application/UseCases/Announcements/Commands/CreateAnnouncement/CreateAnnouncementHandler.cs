@@ -40,8 +40,8 @@ public class CreateAnnouncementHandler : IRequestHandler<CreateAnnouncementComma
                 AuthorId = userId,
                 Title = request.Title,
                 Content = request.Content,
-                // Lưu ngày hết hạn vào trường Target
-                Target = DateTime.UtcNow.AddHours(request.DurationHours == 0 ? 72 : request.DurationHours).ToString("O"),
+                // Trả lại logic tự động hết hạn, dùng định dạng chuỗi ngắn hơn để an toàn
+                Target = DateTime.UtcNow.AddHours(request.DurationHours == 0 ? 72 : request.DurationHours).ToString("yyyy-MM-dd HH:mm:ss"), 
                 Pinned = request.Pinned,
                 ScopeType = request.ScopeType,
                 ScopeId = request.ScopeId,

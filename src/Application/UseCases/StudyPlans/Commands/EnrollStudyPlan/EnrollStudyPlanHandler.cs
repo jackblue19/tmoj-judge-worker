@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -10,17 +10,20 @@ public class EnrollStudyPlanHandler : IRequestHandler<EnrollStudyPlanCommand, Un
     private readonly IStudyPlanRepository _repo;
     private readonly IUserStudyPlanPurchaseRepository _purchaseRepo;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationRepository _notificationRepo;
     private readonly ILogger<EnrollStudyPlanHandler> _logger;
 
     public EnrollStudyPlanHandler(
         IStudyPlanRepository repo,
         IUserStudyPlanPurchaseRepository purchaseRepo,
         ICurrentUserService currentUser,
+        INotificationRepository notificationRepo,
         ILogger<EnrollStudyPlanHandler> logger)
     {
         _repo = repo;
         _purchaseRepo = purchaseRepo;
         _currentUser = currentUser;
+        _notificationRepo = notificationRepo;
         _logger = logger;
     }
 
@@ -82,6 +85,32 @@ public class EnrollStudyPlanHandler : IRequestHandler<EnrollStudyPlanCommand, Un
         }
 
         await _repo.SaveChangesAsync();
+        
+        // =========================
+        // UPDATE ENROLLMENT COUNT
+        // Tăng số lượng người tham gia (tự động)
+        if (plan.EnrollmentCount == null) plan.EnrollmentCount = 0;
+        plan.EnrollmentCount++;
+        _repo.Update(plan);
+        await _repo.SaveChangesAsync();
+
+        // =========================
+        // SEND NOTIFICATION
+        // =========================
+        await _notificationRepo.AddAsync(new Notification
+        {
+            NotificationId = Guid.NewGuid(),
+            UserId = userId,
+            Title = "Đã tham gia khóa học",
+            Message = $"Chúc mừng! Bạn đã tham gia thành công khóa học '{plan.Title}'. Hãy bắt đầu học ngay nhé!",
+            Type = "system",
+            ScopeType = "study_plan",
+            ScopeId = plan.Id,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        }, ct);
+
+        await _notificationRepo.SaveChangesAsync(ct);
 
         _logger.LogInformation(
             "ENROLL SUCCESS | User={UserId} Plan={PlanId} Items={Count}",

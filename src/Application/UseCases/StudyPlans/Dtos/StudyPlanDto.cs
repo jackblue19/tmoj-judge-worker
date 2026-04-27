@@ -1,4 +1,4 @@
-﻿namespace Application.UseCases.StudyPlans.Dtos;
+namespace Application.UseCases.StudyPlans.Dtos;
 
 public class StudyPlanDto
 {
@@ -12,4 +12,6 @@ public class StudyPlanDto
     public bool IsPaid { get; set; }
     public bool IsCompleted { get; set; }
     public bool IsUnlocked { get; set; }
+    public string? ImageUrl { get; set; }
+    public int? EnrollmentCount { get; set; }
 }

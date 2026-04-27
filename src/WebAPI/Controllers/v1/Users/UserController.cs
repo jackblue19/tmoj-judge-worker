@@ -35,7 +35,7 @@ public class UserController : ControllerBase
 
     public UserController(IMediator mediator) => _mediator = mediator;
 
-    [Authorize(Roles = "admin")]
+    [Authorize(Roles = "admin,manager")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserCommand req, CancellationToken ct)
     {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -20,6 +20,8 @@ public partial class StudyPlan
     public bool IsPaid { get; set; }
 
     public int Price { get; set; }
+    public string? ImageUrl { get; set; }
+    public int? EnrollmentCount { get; set; }
 
     public virtual User Creator { get; set; } = null!;
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using Domain.Entities;
@@ -21,7 +21,8 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<Announcement> Announcements { get; set; }
 
     public virtual DbSet<ArtifactBlob> ArtifactBlobs { get; set; }
-
+    public virtual DbSet<FptItem> FptItems { get; set; }
+    public virtual DbSet<UserInventory> UserInventories { get; set; }
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
     public virtual DbSet<Badge> Badges { get; set; }
@@ -221,6 +222,65 @@ public partial class TmojDbContext : DbContext
             entity.Property(e => e.Sha256).HasColumnName("sha256");
             entity.Property(e => e.SizeBytes).HasColumnName("size_bytes");
             entity.Property(e => e.StorageUri).HasColumnName("storage_uri");
+        });
+
+        modelBuilder.Entity<FptItem>(entity =>
+        {
+            entity.HasKey(e => e.ItemId).HasName("fpt_items_pkey");
+            entity.ToTable("fpt_items");
+
+            entity.Property(e => e.ItemId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("item_id");
+            entity.Property(e => e.Name).HasColumnName("name");
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.ItemType).HasColumnName("item_type");
+            entity.Property(e => e.PriceCoin)
+                .HasColumnType("numeric(18,2)")
+                .HasColumnName("price_coin");
+            entity.Property(e => e.ImageUrl).HasColumnName("image_url");
+            entity.Property(e => e.MetaJson)
+                .HasColumnType("jsonb")
+                .HasColumnName("meta_json");
+            entity.Property(e => e.DurationDays).HasColumnName("duration_days");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(e => e.CreatedBy).HasColumnName("created_by");
+        });
+
+        modelBuilder.Entity<UserInventory>(entity =>
+        {
+            entity.HasKey(e => e.InventoryId).HasName("user_inventory_pkey");
+            entity.ToTable("user_inventory");
+
+            entity.Property(e => e.InventoryId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("inventory_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.ItemId).HasColumnName("item_id");
+            entity.Property(e => e.AcquiredAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("acquired_at");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.IsEquipped)
+                .HasDefaultValue(false)
+                .HasColumnName("is_equipped");
+            entity.Property(e => e.TransactionId).HasColumnName("transaction_id");
+
+            entity.HasOne(d => d.Item).WithMany(p => p.UserInventories)
+                .HasForeignKey(d => d.ItemId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("user_inventory_item_id_fkey");
+
+            entity.HasOne(d => d.User).WithMany(p => p.UserInventories)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("user_inventory_user_id_fkey");
         });
 
         modelBuilder.Entity<AuditLog>(entity =>
@@ -2090,6 +2150,11 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("is_public");
             entity.Property(e => e.Title)
                 .HasColumnName("title");
+            entity.Property(e => e.ImageUrl)
+                .HasColumnName("image_url");
+            entity.Property(e => e.EnrollmentCount)
+                .HasColumnName("enrollment_count")
+                .HasDefaultValue(0);
             entity.HasOne(d => d.Creator)
                 .WithMany(p => p.StudyPlans)
                 .HasForeignKey(d => d.CreatorId)

@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
 using MediatR;
 
@@ -48,17 +48,24 @@ public class GetUnlockedPlansHandler
                 totalItems > 0 &&
                 completed == totalItems;
 
-            result.Add(new StudyPlanDto
+            if (isUnlocked)
             {
-                Id = plan.Id,
-                Title = plan.Title,
-                Order = 0,
-                ProblemCount = totalItems,
+                result.Add(new StudyPlanDto
+                {
+                    Id = plan.Id,
+                    Title = plan.Title,
+                    Order = 0,
+                    ProblemCount = totalItems,
+                    Price = plan.Price,
+                    IsPaid = plan.IsPaid,
 
-                // 🔥 FIX NULLABLE HERE
-                IsCompleted = isCompleted,
-                IsUnlocked = isUnlocked
-            });
+                    // 🔥 FIX NULLABLE HERE
+                    IsCompleted = isCompleted,
+                    IsUnlocked = isUnlocked,
+                    ImageUrl = plan.ImageUrl,
+                    EnrollmentCount = plan.EnrollmentCount
+                });
+            }
         }
 
         return result;

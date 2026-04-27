@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Contests.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -93,6 +93,23 @@ public class UserRepository : IUserRepository
                     u.Username ??
                     u.Email
             })
+            .ToListAsync();
+    }
+
+    public async Task<List<Guid>> GetUserIdsByRoleAsync(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName))
+        {
+            return await _db.Users
+                .AsNoTracking()
+                .Select(x => x.UserId)
+                .ToListAsync();
+        }
+
+        return await _db.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.Role.RoleCode.ToLower() == roleName.ToLower())
+            .Select(ur => ur.UserId)
             .ToListAsync();
     }
 }

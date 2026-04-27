@@ -1,4 +1,4 @@
-﻿using Application.Common.Pagination;
+using Application.Common.Pagination;
 using Application.UseCases.Problems.Commands.CreateInPlanProblem;
 using Application.UseCases.Problems.Commands.CreateProblem;
 using Application.UseCases.Problems.Dtos;
@@ -58,6 +58,55 @@ public class StudyPlansController : ControllerBase
     }
 
     // =========================
+    // UPDATE PLAN
+    // =========================
+    [HttpPut("{id:guid}")]
+    [Authorize]
+    public async Task<IActionResult> Update(
+        Guid id,
+        [FromBody] Application.UseCases.StudyPlans.Commands.UpdateStudyPlan.UpdateStudyPlanCommand command,
+        CancellationToken ct)
+    {
+        try
+        {
+            command.StudyPlanId = id;
+            await _mediator.Send(command, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                true,
+                "Study plan updated successfully"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // DELETE PLAN
+    // =========================
+    [HttpDelete("{id:guid}")]
+    [Authorize]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new Application.UseCases.StudyPlans.Commands.DeleteStudyPlan.DeleteStudyPlanCommand
+            {
+                StudyPlanId = id
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                true,
+                "Study plan deleted successfully"));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
     // ADD PROBLEM TO PLAN
     // =========================
     [HttpPost("{planId:guid}/problems/{problemId:guid}")]
@@ -80,6 +129,34 @@ public class StudyPlansController : ControllerBase
                 "Problem added to study plan"));
         }
         catch ( Exception ex )
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
+    // REMOVE PROBLEM FROM PLAN
+    // =========================
+    [HttpDelete("{planId:guid}/problems/{problemId:guid}")]
+    [Authorize]
+    public async Task<IActionResult> RemoveProblem(
+        Guid planId,
+        Guid problemId,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new Application.UseCases.StudyPlans.Commands.RemoveProblemFromPlan.RemoveProblemFromPlanCommand
+            {
+                StudyPlanId = planId,
+                ProblemId = problemId
+            }, ct);
+
+            return Ok(ApiResponse<object>.Ok(
+                true,
+                "Problem removed from study plan"));
+        }
+        catch (Exception ex)
         {
             return BadRequest(new { message = ex.Message });
         }

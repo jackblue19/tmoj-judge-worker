@@ -1,5 +1,6 @@
 using Application.DTOs.NotificationDTOs;
 using Application.UseCases.Notifications.Commands;
+using Application.UseCases.Notifications.Commands.BroadcastNotification;
 using Application.UseCases.Notifications.Commands.CreateNotification;
 using Application.UseCases.Notifications.Commands.DeleteNotification;
 using Application.UseCases.Notifications.Commands.MarkNotificationAsRead;
@@ -51,11 +52,34 @@ namespace WebAPI.Controllers
 
             var notification = await _mediator.Send(command);
 
-            // SignalR realtime
-            await _hub.Clients.User(request.UserId.ToString())
-                .SendAsync("ReceiveNotification", notification);
+            // SignalR realtime - bọc lại để tránh lỗi 500 nếu SignalR tèo
+            try 
+            {
+                await _hub.Clients.User(request.UserId.ToString())
+                    .SendAsync("ReceiveNotification", notification);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"SignalR Error: {ex.Message}");
+            }
 
             return Ok(notification);
+        }
+
+        // ==================================
+        // BROADCAST (ADMIN)
+        // POST api/notification/broadcast
+        // ==================================
+        [HttpPost("broadcast")]
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+        public async Task<IActionResult> Broadcast(
+            [FromBody] BroadcastNotificationCommand command)
+        {
+            var count = await _mediator.Send(command);
+            return Ok(new { 
+                message = "Broadcast sent successfully", 
+                targetCount = count 
+            });
         }
 
 

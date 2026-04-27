@@ -25,22 +25,17 @@ public class AnnouncementRepository : IAnnouncementRepository
     {
         try 
         {
-            var nowString = DateTime.UtcNow.ToString("O");
+            var now = DateTime.UtcNow;
             
-            _logger.LogInformation("FETCHING announcements... nowString={nowString}", nowString);
+            _logger.LogInformation("FETCHING active announcements... now={now}", now);
 
-            var all = await _db.Announcements
+            var filtered = await _db.Announcements
                 .AsNoTracking()
+                .Where(a => a.ExpiresAt == null || a.ExpiresAt > now)
                 .OrderByDescending(a => a.Pinned)
                 .ThenByDescending(a => a.CreatedAt)
-                .ToListAsync();
-
-            _logger.LogInformation("FOUND {count} raw announcements", all.Count);
-
-            var filtered = all
-                .Where(a => a.Target == "all" || (a.Target != null && string.Compare(a.Target, nowString) > 0))
                 .Take(10)
-                .ToList();
+                .ToListAsync();
 
             return filtered;
         }

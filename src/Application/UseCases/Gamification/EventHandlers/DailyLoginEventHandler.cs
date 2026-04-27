@@ -1,4 +1,4 @@
-﻿using Application.Common.Events;
+using Application.Common.Events;
 using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
@@ -84,5 +84,35 @@ public class DailyLoginEventHandler : INotificationHandler<DailyLoginEvent>
         await _repo.SaveChangesAsync();
 
         _logger.LogInformation("Updated streak for user {UserId}: {Streak}", userId, streak.CurrentStreak);
+
+        // =========================
+        // 🔥 AUTO-AWARD BADGES
+        // =========================
+        var rules = await _repo.GetActiveRulesAsync();
+        var userBadges = await _repo.GetUserBadgesAsync(userId);
+        var currentStreak = streak.CurrentStreak ?? 0;
+
+        foreach (var rule in rules.Where(r => r.RuleType == "streak" || r.RuleType == "streak_days"))
+        {
+            if (currentStreak >= rule.TargetValue)
+            {
+                // Kiểm tra xem đã có huy hiệu này chưa
+                if (!userBadges.Any(b => b.BadgeId == rule.BadgeId))
+                {
+                    _logger.LogInformation("Awarding badge {BadgeName} to user {UserId}", rule.Badge?.Name, userId);
+                    
+                    var newBadge = new UserBadge
+                    {
+                        UserId = userId,
+                        BadgeId = rule.BadgeId,
+                        AwardedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                    };
+
+                    await _repo.AddUserBadgeAsync(newBadge);
+                }
+            }
+        }
+        
+        await _repo.SaveChangesAsync();
     }
 }

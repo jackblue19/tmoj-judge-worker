@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Gamification.Dtos;
 using MediatR;
 
@@ -43,6 +43,7 @@ public class GetMyBadgeProgressHandler
                     current = solvedCount;
                     break;
 
+                case "streak":
                 case "streak_days":
                     current = streak?.CurrentStreak ?? 0;
                     break;

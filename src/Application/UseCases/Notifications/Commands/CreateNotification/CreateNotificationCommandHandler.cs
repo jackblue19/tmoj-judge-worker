@@ -15,15 +15,24 @@ namespace Application.UseCases.Notifications.Commands.CreateNotification;
 public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificationCommand, NotificationDto>
 {
     private readonly IWriteRepository<Notification, Guid> _writeRepo;
+    private readonly IUserRepository _userRepo;
+    private readonly Application.Abstractions.Outbound.Services.IEmailService _emailService;
+    private readonly ISystemSettingsService _systemSettings;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<CreateNotificationCommandHandler> _logger;
 
     public CreateNotificationCommandHandler(
         IWriteRepository<Notification, Guid> writeRepo,
+        IUserRepository userRepo,
+        Application.Abstractions.Outbound.Services.IEmailService emailService,
+        ISystemSettingsService systemSettings,
         IUnitOfWork uow,
         ILogger<CreateNotificationCommandHandler> logger)
     {
         _writeRepo = writeRepo;
+        _userRepo = userRepo;
+        _emailService = emailService;
+        _systemSettings = systemSettings;
         _uow = uow;
         _logger = logger;
     }
@@ -55,11 +64,37 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
                 ScopeId = request.ScopeId,
                 CreatedBy = request.CreatedBy,
                 IsRead = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
             };
 
             await _writeRepo.AddAsync(notification, cancellationToken);
             await _uow.SaveChangesAsync(cancellationToken);
+
+            // =========================
+            // 🔥 EMAIL NOTIFICATION LOGIC
+            // =========================
+            try 
+            {
+                if (await _systemSettings.IsEmailEnabledAsync())
+                {
+                    var user = await _userRepo.GetUserWithSettingsAsync(notification.UserId);
+                    if (user != null && !string.IsNullOrEmpty(user.Email))
+                    {
+                        // Check user preference
+                        bool canSend = user.UserNotificationSetting == null || user.UserNotificationSetting.ReceiveEmail;
+                        
+                        if (canSend)
+                        {
+                            _logger.LogInformation("Sending notification email to {Email}", user.Email);
+                            await _emailService.SendEmailAsync(user.Email, notification.Title, notification.Message ?? string.Empty);
+                        }
+                    }
+                }
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx, "Failed to send email notification to User {UserId}", notification.UserId);
+            }
 
             return NotificationDto.FromEntity(notification);
         }

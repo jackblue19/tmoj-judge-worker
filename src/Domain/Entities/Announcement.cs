@@ -20,6 +20,7 @@ public partial class Announcement
     public string? ScopeType { get; set; }
 
     public Guid? ScopeId { get; set; }
+    public DateTime? ExpiresAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

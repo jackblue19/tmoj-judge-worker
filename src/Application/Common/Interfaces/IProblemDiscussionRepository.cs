@@ -1,4 +1,4 @@
-﻿using Application.Common.Pagination;
+using Application.Common.Pagination;
 using Application.UseCases.DiscussionComments.Dtos;
 using Application.UseCases.ProblemDiscussions.Dtos;
 using Domain.Entities;
@@ -11,6 +11,12 @@ namespace Application.Common.Interfaces
     {
         Task<CursorPaginationDto<DiscussionResponseDto>> GetPagedAsync(
             Guid problemId,
+            DateTime? cursorCreatedAt,
+            Guid? cursorId,
+            int pageSize);
+ 
+        Task<CursorPaginationDto<DiscussionResponseDto>> GetPagedByUserAsync(
+            Guid userId,
             DateTime? cursorCreatedAt,
             Guid? cursorId,
             int pageSize);

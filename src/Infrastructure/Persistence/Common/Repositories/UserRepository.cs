@@ -3,6 +3,10 @@ using Application.UseCases.Contests.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Infrastructure.Persistence.Common.Repositories;
 
@@ -111,5 +115,12 @@ public class UserRepository : IUserRepository
             .Where(ur => ur.Role.RoleCode.ToLower() == roleName.ToLower())
             .Select(ur => ur.UserId)
             .ToListAsync();
+    }
+
+    public async Task<User?> GetUserWithSettingsAsync(Guid userId)
+    {
+        return await _db.Users
+            .Include(u => u.UserNotificationSetting)
+            .FirstOrDefaultAsync(u => u.UserId == userId);
     }
 }

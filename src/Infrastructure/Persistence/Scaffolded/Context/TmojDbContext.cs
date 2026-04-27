@@ -167,12 +167,24 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<Wallet> Wallets { get; set; }
 
     public virtual DbSet<WalletTransaction> WalletTransactions { get; set; }
+    public virtual DbSet<GlobalSetting> GlobalSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
             .HasPostgresExtension("pgcrypto")
             .HasPostgresExtension("uuid-ossp");
+ 
+        modelBuilder.Entity<GlobalSetting>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("global_settings_pkey");
+            entity.ToTable("global_settings");
+            entity.Property(e => e.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.Key).HasColumnName("key").IsRequired();
+            entity.Property(e => e.Value).HasColumnName("value").IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
+        });
 
         modelBuilder.Entity<Announcement>(entity =>
         {
@@ -197,6 +209,7 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValueSql("'all'::text")
                 .HasColumnName("target");
             entity.Property(e => e.Title).HasColumnName("title");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
 
             entity.HasOne(d => d.Author).WithMany(p => p.Announcements)
                 .HasForeignKey(d => d.AuthorId)
@@ -234,7 +247,7 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("item_id");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Description).HasColumnName("description");
-            entity.Property(e => e.ItemType).HasColumnName("item_type");
+            entity.Property(e => e.ItemType).HasColumnName("Item_type");
             entity.Property(e => e.PriceCoin)
                 .HasColumnType("numeric(18,2)")
                 .HasColumnName("price_coin");

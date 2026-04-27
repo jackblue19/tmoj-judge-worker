@@ -28,12 +28,14 @@ public class RankingController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
+        [FromQuery] Guid? subjectId = null,
+        [FromQuery] Guid? semesterId = null,
         CancellationToken ct = default)
     {
         try
         {
             var result = await _mediator.Send(
-                new GetGlobalLeaderboardQuery(page, pageSize, search), ct);
+                new GetGlobalLeaderboardQuery(page, pageSize, search, subjectId, semesterId), ct);
 
             return Ok(ApiResponse<GlobalLeaderboardDto>.Ok(result, "Global leaderboard fetched successfully"));
         }
@@ -47,11 +49,14 @@ public class RankingController : ControllerBase
     // GET api/v1/ranking/contests
     // ──────────────────────────────────────────
     [HttpGet("contests")]
-    public async Task<IActionResult> GetPublicContests(CancellationToken ct)
+    public async Task<IActionResult> GetPublicContests(
+        [FromQuery] Guid? subjectId = null,
+        [FromQuery] Guid? semesterId = null,
+        CancellationToken ct = default)
     {
         try
         {
-            var result = await _mediator.Send(new GetPublicContestsQuery(), ct);
+            var result = await _mediator.Send(new GetPublicContestsQuery(subjectId, semesterId), ct);
 
             return Ok(ApiResponse<List<PublicContestSummaryDto>>.Ok(result, "Public contests fetched successfully"));
         }

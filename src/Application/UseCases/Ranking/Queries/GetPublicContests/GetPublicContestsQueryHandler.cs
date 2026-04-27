@@ -12,5 +12,5 @@ public class GetPublicContestsQueryHandler
     public GetPublicContestsQueryHandler(IRankingRepository repo) => _repo = repo;
 
     public Task<List<PublicContestSummaryDto>> Handle(GetPublicContestsQuery request, CancellationToken ct) =>
-        _repo.GetPublicContestsAsync(ct);
+        _repo.GetPublicContestsAsync(request.SubjectId, request.SemesterId, ct);
 }

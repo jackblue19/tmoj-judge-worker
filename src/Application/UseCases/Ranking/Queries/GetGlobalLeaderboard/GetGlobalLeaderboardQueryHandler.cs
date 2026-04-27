@@ -12,5 +12,7 @@ public class GetGlobalLeaderboardQueryHandler
     public GetGlobalLeaderboardQueryHandler(IRankingRepository repo) => _repo = repo;
 
     public Task<GlobalLeaderboardDto> Handle(GetGlobalLeaderboardQuery request, CancellationToken ct) =>
-        _repo.GetGlobalLeaderboardAsync(request.Page, request.PageSize, request.Search, ct);
+        _repo.GetGlobalLeaderboardAsync(
+            request.Page, request.PageSize, request.Search,
+            request.SubjectId, request.SemesterId, ct);
 }

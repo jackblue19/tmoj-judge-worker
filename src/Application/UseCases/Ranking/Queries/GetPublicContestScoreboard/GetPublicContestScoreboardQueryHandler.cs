@@ -20,9 +20,9 @@ public class GetPublicContestScoreboardQueryHandler
     public async Task<GetContestLeaderboardResponse> Handle(
         GetPublicContestScoreboardQuery request, CancellationToken ct)
     {
-        var isPublic = await _rankingRepo.IsPublicContestAsync(request.ContestId, ct);
-        if (!isPublic)
-            throw new KeyNotFoundException("Contest not found or is not public.");
+        var exists = await _rankingRepo.ContestExistsAsync(request.ContestId, ct);
+        if (!exists)
+            throw new KeyNotFoundException("Contest not found.");
 
         return await _mediator.Send(
             new GetContestLeaderboardQuery { ContestId = request.ContestId }, ct);

@@ -639,7 +639,6 @@ public class ClassRepository : IClassRepository
             EndAt = DateTime.SpecifyKind(endAt, DateTimeKind.Utc),
             FreezeAt = freezeAt.HasValue ? DateTime.SpecifyKind(freezeAt.Value, DateTimeKind.Utc) : null,
             Rules = rules?.Trim(),
-            Status = "published",
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = createdBy

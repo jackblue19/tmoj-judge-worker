@@ -3,4 +3,7 @@ using MediatR;
 
 namespace Application.UseCases.Ranking.Queries.GetPublicContests;
 
-public record GetPublicContestsQuery : IRequest<List<PublicContestSummaryDto>>;
+public record GetPublicContestsQuery(
+    Guid? SubjectId = null,
+    Guid? SemesterId = null
+) : IRequest<List<PublicContestSummaryDto>>;

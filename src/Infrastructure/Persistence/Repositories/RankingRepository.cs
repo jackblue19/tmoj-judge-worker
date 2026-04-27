@@ -1,5 +1,6 @@
 using Application.Common.Interfaces;
 using Application.UseCases.Ranking.Dtos;
+using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,17 +13,31 @@ public class RankingRepository : IRankingRepository
     public RankingRepository(TmojDbContext db) => _db = db;
 
     public async Task<GlobalLeaderboardDto> GetGlobalLeaderboardAsync(
-        int page, int pageSize, string? search, CancellationToken ct = default)
+        int page, int pageSize, string? search,
+        Guid? subjectId, Guid? semesterId,
+        CancellationToken ct = default)
     {
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
-        var grouped = _db.UserProblemStats
+        var statsQuery = _db.UserProblemStats
             .AsNoTracking()
-            .Where(s => s.Solved
-                     && s.Problem.VisibilityCode == "public"
-                     && s.Problem.IsActive
-                     && s.Problem.StatusCode == "published")
+            .Where(s => s.Solved && s.Problem.IsActive);
+
+        if (subjectId.HasValue || semesterId.HasValue)
+        {
+            var filteredProblemIds = _db.ClassSlotProblems
+                .AsNoTracking()
+                .Where(csp =>
+                    (!subjectId.HasValue || csp.Slot.ClassSemester.SubjectId == subjectId.Value) &&
+                    (!semesterId.HasValue || csp.Slot.ClassSemester.SemesterId == semesterId.Value))
+                .Select(csp => csp.ProblemId)
+                .Distinct();
+
+            statsQuery = statsQuery.Where(s => filteredProblemIds.Contains(s.ProblemId));
+        }
+
+        var grouped = statsQuery
             .GroupBy(s => s.UserId)
             .Select(g => new
             {
@@ -99,15 +114,40 @@ public class RankingRepository : IRankingRepository
         };
     }
 
-    public async Task<List<PublicContestSummaryDto>> GetPublicContestsAsync(CancellationToken ct = default)
+    public async Task<List<PublicContestSummaryDto>> GetPublicContestsAsync(
+        Guid? subjectId, Guid? semesterId,
+        CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
 
-        return await _db.Contests
-            .AsNoTracking()
-            .Where(c => c.VisibilityCode == "public"
-                     && c.Status == "published"
-                     && c.IsActive)
+        IQueryable<Contest> contestQuery;
+
+        if (subjectId.HasValue || semesterId.HasValue)
+        {
+            var classContestIds = _db.ClassSlots
+                .AsNoTracking()
+                .Where(cs => cs.ContestId != null
+                    && (!subjectId.HasValue || cs.ClassSemester.SubjectId == subjectId.Value)
+                    && (!semesterId.HasValue || cs.ClassSemester.SemesterId == semesterId.Value))
+                .Select(cs => cs.ContestId!.Value)
+                .Distinct();
+
+            contestQuery = _db.Contests
+                .AsNoTracking()
+                .Where(c => c.IsActive
+                    && c.Status != "draft" && c.Status != "cancelled"
+                    && classContestIds.Contains(c.Id));
+        }
+        else
+        {
+            contestQuery = _db.Contests
+                .AsNoTracking()
+                .Where(c => c.VisibilityCode == "public"
+                         && c.IsActive
+                         && c.Status != "draft" && c.Status != "cancelled");
+        }
+
+        return await contestQuery
             .OrderByDescending(c => c.StartAt)
             .Select(c => new PublicContestSummaryDto
             {
@@ -129,6 +169,13 @@ public class RankingRepository : IRankingRepository
             .AsNoTracking()
             .AnyAsync(c => c.Id == contestId
                         && c.VisibilityCode == "public"
-                        && c.Status == "published"
-                        && c.IsActive, ct);
+                        && c.IsActive
+                        && c.Status != "draft" && c.Status != "cancelled", ct);
+
+    public async Task<bool> ContestExistsAsync(Guid contestId, CancellationToken ct = default) =>
+        await _db.Contests
+            .AsNoTracking()
+            .AnyAsync(c => c.Id == contestId
+                        && c.IsActive
+                        && c.Status != "draft" && c.Status != "cancelled", ct);
 }

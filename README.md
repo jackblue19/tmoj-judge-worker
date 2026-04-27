@@ -1,17 +1,47 @@
 # TMOJ (Themis Online Judge) - Backend
 
-TMOJ is a powerful and scalable Online Judge system built with .NET 8, following Clean Architecture principles. It supports automated code judging, problem management, and contest organization.
+TMOJ is an Online Judge platform built for academic environments. It covers the full cycle of competitive programming education — from managing classes and assignments to running timed contests and tracking student progress. The backend is built with .NET 8, following Clean Architecture and CQRS (MediatR) patterns.
 
 ## 🚀 Features
 
-- **Automated Judging**: Supports multiple programming languages with sandboxed execution.
-- **Problem Management**: Create, update, and manage problems with markdown support and testcase zip uploads.
-- **File Storage Integration**:
-    - **Cloudinary**: For user avatars with automatic resizing and optimization.
-    - **Cloudflare R2**: For storing large assets like testsets, problems, and submissions.
-- **Authentication**: JWT-based authentication with Google and GitHub OAuth support.
-- **Email Service**: Automated email verification and notifications using Gmail SMTP.
-- **Identity Management**: Comprehensive user profiles and role-based access control.
+### Judging
+- Multi-language sandboxed code execution (C++, Java, Python, ...).
+- ACM and IOI scoring modes with penalty calculation.
+- Real-time judge queue via background Worker service.
+- Per-problem testset management with override support per contest problem.
+
+### Problem Management
+- Create and publish problems with Markdown description and testcase zip upload.
+- Difficulty, visibility (`public / private`), and access mode (`visible / read_only / hidden`) control.
+- Editorial and discussion support per problem.
+
+### Class Management
+- Class enrollment via invite code with expiry.
+- Assignment slots with due dates, problem sets, and per-slot scoring.
+- Teacher can create and manage multiple class semesters and subjects.
+
+### Contest System
+- Timed contests with ACM / IOI scoring and configurable freeze period.
+- Scoreboard freeze: submissions continue during freeze; public scoreboard shows snapshot.
+- Team and individual participation modes with invite code join.
+- Admin/Manager bypass: always see live scoreboard regardless of freeze state.
+- Remix and virtual contest support.
+- Class-bound private contests accessible only through class slot.
+
+### Ranking & Leaderboard
+- Global leaderboard ranked by solved public problems with accuracy tie-break.
+- Per-contest scoreboard (public contests only) with full ACM/IOI row breakdown.
+- Class semester overall rankings aggregated across all slots.
+
+### Authentication & Identity
+- JWT-based authentication with refresh token rotation.
+- Google and GitHub OAuth support.
+- Role-based access control: Admin, Manager, Teacher, Student.
+- Email verification via Gmail SMTP.
+
+### File Storage
+- **Cloudinary**: User avatars with automatic resizing and optimization.
+- **Cloudflare R2**: Testsets, problem assets, and submission code artifacts.
 
 ## 🏗 Architecture
 
@@ -83,7 +113,7 @@ TMOJ-BE/
 
 ## 📖 API Documentation
 
-The API is versioned (v1) and leverages Scalar for documentation:
+The API is versioned (v1, v2) and leverages Scalar for documentation:
 - **Local Scalar UI**: `http://localhost:7210/scalar/v1`
 
 ## 📄 License

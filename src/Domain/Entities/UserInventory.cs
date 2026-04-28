@@ -20,6 +20,6 @@ public partial class UserInventory
     public int Quantity { get; set; } = 1;
 
     public virtual FptItem Item { get; set; } = null!;
-
     public virtual User User { get; set; } = null!;
+    public virtual WalletTransaction? Transaction { get; set; }
 }

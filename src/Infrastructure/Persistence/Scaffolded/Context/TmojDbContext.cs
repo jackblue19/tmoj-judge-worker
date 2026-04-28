@@ -299,6 +299,11 @@ public partial class TmojDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("user_inventory_user_id_fkey");
+
+            entity.HasOne(d => d.Transaction).WithMany()
+                .HasForeignKey(d => d.TransactionId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("user_inventory_transaction_id_fkey");
         });
 
         modelBuilder.Entity<CartItem>(entity =>

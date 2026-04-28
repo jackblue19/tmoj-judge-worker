@@ -1,6 +1,12 @@
 using Application.Common.Interfaces;
 using Application.UseCases.Gamification.Dtos;
+using Domain.Entities;
 using MediatR;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Application.UseCases.Gamification.Queries.GetMyBadgeProgress;
 
@@ -8,17 +14,24 @@ public class GetMyBadgeProgressHandler
     : IRequestHandler<GetMyBadgeProgressQuery, List<BadgeProgressDto>>
 {
     private readonly IGamificationRepository _repo;
+    private readonly ICurrentUserService _currentUser;
 
-    public GetMyBadgeProgressHandler(IGamificationRepository repo)
+    public GetMyBadgeProgressHandler(
+        IGamificationRepository repo,
+        ICurrentUserService currentUser)
     {
         _repo = repo;
+        _currentUser = currentUser;
     }
 
     public async Task<List<BadgeProgressDto>> Handle(
         GetMyBadgeProgressQuery request,
         CancellationToken cancellationToken)
     {
-        var userId = request.UserId;
+        var userId = _currentUser.UserId ?? request.UserId;
+
+        if (userId == Guid.Empty)
+            throw new UnauthorizedAccessException("Không xác định được người dùng.");
 
         // ===== DATA =====
         var rules = await _repo.GetActiveRulesAsync();
@@ -27,17 +40,17 @@ public class GetMyBadgeProgressHandler
         var streak = await _repo.GetUserStreakAsync(userId);
 
         var result = new List<BadgeProgressDto>();
+        bool needsSave = false;
 
         foreach (var rule in rules)
         {
             var badge = rule.Badge; // navigation
-
             if (badge == null) continue;
 
             int current = 0;
 
             // ===== CALCULATE PROGRESS =====
-            switch (rule.RuleType)
+            switch (rule.RuleType.ToLower())
             {
                 case "solved_count":
                     current = solvedCount;
@@ -54,6 +67,21 @@ public class GetMyBadgeProgressHandler
             }
 
             var isEarned = userBadges.Any(x => x.BadgeId == badge.BadgeId);
+            
+            // 🔥 Tự động "bù" Huy hiệu nếu đã đạt mà chưa có (Self-healing)
+            if (!isEarned && current >= rule.TargetValue && rule.TargetValue > 0)
+            {
+                var newBadge = new UserBadge
+                {
+                    UserBadgesId = Guid.NewGuid(),
+                    UserId = userId,
+                    BadgeId = badge.BadgeId,
+                    AwardedAt = DateTime.UtcNow
+                };
+                await _repo.AddUserBadgeAsync(newBadge);
+                isEarned = true;
+                needsSave = true;
+            }
 
             var percent = rule.TargetValue == 0
                 ? 0
@@ -71,6 +99,11 @@ public class GetMyBadgeProgressHandler
                 ProgressPercent = Math.Min(percent, 100),
                 IsCompleted = isEarned
             });
+        }
+
+        if (needsSave)
+        {
+            await _repo.SaveChangesAsync();
         }
 
         return result;

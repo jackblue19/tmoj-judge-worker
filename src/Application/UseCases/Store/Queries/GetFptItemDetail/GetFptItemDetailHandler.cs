@@ -29,7 +29,20 @@ public class GetFptItemDetailHandler : IRequestHandler<GetFptItemDetailQuery, Fp
             PriceCoin = item.PriceCoin,
             ImageUrl = item.ImageUrl,
             DurationDays = item.DurationDays,
-            MetaJson = string.IsNullOrWhiteSpace(item.MetaJson) ? null : System.Text.Json.JsonDocument.Parse(item.MetaJson).RootElement
+            MetaJson = SafeParseJson(item.MetaJson)
         };
+    }
+
+    private System.Text.Json.JsonElement? SafeParseJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return System.Text.Json.JsonDocument.Parse(json).RootElement.Clone();
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

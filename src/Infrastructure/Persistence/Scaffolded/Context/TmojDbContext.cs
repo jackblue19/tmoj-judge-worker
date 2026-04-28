@@ -247,7 +247,7 @@ public partial class TmojDbContext : DbContext
                 .HasColumnName("item_id");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Description).HasColumnName("description");
-            entity.Property(e => e.ItemType).HasColumnName("Item_type");
+            entity.Property(e => e.ItemType).HasColumnName("item_type");
             entity.Property(e => e.PriceCoin)
                 .HasColumnType("numeric(18,2)")
                 .HasColumnName("price_coin");

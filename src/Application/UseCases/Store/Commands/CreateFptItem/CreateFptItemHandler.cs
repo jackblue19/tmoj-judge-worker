@@ -40,7 +40,7 @@ public class CreateFptItemHandler : IRequestHandler<CreateFptItemCommand, Guid>
             StockQuantity = request.StockQuantity,
             MetaJson = request.MetaJson?.GetRawText(),
             IsActive = true,
-            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
+            CreatedAt = DateTime.UtcNow,
             CreatedBy = adminId
         };
 

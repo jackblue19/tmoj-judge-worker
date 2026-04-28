@@ -153,18 +153,21 @@ public class StoreController : ControllerBase
     /// Trang bị hoặc Tháo bỏ vật phẩm
     /// </summary>
     [HttpPatch("my-inventory/{id}/equip")]
-    public async Task<IActionResult> EquipItem(Guid id, [FromBody] bool isEquipped)
+    public async Task<IActionResult> EquipItem(Guid id, [FromBody] UpdateUserInventoryRequest request)
     {
         try
         {
-            var result = await _mediator.Send(new UpdateUserInventoryCommand(id, isEquipped));
-            return result ? Ok("Thực hiện thành công") : NotFound();
+            var success = await _mediator.Send(new UpdateUserInventoryCommand(id, request.IsEquipped));
+            if (!success) return NotFound(new { message = "Vật phẩm không tồn tại trong kho." });
+            return Ok(new { message = request.IsEquipped ? "Đã trang bị vật phẩm." : "Đã tháo vật phẩm." });
         }
         catch (Exception ex)
         {
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    public record UpdateUserInventoryRequest(bool IsEquipped);
 
     /// <summary>
     /// Xóa/Bỏ vật phẩm khỏi kho đồ

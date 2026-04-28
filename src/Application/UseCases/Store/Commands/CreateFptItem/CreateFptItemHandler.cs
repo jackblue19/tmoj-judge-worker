@@ -30,22 +30,29 @@ public class CreateFptItemHandler : IRequestHandler<CreateFptItemCommand, Guid>
 
         var newItem = new FptItem
         {
-            ItemId = Guid.NewGuid(),
             Name = request.Name,
             Description = request.Description,
-            ItemType = request.ItemType,
+            ItemType = request.ItemType.Trim().ToLower(),
             PriceCoin = request.PriceCoin,
             ImageUrl = request.ImageUrl,
             DurationDays = request.DurationDays,
             StockQuantity = request.StockQuantity,
             MetaJson = request.MetaJson?.GetRawText(),
             IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = adminId
+            CreatedBy = adminId,
+            UpdatedAt = DateTime.UtcNow
         };
 
-        await _itemRepo.AddAsync(newItem);
-        await _uow.SaveChangesAsync(ct);
+        try
+        {
+            await _itemRepo.AddAsync(newItem);
+            await _uow.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            var inner = ex.InnerException?.Message ?? ex.Message;
+            throw new Exception($"DEBUG DB Error: {inner}");
+        }
 
         return newItem.ItemId;
     }

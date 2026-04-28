@@ -25,7 +25,7 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
 
         item.Name = request.Name;
         item.Description = request.Description;
-        item.ItemType = request.ItemType;
+        item.ItemType = request.ItemType.Trim().ToLower();
         item.PriceCoin = request.PriceCoin;
         item.ImageUrl = request.ImageUrl;
         item.DurationDays = request.DurationDays;

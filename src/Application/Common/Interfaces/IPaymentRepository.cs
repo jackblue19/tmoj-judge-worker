@@ -11,6 +11,8 @@ namespace Application.Common.Interfaces
         Task UpdateAsync(Payment payment);
         Task SaveChangesAsync();
         
+        Task<Payment?> GetByProviderTxIdAsync(string providerTxId);
+
         Task<(List<Payment> Items, int TotalItems)> GetMyPaymentHistoryAsync(Guid userId, int page, int pageSize);
         Task<(List<Payment> Items, int TotalItems)> GetAllPaymentHistoryAsync(int page, int pageSize);
     }

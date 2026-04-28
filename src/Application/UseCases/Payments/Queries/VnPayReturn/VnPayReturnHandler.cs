@@ -27,8 +27,8 @@ namespace Application.UseCases.Payments.Queries.VnPayReturn
         {
             var query = request.Query;
 
-            var frontendUrl = _config["Payment:FrontendReturnUrl"] 
-                ?? "http://localhost:3000/payment-result";
+            var feBase = (_config["urls-fe"] ?? throw new InvalidOperationException("Missing urls-fe config")).TrimEnd('/');
+            var frontendUrl = _config["Payment:FrontendReturnUrl"] ?? $"{feBase}/payment-result";
 
             // ❗ Không throw, luôn redirect
             if (!_vnPayService.ValidateSignature(query))

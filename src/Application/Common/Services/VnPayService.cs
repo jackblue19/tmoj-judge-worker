@@ -25,7 +25,8 @@ namespace Application.Common.Services
             // =========================
             if (isFake)
             {
-                return $"http://localhost:3000/payment-result" +
+                var feBase = (_config["urls-fe"] ?? throw new InvalidOperationException("Missing urls-fe config")).TrimEnd('/');
+                return $"{feBase}/payment-result" +
                        $"?paymentId={payment.PaymentId}" +
                        $"&status=success";
             }

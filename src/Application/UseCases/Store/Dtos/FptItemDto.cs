@@ -12,7 +12,7 @@ public class FptItemDto
     public string? ImageUrl { get; set; }
     public int? DurationDays { get; set; }
     public int StockQuantity { get; set; }
-    public string? MetaJson { get; set; }
+    public System.Text.Json.JsonElement? MetaJson { get; set; }
 }
 
 public class UserInventoryDto

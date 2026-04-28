@@ -8,6 +8,10 @@ using Application.UseCases.Store.Queries.GetFptItems;
 using Application.UseCases.Store.Queries.GetFptItemDetail;
 using Application.UseCases.Store.Queries.GetMyInventory;
 using Application.UseCases.Store.Queries.GetUserInventoryDetail;
+using Application.UseCases.Store.Commands.AddToCart;
+using Application.UseCases.Store.Commands.RemoveFromCart;
+using Application.UseCases.Store.Commands.Checkout;
+using Application.UseCases.Store.Queries.GetCartItems;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -170,5 +174,68 @@ public class StoreController : ControllerBase
     {
         var result = await _mediator.Send(new DeleteUserInventoryCommand(id));
         return result ? Ok("Đã bỏ vật phẩm") : NotFound();
+    }
+
+    // --- CART (GIỎ HÀNG) ENDPOINTS ---
+
+    /// <summary>
+    /// Thêm vật phẩm vào giỏ hàng
+    /// </summary>
+    [HttpPost("cart")]
+    public async Task<IActionResult> AddToCart([FromBody] AddToCartCommand command)
+    {
+        try
+        {
+            var result = await _mediator.Send(command);
+            return Ok(new { result, message = "Đã thêm vào giỏ hàng!" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Xem danh sách giỏ hàng của tôi
+    /// </summary>
+    [HttpGet("cart")]
+    public async Task<IActionResult> GetCart()
+    {
+        var cart = await _mediator.Send(new GetCartItemsQuery());
+        return Ok(cart);
+    }
+
+    /// <summary>
+    /// Xóa vật phẩm khỏi giỏ hàng
+    /// </summary>
+    [HttpDelete("cart/{id}")]
+    public async Task<IActionResult> RemoveFromCart(Guid id)
+    {
+        try
+        {
+            var result = await _mediator.Send(new RemoveFromCartCommand(id));
+            return result ? Ok("Đã xóa khỏi giỏ hàng") : NotFound();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Thanh toán toàn bộ giỏ hàng
+    /// </summary>
+    [HttpPost("checkout")]
+    public async Task<IActionResult> Checkout()
+    {
+        try
+        {
+            var result = await _mediator.Send(new CheckoutCommand());
+            return Ok(new { result, message = "Thanh toán giỏ hàng thành công!" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }

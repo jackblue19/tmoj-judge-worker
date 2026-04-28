@@ -23,6 +23,7 @@ public partial class TmojDbContext : DbContext
     public virtual DbSet<ArtifactBlob> ArtifactBlobs { get; set; }
     public virtual DbSet<FptItem> FptItems { get; set; }
     public virtual DbSet<UserInventory> UserInventories { get; set; }
+    public virtual DbSet<CartItem> CartItems { get; set; }
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
     public virtual DbSet<Badge> Badges { get; set; }
@@ -285,6 +286,9 @@ public partial class TmojDbContext : DbContext
                 .HasDefaultValue(false)
                 .HasColumnName("is_equipped");
             entity.Property(e => e.TransactionId).HasColumnName("transaction_id");
+            entity.Property(e => e.Quantity)
+                .HasDefaultValue(1)
+                .HasColumnName("quantity");
 
             entity.HasOne(d => d.Item).WithMany(p => p.UserInventories)
                 .HasForeignKey(d => d.ItemId)
@@ -295,6 +299,34 @@ public partial class TmojDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("user_inventory_user_id_fkey");
+        });
+
+        modelBuilder.Entity<CartItem>(entity =>
+        {
+            entity.HasKey(e => e.CartItemId).HasName("cart_items_pkey");
+            entity.ToTable("cart_items");
+
+            entity.Property(e => e.CartItemId)
+                .HasDefaultValueSql("gen_random_uuid()")
+                .HasColumnName("cart_item_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.ItemId).HasColumnName("item_id");
+            entity.Property(e => e.Quantity)
+                .HasDefaultValue(1)
+                .HasColumnName("quantity");
+            entity.Property(e => e.AddedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("added_at");
+
+            entity.HasOne(d => d.Item).WithMany()
+                .HasForeignKey(d => d.ItemId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_cart_item");
+
+            entity.HasOne(d => d.User).WithMany()
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_cart_user");
         });
 
         modelBuilder.Entity<AuditLog>(entity =>

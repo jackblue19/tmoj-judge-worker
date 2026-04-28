@@ -17,6 +17,7 @@ public partial class UserInventory
     public bool IsEquipped { get; set; }
 
     public Guid? TransactionId { get; set; }
+    public int Quantity { get; set; } = 1;
 
     public virtual FptItem Item { get; set; } = null!;
 

@@ -39,6 +39,12 @@ public class UserInventoryRepository : IUserInventoryRepository
             .FirstOrDefaultAsync(x => x.InventoryId == inventoryId);
     }
 
+    public async Task<UserInventory?> GetByUserAndItemAsync(Guid userId, Guid itemId)
+    {
+        return await _context.UserInventories
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.ItemId == itemId);
+    }
+
     public async Task UpdateAsync(UserInventory entity)
     {
         _context.UserInventories.Update(entity);

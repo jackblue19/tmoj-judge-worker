@@ -35,6 +35,7 @@ public class GetUserInventoryDetailHandler : IRequestHandler<GetUserInventoryDet
             ItemType = inv.Item.ItemType,
             AcquiredAt = inv.AcquiredAt,
             ExpiresAt = inv.ExpiresAt,
+            Quantity = inv.Quantity,
             IsEquipped = inv.IsEquipped
         };
     }

@@ -29,6 +29,7 @@ public class GetFptItemDetailHandler : IRequestHandler<GetFptItemDetailQuery, Fp
             PriceCoin = item.PriceCoin,
             ImageUrl = item.ImageUrl,
             DurationDays = item.DurationDays,
+            StockQuantity = item.StockQuantity,
             MetaJson = SafeParseJson(item.MetaJson)
         };
     }

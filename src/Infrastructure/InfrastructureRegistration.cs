@@ -78,6 +78,9 @@ public static class InfrastructureRegistration
         services.AddScoped<ICartItemRepository, CartItemRepository>();
         services.AddScoped<IRankingRepository, RankingRepository>();
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
+        services.AddScoped<ISemesterRepository, SemesterRepository>();
+        services.AddScoped<IClassSlotRepository, ClassSlotRepository>();
+        services.AddScoped<IClassRepository, ClassRepository>();
         return services;
     }
 

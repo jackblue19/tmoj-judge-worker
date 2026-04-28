@@ -56,6 +56,31 @@ public class BuyFptItemHandler : IRequestHandler<BuyFptItemCommand, Guid>
         item.StockQuantity -= 1;
         
         await _walletRepo.UpdateAsync(wallet);
+        await _itemRepo.UpdateAsync(item);
+
+        var transactionId = Guid.NewGuid();
+        await _walletRepo.AddTransactionAsync(new WalletTransaction
+        {
+            TransactionId = transactionId,
+            WalletId = wallet.WalletId,
+            Amount = item.PriceCoin,
+            Type = "withdraw",
+            Direction = "out",
+            SourceType = "store",
+            Status = "completed",
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Kiểm tra xem đã có món này chưa để cộng dồn số lượng
+        var existingInventory = await _inventoryRepo.GetByUserAndItemAsync(userId.Value, item.ItemId);
+
+        if (existingInventory != null)
+        {
+            existingInventory.Quantity += 1;
+            await _inventoryRepo.UpdateAsync(existingInventory);
+            await _uow.SaveChangesAsync(ct);
+            return existingInventory.InventoryId;
+        }
 
         var inventory = new UserInventory
         {
@@ -63,7 +88,9 @@ public class BuyFptItemHandler : IRequestHandler<BuyFptItemCommand, Guid>
             UserId = userId.Value,
             ItemId = item.ItemId,
             AcquiredAt = DateTime.UtcNow,
-            IsEquipped = false
+            Quantity = 1,
+            IsEquipped = false,
+            TransactionId = transactionId
         };
 
         if (item.DurationDays.HasValue)

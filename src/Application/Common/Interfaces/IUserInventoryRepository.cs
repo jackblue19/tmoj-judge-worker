@@ -9,5 +9,6 @@ public interface IUserInventoryRepository
     Task<List<UserInventory>> GetByUserIdAsync(Guid userId);
     Task<UserInventory?> GetByIdAsync(Guid inventoryId);
     Task UpdateAsync(UserInventory entity);
+    Task<UserInventory?> GetByUserAndItemAsync(Guid userId, Guid itemId);
     Task DeleteAsync(UserInventory entity);
 }

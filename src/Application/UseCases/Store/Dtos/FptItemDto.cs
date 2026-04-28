@@ -24,6 +24,7 @@ public class UserInventoryDto
     public string ItemType { get; set; } = null!;
     public DateTime AcquiredAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
+    public int Quantity { get; set; }
     public bool IsEquipped { get; set; }
     public bool IsExpired => ExpiresAt.HasValue && ExpiresAt.Value < DateTime.UtcNow;
 }

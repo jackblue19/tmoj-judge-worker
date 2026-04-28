@@ -36,6 +36,7 @@ public class GetMyInventoryHandler : IRequestHandler<GetMyInventoryQuery, List<U
             ItemType = x.Item.ItemType,
             AcquiredAt = x.AcquiredAt,
             ExpiresAt = x.ExpiresAt,
+            Quantity = x.Quantity,
             IsEquipped = x.IsEquipped
         }).ToList();
     }

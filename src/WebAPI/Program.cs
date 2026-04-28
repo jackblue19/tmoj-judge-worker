@@ -27,19 +27,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 //  database
-builder.Services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
-builder.Services.AddScoped<IProblemDiscussionRepository, ProblemDiscussionRepository>();
-builder.Services.AddScoped<IVnPayService, VnPayService>();
-builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
-builder.Services.AddScoped<IGamificationRepository, GamificationRepository>();
-builder.Services.AddScoped<IWalletRepository, WalletRepository>();
-builder.Services.AddScoped<ITeamRepository, TeamRepository>();
-builder.Services.AddScoped<IUserStudyPlanPurchaseRepository, UserStudyPlanPurchaseRepository>();
-builder.Services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
-builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
-builder.Services.AddScoped<ISemesterRepository, SemesterRepository>();
-builder.Services.AddScoped<IClassSlotRepository, ClassSlotRepository>();
-builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddPostgresConnection(builder.Configuration);
 builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 {
@@ -52,22 +39,25 @@ builder.Services.AddDbContext<TmojDbContext>((sp , opt) =>
 });
 
 //  controller + odata
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<AutoWrapResponseFilter>();
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler =
             System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     })
     .AddOData(opt =>
-{
-    opt.AddRouteComponents("odata" , EdmModelBuilder.GetEdmModel())
-        .Select()
-        .Filter()
-        .OrderBy()
-        .Expand()
-        .Count()
-        .SetMaxTop(100);
-});
+    {
+        opt.AddRouteComponents("odata" , EdmModelBuilder.GetEdmModel())
+            .Select()
+            .Filter()
+            .OrderBy()
+            .Expand()
+            .Count()
+            .SetMaxTop(100);
+    });
 
 builder.Services.AddPersistence();
 builder.Services.AddExternalServices(builder.Configuration);
@@ -78,12 +68,7 @@ builder.Services.Configure<Application.UseCases.Auth.Options.GoogleOptions>(buil
 builder.Services.Configure<Application.UseCases.Auth.Options.GithubOptions>(builder.Configuration.GetSection("Authentication:Github"));
 builder.Services.AddScoped<ConfirmEmailCommandHandler>();
 
-//  wrap + problem details + rate limit
-builder.Services.AddControllers(options =>
-{
-    options.Filters.Add<AutoWrapResponseFilter>();
-});
-
+//  problem details + rate limit
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = ctx =>
@@ -100,8 +85,6 @@ builder.Services.AddScalarWithApiVersioning(builder.Configuration);
 //  DI TEMP SERVICES
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUserService , CurrentUserService>();
-builder.Services.AddScoped<IContestStatusService , ContestStatusService>();
 
 //  v2  -   Judge Worker    -   DI
 builder.Services.AddScoped<WebAPI.Services.Judging.JudgeJobDispatchService>();

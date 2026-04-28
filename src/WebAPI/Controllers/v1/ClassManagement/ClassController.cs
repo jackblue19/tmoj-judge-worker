@@ -36,6 +36,9 @@ using Application.UseCases.Classes.Queries.GetAvailableStudents;
 using Application.UseCases.Classes.Queries.GetClassContests;
 using Application.UseCases.Classes.Queries.GetClassContestById;
 using Application.UseCases.Auth.Hasher;
+using Application.UseCases.Classes.Commands.AddClassContestProblem;
+using Application.UseCases.Classes.Commands.UpdateClassContestProblem;
+using Application.UseCases.Classes.Commands.RemoveClassContestProblem;
 
 namespace WebAPI.Controllers.v1.ClassManagement;
 
@@ -1500,6 +1503,110 @@ public class ClassController : ControllerBase
         }
     }
 
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{classSemesterId}/contests/{contestId}/problems
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("{classSemesterId:guid}/contests/{contestId:guid}/problems")]
+    public async Task<IActionResult> AddContestProblem(
+        Guid classSemesterId,
+        Guid contestId,
+        [FromBody] AddClassContestProblemBody req,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var contestProblemId = await _mediator.Send(
+                new AddClassContestProblemCommand(
+                    classSemesterId, contestId, userId.Value,
+                    req.ProblemId, req.Alias, req.Ordinal, req.Points, req.MaxScore,
+                    req.TimeLimitMs, req.MemoryLimitKb), ct);
+
+            return Ok(ApiResponse<object>.Ok(new { contestProblemId }, "Problem added to contest"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+    }
+
+    // ──────────────────────────────────────────
+    // PUT api/v1/class/{classSemesterId}/contests/{contestId}/problems/{contestProblemId}
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPut("{classSemesterId:guid}/contests/{contestId:guid}/problems/{contestProblemId:guid}")]
+    public async Task<IActionResult> UpdateContestProblem(
+        Guid classSemesterId,
+        Guid contestId,
+        Guid contestProblemId,
+        [FromBody] UpdateClassContestProblemBody req,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            await _mediator.Send(
+                new UpdateClassContestProblemCommand(
+                    classSemesterId, contestId, contestProblemId,
+                    req.Alias, req.Ordinal, req.Points, req.MaxScore,
+                    req.TimeLimitMs, req.MemoryLimitKb), ct);
+
+            return Ok(ApiResponse<object?>.Ok(null, "Contest problem updated"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+    }
+
+    // ──────────────────────────────────────────
+    // DELETE api/v1/class/{classSemesterId}/contests/{contestId}/problems/{contestProblemId}
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpDelete("{classSemesterId:guid}/contests/{contestId:guid}/problems/{contestProblemId:guid}")]
+    public async Task<IActionResult> RemoveContestProblem(
+        Guid classSemesterId,
+        Guid contestId,
+        Guid contestProblemId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            await _mediator.Send(
+                new RemoveClassContestProblemCommand(classSemesterId, contestId, contestProblemId), ct);
+
+            return Ok(ApiResponse<object?>.Ok(null, "Problem removed from contest"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+    }
+
     // ── Helpers ───────────────────────────────
 
     private string GetCellString(ClosedXML.Excel.IXLRow row, Dictionary<string, int> headers, string colName)
@@ -1534,3 +1641,9 @@ public record CreateContestBody(
     int? SlotNo, string? SlotTitle);
 public record ExtendContestBody(DateTime NewEndAt);
 public record ClassContestSubmitBody(Guid ContestProblemId, string Code, string Language = "cpp");
+public record AddClassContestProblemBody(
+    Guid ProblemId, string? Alias, int? Ordinal,
+    int? Points, int? MaxScore, int? TimeLimitMs, int? MemoryLimitKb);
+public record UpdateClassContestProblemBody(
+    string? Alias, int? Ordinal,
+    int? Points, int? MaxScore, int? TimeLimitMs, int? MemoryLimitKb);

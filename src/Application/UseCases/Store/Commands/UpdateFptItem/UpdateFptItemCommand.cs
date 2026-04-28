@@ -12,6 +12,6 @@ public record UpdateFptItemCommand(
     string? ImageUrl,
     int? DurationDays,
     int StockQuantity,
-    string? MetaJson,
+    System.Text.Json.JsonElement? MetaJson,
     bool IsActive
 ) : IRequest<bool>;

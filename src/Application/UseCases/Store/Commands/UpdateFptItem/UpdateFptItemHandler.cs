@@ -30,8 +30,9 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
         item.ImageUrl = request.ImageUrl;
         item.DurationDays = request.DurationDays;
         item.StockQuantity = request.StockQuantity;
-        item.MetaJson = request.MetaJson;
+        item.MetaJson = request.MetaJson?.GetRawText();
         item.IsActive = request.IsActive;
+        item.UpdatedAt = DateTime.UtcNow;
 
         await _itemRepo.UpdateAsync(item);
         await _uow.SaveChangesAsync(ct);

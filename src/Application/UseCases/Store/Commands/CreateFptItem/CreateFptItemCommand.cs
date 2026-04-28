@@ -11,5 +11,5 @@ public record CreateFptItemCommand(
     string? ImageUrl,
     int? DurationDays,
     int StockQuantity,
-    string? MetaJson
+    System.Text.Json.JsonElement? MetaJson
 ) : IRequest<Guid>;

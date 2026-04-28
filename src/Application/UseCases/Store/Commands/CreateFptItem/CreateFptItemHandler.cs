@@ -38,7 +38,7 @@ public class CreateFptItemHandler : IRequestHandler<CreateFptItemCommand, Guid>
             ImageUrl = request.ImageUrl,
             DurationDays = request.DurationDays,
             StockQuantity = request.StockQuantity,
-            MetaJson = request.MetaJson,
+            MetaJson = request.MetaJson?.GetRawText(),
             IsActive = true,
             CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
             CreatedBy = adminId

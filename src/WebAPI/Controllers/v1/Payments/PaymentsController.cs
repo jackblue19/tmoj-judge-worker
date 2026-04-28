@@ -1,11 +1,15 @@
 using Application.Common.Interfaces;
+using Application.UseCases.Payments.Commands.CreatePayOsPayment;
 using Application.UseCases.Payments.Commands.CreateVnPayPayment;
+using Application.UseCases.Payments.Commands.HandlePayOsWebhook;
+using Application.UseCases.Payments.Commands.VerifyPayOsPayment;
 using Application.UseCases.Payments.Commands.VnPayCallback;
 using Application.UseCases.Payments.Dtos;
 using Application.UseCases.Payments.Queries.GetConversionRate;
 using Application.UseCases.Payments.Queries.VnPayReturn;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 [ApiController]
 [Route("api/v1/payments")]
@@ -13,13 +17,16 @@ public class PaymentsController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUser;
+    private readonly IConfiguration _config;
 
     public PaymentsController(
         IMediator mediator,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IConfiguration config)
     {
         _mediator = mediator;
         _currentUser = currentUser;
+        _config = config;
     }
 
     // =========================
@@ -43,6 +50,87 @@ public class PaymentsController : ControllerBase
         });
 
         return Ok(result);
+    }
+
+    // =========================
+    // CREATE PAYOS PAYMENT
+    // =========================
+    [HttpPost("payos")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<IActionResult> CreatePayOs([FromBody] CreatePaymentRequest request)
+    {
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId == null)
+            return Unauthorized("User chưa đăng nhập");
+
+        try
+        {
+            var result = await _mediator.Send(new CreatePayOsPaymentCommand
+            {
+                Amount = request.Amount,
+                UserId = _currentUser.UserId.Value
+            });
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message, detail = ex.InnerException?.Message });
+        }
+    }
+
+    // =========================
+    // PAYOS VERIFY (FE gọi sau khi redirect về, backup cho webhook)
+    // =========================
+    [HttpPost("payos/verify")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    public async Task<IActionResult> VerifyPayOs([FromBody] VerifyPayOsRequest request)
+    {
+        var result = await _mediator.Send(new VerifyPayOsPaymentCommand
+        {
+            OrderCode = request.OrderCode
+        });
+        return Ok(result);
+    }
+
+    // =========================
+    // PAYOS WEBHOOK (SERVER TO SERVER)
+    // =========================
+    [HttpPost("payos/webhook")]
+    public async Task<IActionResult> PayOsWebhook([FromBody] PayOsWebhookPayload payload)
+    {
+        var result = await _mediator.Send(new HandlePayOsWebhookCommand
+        {
+            Payload = payload
+        });
+
+        // PayOS yêu cầu trả về code "00" để xác nhận đã nhận webhook
+        return Ok(new { code = "00", desc = result.Status });
+    }
+
+    // =========================
+    // PAYOS RETURN (REDIRECT USER)
+    // =========================
+    [HttpGet("payos/return")]
+    public IActionResult PayOsReturn(
+        [FromQuery] string? code,
+        [FromQuery] long? orderCode,
+        [FromQuery] string? status)
+    {
+        var feUrl = (_config["urls-fe"] ?? throw new InvalidOperationException("Missing urls-fe config")).TrimEnd('/');
+        var redirectUrl = $"{feUrl}/payment-result" +
+                          $"?status={(status == "PAID" || code == "00" ? "success" : "cancel")}" +
+                          $"&orderCode={orderCode}";
+        return Redirect(redirectUrl);
+    }
+
+    // =========================
+    // PAYOS CANCEL (REDIRECT USER)
+    // =========================
+    [HttpGet("payos/cancel")]
+    public IActionResult PayOsCancel([FromQuery] long? orderCode)
+    {
+        var feUrl = (_config["urls-fe"] ?? throw new InvalidOperationException("Missing urls-fe config")).TrimEnd('/');
+        var redirectUrl = $"{feUrl}/payment-cancel?orderCode={orderCode}";
+        return Redirect(redirectUrl);
     }
 
     // =========================

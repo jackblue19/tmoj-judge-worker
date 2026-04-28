@@ -38,6 +38,12 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .FirstOrDefaultAsync(x => x.PaymentId.ToString() == txnRef);
         }
 
+        public async Task<Payment?> GetByProviderTxIdAsync(string providerTxId)
+        {
+            return await _db.Set<Payment>()
+                .FirstOrDefaultAsync(x => x.ProviderTxId == providerTxId);
+        }
+
         public async Task<bool> ExistsAsync(Guid paymentId)
         {
             return await _db.Set<Payment>()

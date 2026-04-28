@@ -75,8 +75,9 @@ public class SubmitContestCommandHandler
         if (now > contest.EndAt)
             throw new Exception("CONTEST_ENDED");
 
-        // Rule 1/8: FREEZE KHÔNG chặn submit.
-        // Freeze chỉ đóng băng scoreboard public — contestant vẫn submit/judge/xem verdict cá nhân.
+        // Class contest: freeze chặn submit của student.
+        if (request.ClassSlotId is not null && contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value)
+            throw new Exception("CONTEST_FROZEN");
 
         // ======================
         // 2. CHECK CONTEST PROBLEM

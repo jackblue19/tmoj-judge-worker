@@ -44,12 +44,17 @@ public interface IClassRepository
     Task RemoveStudentAsync(Guid classSemesterId, Guid studentId, CancellationToken ct = default);
 
     // ── Contest operations ────────────────────────────────
-    Task<(Guid ContestId, Guid SlotId)> CreateContestAsync(
-        Guid classSemesterId, Guid createdBy, string title, string? slug, string? descriptionMd,
-        DateTime startAt, DateTime endAt, DateTime? freezeAt, string? rules,
-        List<ContestProblemItem>? problems, int? slotNo, string? slotTitle,
-        CancellationToken ct = default);
-
     Task ExtendContestTimeAsync(Guid classSemesterId, Guid contestId, DateTime newEndAt, CancellationToken ct = default);
     Task JoinContestAsync(Guid classSemesterId, Guid contestId, Guid userId, CancellationToken ct = default);
+
+    Task<Guid> AddContestProblemAsync(Guid classSemesterId, Guid contestId, Guid createdBy,
+        Guid problemId, string? alias, int? ordinal, int? points, int? maxScore,
+        int? timeLimitMs, int? memoryLimitKb, CancellationToken ct = default);
+
+    Task UpdateContestProblemAsync(Guid classSemesterId, Guid contestId, Guid contestProblemId,
+        string? alias, int? ordinal, int? points, int? maxScore,
+        int? timeLimitMs, int? memoryLimitKb, CancellationToken ct = default);
+
+    Task RemoveContestProblemAsync(Guid classSemesterId, Guid contestId, Guid contestProblemId,
+        CancellationToken ct = default);
 }

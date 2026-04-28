@@ -51,6 +51,27 @@ public class GetContestDetailQueryHandler
         if (!contest.IsActive && !isPrivileged)
             throw new KeyNotFoundException("CONTEST_NOT_FOUND");
 
+        // Visibility guard cho non-class contests.
+        // "hidden"  → chỉ admin/manager/creator
+        // "private" → admin/manager/creator hoặc đã đăng ký tham gia
+        // "public"  → ai cũng xem được
+        if (!isPrivileged && !isCreator)
+        {
+            var visibility = contest.VisibilityCode ?? "private";
+            if (visibility == "hidden")
+                throw new KeyNotFoundException("CONTEST_NOT_FOUND");
+
+            if (visibility == "private")
+            {
+                var userId = _currentUser.UserId;
+                var isParticipant = userId.HasValue &&
+                    await _contestQueryRepo.HasUserRegisteredAsync(contest.Id, userId.Value);
+
+                if (!isParticipant)
+                    throw new KeyNotFoundException("CONTEST_NOT_FOUND");
+            }
+        }
+
         var isFrozen = FreezeContestPatch.IsFrozen(contest);
 
         var status = _statusService.GetStatus(contest.StartAt, contest.EndAt);

@@ -1,5 +1,4 @@
 using Application.Common.Interfaces;
-using Application.UseCases.Classes.Commands.CreateClassContest;
 using Application.UseCases.Classes.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -612,86 +611,6 @@ public class ClassRepository : IClassRepository
 
     // ── Contest operations ─────────────────────────────────
 
-    public async Task<(Guid ContestId, Guid SlotId)> CreateContestAsync(
-        Guid classSemesterId, Guid createdBy, string title, string? slug, string? descriptionMd,
-        DateTime startAt, DateTime endAt, DateTime? freezeAt, string? rules,
-        List<ContestProblemItem>? problems, int? slotNo, string? slotTitle,
-        CancellationToken ct = default)
-    {
-        if (!await _db.ClassSemesters.AnyAsync(cs => cs.Id == classSemesterId, ct))
-            throw new KeyNotFoundException("Class instance not found.");
-
-        if (string.IsNullOrWhiteSpace(title))
-            throw new ArgumentException("Title is required.");
-        if (startAt >= endAt)
-            throw new ArgumentException("EndAt must be after StartAt.");
-
-        var contest = new Contest
-        {
-            Id = Guid.NewGuid(),
-            Title = title.Trim(),
-            Slug = string.IsNullOrWhiteSpace(slug) ? null : slug.Trim(),
-            DescriptionMd = descriptionMd?.Trim(),
-            VisibilityCode = "private",
-            ContestType = "acm",
-            AllowTeams = false,
-            StartAt = DateTime.SpecifyKind(startAt, DateTimeKind.Utc),
-            EndAt = DateTime.SpecifyKind(endAt, DateTimeKind.Utc),
-            FreezeAt = freezeAt.HasValue ? DateTime.SpecifyKind(freezeAt.Value, DateTimeKind.Utc) : null,
-            Rules = rules?.Trim(),
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            CreatedBy = createdBy
-        };
-        _db.Contests.Add(contest);
-
-        if (problems is { Count: > 0 })
-        {
-            int ord = 1;
-            foreach (var p in problems)
-            {
-                if (!await _db.Problems.AnyAsync(pr => pr.Id == p.ProblemId, ct))
-                    throw new KeyNotFoundException($"Problem {p.ProblemId} not found.");
-
-                _db.ContestProblems.Add(new ContestProblem
-                {
-                    ContestId = contest.Id,
-                    ProblemId = p.ProblemId,
-                    Ordinal = p.Ordinal ?? ord,
-                    Alias = p.Alias,
-                    Points = p.Points,
-                    MaxScore = p.MaxScore,
-                    TimeLimitMs = p.TimeLimitMs,
-                    MemoryLimitKb = p.MemoryLimitKb,
-                    IsActive = true,
-                    CreatedBy = createdBy
-                });
-                ord++;
-            }
-        }
-
-        int computedSlotNo = slotNo ?? (await _db.ClassSlots
-            .Where(s => s.ClassSemesterId == classSemesterId)
-            .MaxAsync(s => (int?)s.SlotNo, ct) ?? 0) + 1;
-
-        var slot = new ClassSlot
-        {
-            ClassSemesterId = classSemesterId,
-            SlotNo = computedSlotNo,
-            Title = slotTitle ?? title.Trim(),
-            Mode = "contest",
-            ContestId = contest.Id,
-            IsPublished = false,
-            CreatedBy = createdBy,
-            UpdatedBy = createdBy
-        };
-        _db.ClassSlots.Add(slot);
-
-        await _db.SaveChangesAsync(ct);
-
-        return (contest.Id, slot.Id);
-    }
-
     public async Task ExtendContestTimeAsync(Guid classSemesterId, Guid contestId, DateTime newEndAt, CancellationToken ct = default)
     {
         if (!await _db.ClassSemesters.AnyAsync(cs => cs.Id == classSemesterId, ct))
@@ -764,6 +683,90 @@ public class ClassRepository : IClassRepository
             ContestId = contestId,
             TeamId = personalTeam.Id
         });
+        await _db.SaveChangesAsync(ct);
+    }
+
+    // ── Contest problem management ────────────────────────
+
+    public async Task<Guid> AddContestProblemAsync(
+        Guid classSemesterId, Guid contestId, Guid createdBy,
+        Guid problemId, string? alias, int? ordinal, int? points, int? maxScore,
+        int? timeLimitMs, int? memoryLimitKb, CancellationToken ct = default)
+    {
+        var slotExists = await _db.ClassSlots.AnyAsync(
+            s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+        if (!slotExists)
+            throw new KeyNotFoundException("Contest not found in this class.");
+
+        var problem = await _db.Problems.FirstOrDefaultAsync(p => p.Id == problemId, ct)
+            ?? throw new KeyNotFoundException($"Problem {problemId} not found.");
+
+        var existing = await _db.ContestProblems
+            .Where(cp => cp.ContestId == contestId && cp.IsActive)
+            .ToListAsync(ct);
+
+        if (existing.Any(cp => cp.ProblemId == problemId))
+            throw new InvalidOperationException("Problem already exists in this contest.");
+
+        var autoAlias = alias ?? ((char)('A' + existing.Count)).ToString();
+
+        var entity = new ContestProblem
+        {
+            Id = Guid.NewGuid(),
+            ContestId = contestId,
+            ProblemId = problemId,
+            Alias = autoAlias,
+            Ordinal = ordinal ?? (existing.Count + 1),
+            Points = points ?? 100,
+            MaxScore = maxScore ?? 100,
+            TimeLimitMs = timeLimitMs ?? problem.TimeLimitMs,
+            MemoryLimitKb = memoryLimitKb ?? problem.MemoryLimitKb,
+            IsActive = true,
+            CreatedBy = createdBy
+        };
+        _db.ContestProblems.Add(entity);
+        await _db.SaveChangesAsync(ct);
+
+        return entity.Id;
+    }
+
+    public async Task UpdateContestProblemAsync(
+        Guid classSemesterId, Guid contestId, Guid contestProblemId,
+        string? alias, int? ordinal, int? points, int? maxScore,
+        int? timeLimitMs, int? memoryLimitKb, CancellationToken ct = default)
+    {
+        var slotExists = await _db.ClassSlots.AnyAsync(
+            s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+        if (!slotExists)
+            throw new KeyNotFoundException("Contest not found in this class.");
+
+        var cp = await _db.ContestProblems
+            .FirstOrDefaultAsync(p => p.Id == contestProblemId && p.ContestId == contestId, ct)
+            ?? throw new KeyNotFoundException("Contest problem not found.");
+
+        if (alias is not null) cp.Alias = alias;
+        if (ordinal.HasValue) cp.Ordinal = ordinal;
+        if (points.HasValue) cp.Points = points;
+        if (maxScore.HasValue) cp.MaxScore = maxScore;
+        if (timeLimitMs.HasValue) cp.TimeLimitMs = timeLimitMs;
+        if (memoryLimitKb.HasValue) cp.MemoryLimitKb = memoryLimitKb;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task RemoveContestProblemAsync(
+        Guid classSemesterId, Guid contestId, Guid contestProblemId, CancellationToken ct = default)
+    {
+        var slotExists = await _db.ClassSlots.AnyAsync(
+            s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+        if (!slotExists)
+            throw new KeyNotFoundException("Contest not found in this class.");
+
+        var cp = await _db.ContestProblems
+            .FirstOrDefaultAsync(p => p.Id == contestProblemId && p.ContestId == contestId, ct)
+            ?? throw new KeyNotFoundException("Contest problem not found.");
+
+        _db.ContestProblems.Remove(cp);
         await _db.SaveChangesAsync(ct);
     }
 

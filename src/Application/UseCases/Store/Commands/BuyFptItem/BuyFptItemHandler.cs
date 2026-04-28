@@ -74,33 +74,35 @@ public class BuyFptItemHandler : IRequestHandler<BuyFptItemCommand, Guid>
         // Kiểm tra xem đã có món này chưa để cộng dồn số lượng
         var existingInventory = await _inventoryRepo.GetByUserAndItemAsync(userId.Value, item.ItemId);
 
+        Guid inventoryIdForReturn = Guid.Empty;
         if (existingInventory != null)
         {
             existingInventory.Quantity += 1;
             await _inventoryRepo.UpdateAsync(existingInventory);
-            await _uow.SaveChangesAsync(ct);
-            return existingInventory.InventoryId;
+        }
+        else
+        {
+            inventoryIdForReturn = Guid.NewGuid();
+            var inventory = new UserInventory
+            {
+                InventoryId = inventoryIdForReturn,
+                UserId = userId.Value,
+                ItemId = item.ItemId,
+                AcquiredAt = DateTime.UtcNow,
+                Quantity = 1,
+                IsEquipped = false,
+                TransactionId = transactionId
+            };
+
+            if (item.DurationDays.HasValue)
+            {
+                inventory.ExpiresAt = DateTime.UtcNow.AddDays(item.DurationDays.Value);
+            }
+
+            await _inventoryRepo.AddAsync(inventory);
         }
 
-        var inventory = new UserInventory
-        {
-            InventoryId = Guid.NewGuid(),
-            UserId = userId.Value,
-            ItemId = item.ItemId,
-            AcquiredAt = DateTime.UtcNow,
-            Quantity = 1,
-            IsEquipped = false,
-            TransactionId = transactionId
-        };
-
-        if (item.DurationDays.HasValue)
-        {
-            inventory.ExpiresAt = DateTime.UtcNow.AddDays(item.DurationDays.Value);
-        }
-
-        await _inventoryRepo.AddAsync(inventory);
         await _uow.SaveChangesAsync(ct);
-
-        return inventory.InventoryId;
+        return existingInventory?.InventoryId ?? inventoryIdForReturn;
     }
 }

@@ -1,73 +1,72 @@
-﻿using Application.Common.Interfaces;
-using Application.UseCases.Payments.Dtos;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace Application.UseCases.Payments.Commands.VnPayCallback
+namespace Application.UseCases.Payments.Commands.HandlePayOsWebhook
 {
-    public class VnPayCallbackHandler
-        : IRequestHandler<VnPayCallbackCommand, VnPayCallbackResult>
+    public class HandlePayOsWebhookHandler
+        : IRequestHandler<HandlePayOsWebhookCommand, HandlePayOsWebhookResult>
     {
-        private readonly IVnPayService _vnPayService;
+        private readonly IPayOsService _payOsService;
         private readonly IPaymentRepository _paymentRepo;
         private readonly IWalletRepository _walletRepo;
         private readonly IConfiguration _config;
-        private readonly ILogger<VnPayCallbackHandler> _logger;
+        private readonly ILogger<HandlePayOsWebhookHandler> _logger;
 
-        public VnPayCallbackHandler(
-            IVnPayService vnPayService,
+        public HandlePayOsWebhookHandler(
+            IPayOsService payOsService,
             IPaymentRepository paymentRepo,
             IWalletRepository walletRepo,
             IConfiguration config,
-            ILogger<VnPayCallbackHandler> logger)
+            ILogger<HandlePayOsWebhookHandler> logger)
         {
-            _vnPayService = vnPayService;
+            _payOsService = payOsService;
             _paymentRepo = paymentRepo;
             _walletRepo = walletRepo;
             _config = config;
             _logger = logger;
         }
 
-        public async Task<VnPayCallbackResult> Handle(
-            VnPayCallbackCommand request,
+        public async Task<HandlePayOsWebhookResult> Handle(
+            HandlePayOsWebhookCommand request,
             CancellationToken cancellationToken)
         {
             try
             {
-                var query = request.Query;
+                // =========================
+                // VERIFY SIGNATURE
+                // =========================
+                var verify = await _payOsService.VerifyWebhookAsync(request.Payload);
 
-                if (!_vnPayService.ValidateSignature(query))
-                {
-                    return new VnPayCallbackResult { Status = "invalid_signature" };
-                }
+                if (!verify.IsValid)
+                    return new HandlePayOsWebhookResult { Status = "invalid_signature" };
 
-                var txnRef = query["vnp_TxnRef"].ToString();
-                var responseCode = query["vnp_ResponseCode"].ToString();
+                if (!verify.IsPaid)
+                    return new HandlePayOsWebhookResult { Status = "not_paid" };
 
-                var payment = await _paymentRepo.GetByTxnRefAsync(txnRef);
+                // =========================
+                // TÌM PAYMENT THEO ORDER CODE
+                // =========================
+                var payment = await _paymentRepo.GetByProviderTxIdAsync(verify.OrderCode.ToString());
 
                 if (payment == null)
-                    return new VnPayCallbackResult { Status = "not_found" };
+                    return new HandlePayOsWebhookResult { Status = "not_found" };
 
-                if (responseCode != "00")
-                {
-                    payment.Status = "failed";
-                    await _paymentRepo.UpdateAsync(payment);
-                    await _paymentRepo.SaveChangesAsync();
+                // Idempotency: tránh xử lý lại nếu đã paid
+                if (payment.Status == "paid")
+                    return new HandlePayOsWebhookResult { Status = "already_paid" };
 
-                    return new VnPayCallbackResult { Status = "failed" };
-                }
+                if (payment.UserId == null)
+                    return new HandlePayOsWebhookResult { Status = "no_user" };
 
                 // =========================
                 // MARK PAYMENT PAID
                 // =========================
                 payment.Status = "paid";
+                payment.PaidAt = DateTime.UtcNow;
                 await _paymentRepo.UpdateAsync(payment);
-
-                if (payment.UserId == null)
-                    return new VnPayCallbackResult { Status = "no_user" };
 
                 // =========================
                 // GET OR CREATE WALLET
@@ -87,8 +86,6 @@ namespace Application.UseCases.Payments.Commands.VnPayCallback
                     };
 
                     await _walletRepo.CreateAsync(wallet);
-
-                    // 🔥 MUST SAVE FIRST TO AVOID FK ERROR
                     await _walletRepo.SaveChangesAsync();
                 }
 
@@ -107,47 +104,32 @@ namespace Application.UseCases.Payments.Commands.VnPayCallback
                 await _walletRepo.UpdateAsync(wallet);
 
                 // =========================
-                // CREATE TRANSACTION (FIXED FK ISSUE)
+                // CREATE TRANSACTION
                 // =========================
                 var transaction = new WalletTransaction
                 {
                     TransactionId = Guid.NewGuid(),
                     WalletId = wallet.WalletId,
-
                     Type = "deposit",
                     Direction = "in",
                     Amount = Math.Abs(coin),
-
-                    SourceType = "vnpay",
+                    SourceType = "payos",
                     SourceId = payment.PaymentId,
-
                     Status = "completed",
                     CreatedAt = DateTime.UtcNow
-
-                    // ❌ DO NOT SET Wallet navigation
                 };
 
                 await _walletRepo.AddTransactionAsync(transaction);
 
-                // =========================
-                // FINAL SAVE (ALL CHANGES)
-                // =========================
                 await _walletRepo.SaveChangesAsync();
                 await _paymentRepo.SaveChangesAsync();
 
-                return new VnPayCallbackResult
-                {
-                    PaymentId = payment.PaymentId,
-                    Status = "paid",
-                    WalletUpdated = true,
-                    TransactionCreated = true
-                };
+                return new HandlePayOsWebhookResult { Status = "paid" };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "VNPay CALLBACK ERROR");
-
-                return new VnPayCallbackResult
+                _logger.LogError(ex, "PayOS WEBHOOK ERROR");
+                return new HandlePayOsWebhookResult
                 {
                     Status = "error: " + (ex.InnerException?.Message ?? ex.Message)
                 };

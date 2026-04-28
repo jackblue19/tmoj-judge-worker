@@ -18,6 +18,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Services;
 using Infrastructure.ExternalServices.Mailing;
+using Application.Common.Interfaces;
 
 namespace Infrastructure;
 
@@ -67,6 +68,7 @@ public static class InfrastructureRegistration
         services.AddScoped<IGamificationRepository, GamificationRepository>();
         services.AddScoped<IFavoriteRepository, FavoriteRepository>();
         services.AddScoped<IVnPayService, VnPayService>();
+        services.AddScoped<IPayOsService, PayOsService>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUserManagementRepository, UserManagementRepository>();

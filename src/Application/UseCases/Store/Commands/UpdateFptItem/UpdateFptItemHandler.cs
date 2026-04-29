@@ -1,6 +1,8 @@
 using Application.Common.Interfaces;
 using Domain.Abstractions;
+using Application.Abstractions.Outbound.Services;
 using MediatR;
+using System.IO;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,11 +13,13 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
 {
     private readonly IFptItemRepository _itemRepo;
     private readonly IUnitOfWork _uow;
+    private readonly ICloudinaryService _cloudinary;
 
-    public UpdateFptItemHandler(IFptItemRepository itemRepo, IUnitOfWork uow)
+    public UpdateFptItemHandler(IFptItemRepository itemRepo, IUnitOfWork uow, ICloudinaryService cloudinary)
     {
         _itemRepo = itemRepo;
         _uow = uow;
+        _cloudinary = cloudinary;
     }
 
     public async Task<bool> Handle(UpdateFptItemCommand request, CancellationToken ct)
@@ -23,11 +27,36 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
         var item = await _itemRepo.GetByIdAsync(request.ItemId);
         if (item == null) return false;
 
+        var imageUrl = request.ImageUrl;
+
+        // 1. Xử lý Upload Ảnh nếu có Stream
+        if (request.FileStream != null && !string.IsNullOrEmpty(request.Extension))
+        {
+            // Kiểm tra xem ảnh cũ có phải từ Cloudinary không để thay thế
+            if (TryGetImageId(item.ImageUrl, out var existingId))
+            {
+                await _cloudinary.ReplaceImageAsync(existingId, request.FileStream, request.Extension, "items", ct);
+                imageUrl = _cloudinary.GetImageUrl(existingId, "items");
+            }
+            else
+            {
+                var imageId = await _cloudinary.UploadImageAsync(request.FileStream, request.Extension, "items", ct);
+                imageUrl = _cloudinary.GetImageUrl(imageId, "items");
+            }
+        }
+
+        // 2. Chuẩn hóa ItemType
+        var itemType = request.ItemType.Trim().ToLower();
+        if (itemType == "khung" || itemType == "frame") itemType = "avatar_frame";
+        if (itemType == "nen" || itemType == "bg") itemType = "background";
+        if (itemType == "danhhieu" || itemType == "title") itemType = "title";
+        if (itemType == "huyhieu" || itemType == "badge") itemType = "badge";
+
         item.Name = request.Name;
         item.Description = request.Description;
-        item.ItemType = request.ItemType.Trim().ToLower();
+        item.ItemType = itemType;
         item.PriceCoin = request.PriceCoin;
-        item.ImageUrl = request.ImageUrl;
+        item.ImageUrl = imageUrl;
         item.DurationDays = request.DurationDays;
         item.StockQuantity = request.StockQuantity;
         item.MetaJson = request.MetaJson?.GetRawText();
@@ -38,5 +67,25 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
         await _uow.SaveChangesAsync(ct);
 
         return true;
+    }
+
+    private static bool TryGetImageId(string? url, out Guid imageId)
+    {
+        imageId = Guid.Empty;
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        
+        // Nếu là GUID trần
+        if (Guid.TryParse(url, out imageId)) return true;
+
+        // Nếu là URL Cloudinary: .../items/{guid}
+        var parts = url.Split('/');
+        var lastPart = parts.LastOrDefault();
+        if (lastPart != null)
+        {
+            var fileName = Path.GetFileNameWithoutExtension(lastPart);
+            return Guid.TryParse(fileName, out imageId);
+        }
+        
+        return false;
     }
 }

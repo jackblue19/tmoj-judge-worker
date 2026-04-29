@@ -43,11 +43,11 @@ public class CreateFptItemHandler : IRequestHandler<CreateFptItemCommand, Guid>
         // 2. Chuẩn hóa ItemType (Avatar Frame, Title, Background, v.v.)
         // Một số giá trị phổ biến để tránh lỗi Check Constraint
         var itemType = request.ItemType.Trim().ToLower();
-        if (itemType == "khung" || itemType == "frame") itemType = "avatar_frame";
-        if (itemType == "nen" || itemType == "bg") itemType = "background";
-        if (itemType == "danhhieu" || itemType == "title") itemType = "title";
-        if (itemType == "huyhieu" || itemType == "badge") itemType = "badge";
-        if (itemType == "vatly" || itemType == "physical") itemType = "physical_item";
+        if (itemType.Contains("khung") || itemType.Contains("frame")) itemType = "avatar_frame";
+        else if (itemType.Contains("nen") || itemType.Contains("bg") || itemType.Contains("background")) itemType = "background";
+        else if (itemType.Contains("danhhieu") || itemType.Contains("title")) itemType = "title";
+        else if (itemType.Contains("huyhieu") || itemType.Contains("badge")) itemType = "badge";
+        else if (itemType.Contains("vatly") || itemType.Contains("physical")) itemType = "physical_item";
 
         var newItem = new FptItem
         {

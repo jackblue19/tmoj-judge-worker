@@ -23,7 +23,12 @@ public class DeleteFptItemHandler : IRequestHandler<DeleteFptItemCommand, bool>
         var item = await _itemRepo.GetByIdAsync(request.ItemId);
         if (item == null) return false;
 
-        await _itemRepo.DeleteAsync(item);
+        // Thay vì xóa cứng (Hard Delete), ta dùng xóa mềm (Soft Delete)
+        // Để những người đã mua rồi vẫn còn vật phẩm trong kho đồ.
+        item.IsActive = false;
+        item.UpdatedAt = DateTime.UtcNow;
+
+        await _itemRepo.UpdateAsync(item);
         await _uow.SaveChangesAsync(ct);
 
         return true;

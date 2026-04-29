@@ -49,7 +49,7 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
         var itemType = request.ItemType.Trim().ToLower();
         if (itemType.Contains("khung") || itemType.Contains("frame")) itemType = "avatar_frame";
         else if (itemType.Contains("nen") || itemType.Contains("bg") || itemType.Contains("background")) itemType = "background";
-        else if (itemType.Contains("danhhieu") || itemType.Contains("title")) itemType = "title";
+        else if (itemType.Contains("danhhieu") || itemType.Contains("title")) itemType = "title_color";
         else if (itemType.Contains("huyhieu") || itemType.Contains("badge")) itemType = "badge";
         else if (itemType.Contains("vatly") || itemType.Contains("physical")) itemType = "physical_item";
 

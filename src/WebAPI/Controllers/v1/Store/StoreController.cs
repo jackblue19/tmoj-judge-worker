@@ -16,6 +16,8 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Asp.Versioning;
+using Microsoft.AspNetCore.Http;
+using System.IO;
 using System;
 using System.Threading.Tasks;
 
@@ -35,14 +37,37 @@ public class StoreController : ControllerBase
     }
 
     /// <summary>
-    /// API Admin: Đăng món đồ mới vào cửa hàng
+    /// API Admin: Đăng món đồ mới vào cửa hàng (Hỗ trợ Upload Ảnh)
     /// </summary>
     [HttpPost("items")]
     [Authorize(Roles = "admin,manager")]
-    public async Task<IActionResult> CreateItem([FromBody] CreateFptItemCommand command)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> CreateItem(
+        [FromForm] string name,
+        [FromForm] string? description,
+        [FromForm] string itemType,
+        [FromForm] decimal priceCoin,
+        [FromForm] string? imageUrl,
+        [FromForm] int? durationDays,
+        [FromForm] int stockQuantity,
+        [FromForm] string? metaJson,
+        IFormFile? file)
     {
         try
         {
+            System.Text.Json.JsonElement? meta = null;
+            if (!string.IsNullOrEmpty(metaJson))
+                meta = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(metaJson);
+
+            System.IO.Stream? stream = null;
+            string? ext = null;
+            if (file != null && file.Length > 0)
+            {
+                stream = file.OpenReadStream();
+                ext = System.IO.Path.GetExtension(file.FileName);
+            }
+
+            var command = new CreateFptItemCommand(name, description, itemType, priceCoin, imageUrl, durationDays, stockQuantity, meta, stream, ext);
             var itemId = await _mediator.Send(command);
             return Ok(new { itemId, message = "Đã đăng món đồ mới thành công!" });
         }
@@ -53,15 +78,46 @@ public class StoreController : ControllerBase
     }
 
     /// <summary>
-    /// API Admin: Cập nhật thông tin món đồ
+    /// API Admin: Cập nhật thông tin món đồ (Hỗ trợ Upload Ảnh)
     /// </summary>
     [HttpPut("items/{id}")]
     [Authorize(Roles = "admin,manager")]
-    public async Task<IActionResult> UpdateItem(Guid id, [FromBody] UpdateFptItemCommand command)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UpdateItem(
+        Guid id,
+        [FromForm] string name,
+        [FromForm] string? description,
+        [FromForm] string itemType,
+        [FromForm] decimal priceCoin,
+        [FromForm] string? imageUrl,
+        [FromForm] int? durationDays,
+        [FromForm] int stockQuantity,
+        [FromForm] string? metaJson,
+        [FromForm] bool isActive,
+        IFormFile? file)
     {
-        if (id != command.ItemId) return BadRequest("ID mismatch");
-        var result = await _mediator.Send(command);
-        return result ? Ok("Cập nhật thành công") : NotFound();
+        try
+        {
+            System.Text.Json.JsonElement? meta = null;
+            if (!string.IsNullOrEmpty(metaJson))
+                meta = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(metaJson);
+
+            System.IO.Stream? stream = null;
+            string? ext = null;
+            if (file != null && file.Length > 0)
+            {
+                stream = file.OpenReadStream();
+                ext = System.IO.Path.GetExtension(file.FileName);
+            }
+
+            var command = new UpdateFptItemCommand(id, name, description, itemType, priceCoin, imageUrl, durationDays, stockQuantity, meta, isActive, stream, ext);
+            var result = await _mediator.Send(command);
+            return result ? Ok("Cập nhật thành công") : NotFound();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>

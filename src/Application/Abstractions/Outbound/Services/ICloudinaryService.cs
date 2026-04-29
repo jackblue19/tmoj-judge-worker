@@ -32,4 +32,10 @@ public interface ICloudinaryService
     /// <param name="avatarId">The GUID used as the public ID.</param>
     /// <returns>The full public URL, or null if avatarId is empty.</returns>
     string? GetAvatarUrl(Guid avatarId);
+
+    // Generic methods for other images (e.g. store items)
+    Task<Guid> UploadImageAsync(Stream fileStream, string fileExtension, string folder = "items", CancellationToken cancellationToken = default);
+    Task ReplaceImageAsync(Guid imageId, Stream fileStream, string fileExtension, string folder = "items", CancellationToken cancellationToken = default);
+    Task<bool> DeleteImageAsync(Guid imageId, string folder = "items", CancellationToken cancellationToken = default);
+    string? GetImageUrl(Guid imageId, string folder = "items");
 }

@@ -82,4 +82,63 @@ public class CloudinaryService : ICloudinaryService
         return _cloudinary.Api.UrlImgUp
             .BuildUrl($"{AvatarFolder}/{avatarId}");
     }
+
+    // =====================================================
+    // GENERIC METHODS
+    // =====================================================
+
+    public async Task<Guid> UploadImageAsync(Stream fileStream, string fileExtension, string folder = "items", CancellationToken cancellationToken = default)
+    {
+        var imageId = Guid.NewGuid();
+        var publicId = $"{folder}/{imageId}";
+
+        var uploadParams = new ImageUploadParams
+        {
+            File = new FileDescription($"{imageId}{fileExtension}", fileStream),
+            PublicId = publicId,
+            Overwrite = true
+        };
+
+        var result = await _cloudinary.UploadAsync(uploadParams, cancellationToken);
+
+        if (result.Error != null)
+            throw new InvalidOperationException($"Cloudinary upload failed: {result.Error.Message}");
+
+        return imageId;
+    }
+
+    public async Task ReplaceImageAsync(Guid imageId, Stream fileStream, string fileExtension, string folder = "items", CancellationToken cancellationToken = default)
+    {
+        var publicId = $"{folder}/{imageId}";
+
+        var uploadParams = new ImageUploadParams
+        {
+            File = new FileDescription($"{imageId}{fileExtension}", fileStream),
+            PublicId = publicId,
+            Overwrite = true,
+            Invalidate = true
+        };
+
+        var result = await _cloudinary.UploadAsync(uploadParams, cancellationToken);
+
+        if (result.Error != null)
+            throw new InvalidOperationException($"Cloudinary upload failed: {result.Error.Message}");
+    }
+
+    public async Task<bool> DeleteImageAsync(Guid imageId, string folder = "items", CancellationToken cancellationToken = default)
+    {
+        var publicId = $"{folder}/{imageId}";
+        var deleteParams = new DeletionParams(publicId);
+        var result = await _cloudinary.DestroyAsync(deleteParams);
+        return result.Result == "ok";
+    }
+
+    public string? GetImageUrl(Guid imageId, string folder = "items")
+    {
+        if (imageId == Guid.Empty)
+            return null;
+
+        return _cloudinary.Api.UrlImgUp
+            .BuildUrl($"{folder}/{imageId}");
+    }
 }

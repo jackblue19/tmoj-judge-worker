@@ -13,5 +13,7 @@ public record UpdateFptItemCommand(
     int? DurationDays,
     int StockQuantity,
     System.Text.Json.JsonElement? MetaJson,
-    bool IsActive
+    bool IsActive,
+    System.IO.Stream? FileStream = null,
+    string? Extension = null
 ) : IRequest<bool>;

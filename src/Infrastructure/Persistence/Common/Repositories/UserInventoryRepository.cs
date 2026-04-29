@@ -56,4 +56,12 @@ public class UserInventoryRepository : IUserInventoryRepository
         _context.UserInventories.Remove(entity);
         await Task.CompletedTask;
     }
+
+    public async Task<List<UserInventory>> GetEquippedItemsByTypeAsync(Guid userId, string itemType)
+    {
+        return await _context.UserInventories
+            .Include(x => x.Item)
+            .Where(x => x.UserId == userId && x.IsEquipped && x.Item.ItemType == itemType)
+            .ToListAsync();
+    }
 }

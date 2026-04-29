@@ -47,11 +47,11 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
 
         // 2. Chuẩn hóa ItemType
         var itemType = request.ItemType.Trim().ToLower();
-        if (itemType == "khung" || itemType == "frame") itemType = "avatar_frame";
-        if (itemType == "nen" || itemType == "bg") itemType = "background";
-        if (itemType == "danhhieu" || itemType == "title") itemType = "title";
-        if (itemType == "huyhieu" || itemType == "badge") itemType = "badge";
-        if (itemType == "vatly" || itemType == "physical") itemType = "physical_item";
+        if (itemType.Contains("khung") || itemType.Contains("frame")) itemType = "avatar_frame";
+        else if (itemType.Contains("nen") || itemType.Contains("bg") || itemType.Contains("background")) itemType = "background";
+        else if (itemType.Contains("danhhieu") || itemType.Contains("title")) itemType = "title";
+        else if (itemType.Contains("huyhieu") || itemType.Contains("badge")) itemType = "badge";
+        else if (itemType.Contains("vatly") || itemType.Contains("physical")) itemType = "physical_item";
 
         item.Name = request.Name;
         item.Description = request.Description;

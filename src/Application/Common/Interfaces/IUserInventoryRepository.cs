@@ -11,4 +11,5 @@ public interface IUserInventoryRepository
     Task UpdateAsync(UserInventory entity);
     Task<UserInventory?> GetByUserAndItemAsync(Guid userId, Guid itemId);
     Task DeleteAsync(UserInventory entity);
+    Task<List<UserInventory>> GetEquippedItemsByTypeAsync(Guid userId, string itemType);
 }

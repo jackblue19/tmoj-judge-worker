@@ -51,6 +51,7 @@ public class UpdateFptItemHandler : IRequestHandler<UpdateFptItemCommand, bool>
         if (itemType == "nen" || itemType == "bg") itemType = "background";
         if (itemType == "danhhieu" || itemType == "title") itemType = "title";
         if (itemType == "huyhieu" || itemType == "badge") itemType = "badge";
+        if (itemType == "vatly" || itemType == "physical") itemType = "physical";
 
         item.Name = request.Name;
         item.Description = request.Description;

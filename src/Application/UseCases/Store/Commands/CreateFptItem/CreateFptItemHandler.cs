@@ -47,6 +47,7 @@ public class CreateFptItemHandler : IRequestHandler<CreateFptItemCommand, Guid>
         if (itemType == "nen" || itemType == "bg") itemType = "background";
         if (itemType == "danhhieu" || itemType == "title") itemType = "title";
         if (itemType == "huyhieu" || itemType == "badge") itemType = "badge";
+        if (itemType == "vatly" || itemType == "physical") itemType = "physical";
 
         var newItem = new FptItem
         {

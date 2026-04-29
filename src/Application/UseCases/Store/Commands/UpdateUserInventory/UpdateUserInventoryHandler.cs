@@ -36,6 +36,20 @@ public class UpdateUserInventoryHandler : IRequestHandler<UpdateUserInventoryCom
         if (inv.ExpiresAt.HasValue && inv.ExpiresAt.Value < DateTime.UtcNow)
             throw new Exception("Vật phẩm đã hết hạn, không thể trang bị.");
 
+        // Rule: Một loại chỉ được trang bị 1 cái (Mutual Exclusion)
+        if (request.IsEquipped)
+        {
+            var currentlyEquipped = await _inventoryRepo.GetEquippedItemsByTypeAsync(inv.UserId, inv.Item.ItemType);
+            foreach (var item in currentlyEquipped)
+            {
+                if (item.InventoryId != inv.InventoryId)
+                {
+                    item.IsEquipped = false;
+                    await _inventoryRepo.UpdateAsync(item);
+                }
+            }
+        }
+
         inv.IsEquipped = request.IsEquipped;
 
         await _inventoryRepo.UpdateAsync(inv);

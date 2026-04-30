@@ -142,7 +142,7 @@ public class GamificationController : ControllerBase
     [HttpPost("badges")]
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> CreateBadge(
-        [FromBody] CreateBadgeCommand command,
+        [FromForm] CreateBadgeCommand command,
         CancellationToken ct)
     {
         var badgeId = await _mediator.Send(command, ct);
@@ -158,7 +158,7 @@ public class GamificationController : ControllerBase
     [Authorize(Roles = "admin")]
     public async Task<IActionResult> UpdateBadge(
         Guid id,
-        [FromBody] UpdateBadgeCommand command,
+        [FromForm] UpdateBadgeCommand command,
         CancellationToken ct)
     {
         command.BadgeId = id;

@@ -1,3 +1,4 @@
+using Application.Abstractions.Outbound.Services;
 using Application.Common.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -62,10 +63,13 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
             
             if (request.IconFile != null && request.IconFile.Length > 0)
             {
-                var uploadResult = await _cloudinary.UploadImageAsync(request.IconFile);
-                if (uploadResult != null && !string.IsNullOrEmpty(uploadResult.Url))
+                var ext = System.IO.Path.GetExtension(request.IconFile.FileName);
+                using var stream = request.IconFile.OpenReadStream();
+                var imageId = await _cloudinary.UploadImageAsync(stream, ext, "badges", ct);
+                var url = _cloudinary.GetImageUrl(imageId, "badges");
+                if (!string.IsNullOrEmpty(url))
                 {
-                    badge.IconUrl = uploadResult.Url;
+                    badge.IconUrl = url;
                 }
             }
             else if (!string.IsNullOrEmpty(request.IconUrl))

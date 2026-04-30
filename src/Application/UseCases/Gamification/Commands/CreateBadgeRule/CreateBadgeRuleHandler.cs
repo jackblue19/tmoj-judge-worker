@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -11,7 +11,7 @@ public class CreateBadgeRuleHandler : IRequestHandler<CreateBadgeRuleCommand, Gu
     private readonly ICurrentUserService _currentUser;
     private readonly ILogger<CreateBadgeRuleHandler> _logger;
 
-    private static readonly string[] RuleTypes = { "rank", "streak_days", "solved_count" };
+    private static readonly string[] RuleTypes = { "rank", "streak_days", "solved_count", "complete_contest" };
     private static readonly string[] Targets = { "contest", "course", "org", "streak", "problem" };
 
     public CreateBadgeRuleHandler(

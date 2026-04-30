@@ -46,7 +46,7 @@ public class CreateAnnouncementHandler : IRequestHandler<CreateAnnouncementComma
                 Title = request.Title,
                 Content = request.Content,
                 Target = "all", // Tránh lỗi CHECK Constraint
-                ExpiresAt = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(request.DurationHours == 0 ? 72 : request.DurationHours), DateTimeKind.Unspecified),
+                ExpiresAt = DateTime.UtcNow.AddHours(request.DurationHours == 0 ? 72 : request.DurationHours),
                 Pinned = request.Pinned,
                 ScopeType = request.ScopeType,
                 ScopeId = request.ScopeId,
@@ -57,44 +57,41 @@ public class CreateAnnouncementHandler : IRequestHandler<CreateAnnouncementComma
             await _repo.SaveChangesAsync();
 
             // Background task for sending emails
-            if (request.SendEmail)
+            _logger.LogInformation("Checking global settings to broadcast announcement via email (background task)...");
+            _ = Task.Run(async () => 
             {
-                _logger.LogInformation("Broadcasting announcement via email (background task)...");
-                _ = Task.Run(async () => 
+                try
                 {
-                    try
+                    using var scope = _scopeFactory.CreateScope();
+                    var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+                    var emailService = scope.ServiceProvider.GetRequiredService<Application.Abstractions.Outbound.Services.IEmailService>();
+                    var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
+
+                    if (await systemSettings.IsEmailEnabledAsync())
                     {
-                        using var scope = _scopeFactory.CreateScope();
-                        var userRepo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-                        var emailService = scope.ServiceProvider.GetRequiredService<Application.Abstractions.Outbound.Services.IEmailService>();
-                        var systemSettings = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
+                        var activeUsers = await userRepo.GetAllActiveUsersWithSettingsAsync();
+                        var targetUsers = activeUsers.Where(u => 
+                            u.UserNotificationSetting == null || 
+                            u.UserNotificationSetting.ReceiveEmail).ToList();
 
-                        if (await systemSettings.IsEmailEnabledAsync())
+                        foreach (var user in targetUsers)
                         {
-                            var activeUsers = await userRepo.GetAllActiveUsersWithSettingsAsync();
-                            var targetUsers = activeUsers.Where(u => 
-                                u.UserNotificationSetting == null || 
-                                u.UserNotificationSetting.ReceiveEmail).ToList();
-
-                            foreach (var user in targetUsers)
+                            try
                             {
-                                try
-                                {
-                                    await emailService.SendEmailAsync(user.Email!, request.Title, request.Content);
-                                }
-                                catch (Exception emailEx)
-                                {
-                                    _logger.LogError(emailEx, "Failed to send broadcast email to {Email}", user.Email);
-                                }
+                                await emailService.SendEmailAsync(user.Email!, request.Title, request.Content);
+                            }
+                            catch (Exception emailEx)
+                            {
+                                _logger.LogError(emailEx, "Failed to send broadcast email to {Email}", user.Email);
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to process background broadcast emails.");
-                    }
-                });
-            }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to process background broadcast emails.");
+                }
+            });
 
             return announcement.AnnouncementId;
         }

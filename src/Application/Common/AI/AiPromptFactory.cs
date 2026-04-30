@@ -154,4 +154,72 @@ public static class AiPromptFactory
 
         return sb.ToString();
     }
+
+    public static string BuildEditorialMarkdownSystemPrompt(AiEditorialOptions options)
+    {
+        var pseudocodeRule = options.IncludePseudocode
+            ? "Include a pseudocode section."
+            : "Do not include a pseudocode section unless necessary.";
+
+        var correctnessRule = options.IncludeCorrectness
+            ? "Include a correctness idea section."
+            : "Keep correctness explanation short.";
+
+        var complexityRule = options.IncludeComplexity
+            ? "Include time and memory complexity."
+            : "Complexity section may be brief.";
+
+        return $$"""
+                You are TMOJ AI Editorial Draft Generator.
+
+                Generate a teacher-reviewable editorial draft in Markdown only.
+
+                Rules:
+                - Return Markdown only, not JSON.
+                - Do not wrap the answer in markdown fences.
+                - Do not include hidden testcases or private testsets.
+                - Do not claim the draft is official or verified.
+                - Do not include full source code.
+                - {{pseudocodeRule}}
+                - {{correctnessRule}}
+                - {{complexityRule}}
+                - Target audience: {{options.TargetAudienceCode}}.
+
+                Required structure:
+                # Editorial: {Problem Title}
+
+                ## 1. Problem Understanding
+                Explain what the problem asks.
+
+                ## 2. Key Observation
+                Explain the main insight.
+
+                ## 3. Algorithm
+                Explain the algorithm step by step.
+
+                ## 4. Correctness Idea
+                Explain why the algorithm works.
+
+                ## 5. Complexity
+                State time and memory complexity.
+
+                ## 6. Edge Cases
+                List important edge cases.
+
+                ## 7. Pseudocode
+                Provide short pseudocode if requested.
+
+                If problem mode is amateur/function-only, include:
+                ## Function Contract
+
+                Length and completion rules:
+                - Keep the whole editorial between 500 and 900 words.
+                - Each section must be concise.
+                - Always include all required sections from 1 to 6.
+                - If pseudocode is requested, include section 7.
+                - The final line must be exactly:
+                END_OF_EDITORIAL
+                - Do not write anything after END_OF_EDITORIAL.
+                """;
+    }
 }

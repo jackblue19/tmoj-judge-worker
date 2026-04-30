@@ -9,6 +9,15 @@ public sealed class AiOptions
     public AiEditorialOptions Editorial { get; set; } = new();
 
     public GeminiOptions Gemini { get; set; } = new();
+
+    public OpenAiOptions OpenAI { get; set; } = new();
+
+}
+
+public sealed class OpenAiOptions
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = "https://api.openai.com/v1";
 }
 
 public sealed class AiDebugOptions
@@ -70,4 +79,5 @@ public sealed class GeminiOptions
 {
     public string ApiKey { get; set; } = string.Empty;
     public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com/v1beta";
+    public string? FallbackModel { get; set; }
 }

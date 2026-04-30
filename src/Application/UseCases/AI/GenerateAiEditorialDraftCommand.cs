@@ -20,6 +20,10 @@ public sealed record GenerateAiEditorialDraftCommand(
 public sealed class GenerateAiEditorialDraftCommandHandler
     : IRequestHandler<GenerateAiEditorialDraftCommand , AiEditorialDraftResponseDto>
 {
+    private const string FeatureCode = "editorial_draft";
+    private const string ResponseMode = "markdown";
+    private const string EndMarker = "END_OF_EDITORIAL";
+
     private readonly IAiModelClient _ai;
     private readonly IAiEditorialDataService _data;
     private readonly AiOptions _options;
@@ -83,7 +87,7 @@ public sealed class GenerateAiEditorialDraftCommandHandler
 
         var contextHash = AiHash.Create(new
         {
-            feature = "editorial_draft" ,
+            feature = FeatureCode ,
             problemId = request.ProblemId ,
             languageCode ,
             styleCode ,
@@ -92,6 +96,7 @@ public sealed class GenerateAiEditorialDraftCommandHandler
             includeCorrectness ,
             includeComplexity ,
             promptVersion = cfg.PromptVersion ,
+            responseMode = ResponseMode ,
             ctx
         });
 
@@ -110,16 +115,17 @@ public sealed class GenerateAiEditorialDraftCommandHandler
 
                 if ( !string.IsNullOrWhiteSpace(cached.ResponseJson) )
                 {
-                    var cachedJson = AiModelJsonNormalizer.NormalizeOrFallback(
-                        cached.ResponseJson ,
-                        "editorial_draft" ,
-                        cached.Title ,
-                        "Cached AI editorial draft was not valid JSON.");
+                    try
+                    {
+                        using var cachedDoc = JsonDocument.Parse(cached.ResponseJson);
 
-                    using var cachedDoc = JsonDocument.Parse(cachedJson);
-
-                    if ( cachedDoc.RootElement.TryGetProperty("outline" , out var cachedOutlineEl) )
-                        cachedOutline = JsonSerializer.Deserialize<object>(cachedOutlineEl.GetRawText());
+                        if ( cachedDoc.RootElement.TryGetProperty("outline" , out var cachedOutlineEl) )
+                            cachedOutline = JsonSerializer.Deserialize<object>(cachedOutlineEl.GetRawText());
+                    }
+                    catch
+                    {
+                        cachedOutline = null;
+                    }
                 }
 
                 return new AiEditorialDraftResponseDto(
@@ -143,7 +149,7 @@ public sealed class GenerateAiEditorialDraftCommandHandler
 
         var usedToday = await _data.CountTodayRequestsAsync(
             request.CurrentUserId ,
-            "editorial_draft" ,
+            FeatureCode ,
             ct);
 
         if ( usedToday >= quota )
@@ -163,23 +169,22 @@ public sealed class GenerateAiEditorialDraftCommandHandler
 
         try
         {
-            modelResult = await _ai.GenerateJsonAsync(
+            modelResult = await _ai.GenerateTextAsync(
                 cfg.Model ,
-                AiPromptFactory.BuildEditorialSystemPrompt(cfg) ,
+                AiPromptFactory.BuildEditorialMarkdownSystemPrompt(cfg) ,
                 userPrompt ,
-                AiJsonSchemas.EditorialResponseSchema ,
                 new AiGenerationSettings(
                     cfg.Temperature ,
                     cfg.TopP ,
                     cfg.MaxOutputTokens ,
                     cfg.TimeoutSeconds ,
-                    cfg.ResponseMimeType) ,
+                    "text/plain") ,
                 ct);
 
             requestLogId = await _data.InsertRequestLogAsync(
                 new AiRequestLogCreateDto(
                     UserId: request.CurrentUserId ,
-                    FeatureCode: "editorial_draft" ,
+                    FeatureCode: FeatureCode ,
                     ProviderCode: _options.Provider ,
                     ModelName: cfg.Model ,
                     PromptVersion: cfg.PromptVersion ,
@@ -196,75 +201,92 @@ public sealed class GenerateAiEditorialDraftCommandHandler
         }
         catch ( Exception ex )
         {
-            await _data.InsertRequestLogAsync(
-                new AiRequestLogCreateDto(
-                    UserId: request.CurrentUserId ,
-                    FeatureCode: "editorial_draft" ,
-                    ProviderCode: _options.Provider ,
-                    ModelName: cfg.Model ,
-                    PromptVersion: cfg.PromptVersion ,
-                    RequestHash: contextHash ,
-                    StatusCode: "failed" ,
-                    LanguageCode: languageCode ,
-                    PromptTokens: null ,
-                    CompletionTokens: null ,
-                    TotalTokens: null ,
-                    LatencyMs: null ,
-                    ErrorCode: "provider_error" ,
-                    ErrorMessage: ex.Message) ,
+            var errorCode = GetProviderErrorCode(ex);
+
+            await InsertFailedRequestLogSafeAsync(
+                request.CurrentUserId ,
+                cfg.Model ,
+                cfg.PromptVersion ,
+                contextHash ,
+                languageCode ,
+                errorCode ,
+                ex.Message ,
                 ct);
 
-            throw new InvalidOperationException("AI editorial generation is temporarily unavailable. Your problem data was not changed.");
+            ThrowFriendlyProviderException(errorCode);
+
+            throw;
         }
 
-        var normalizedJson = AiModelJsonNormalizer.NormalizeOrFallback(
-            modelResult.JsonText ,
-            "editorial_draft" ,
-            $"Editorial draft for {editorialContext.ProblemTitle}" ,
-            "AI generated an editorial draft, but the response was not valid JSON.");
+        var rawMarkdown = modelResult.JsonText ?? string.Empty;
 
-        using var doc = JsonDocument.Parse(normalizedJson);
-        var root = doc.RootElement;
+        if ( !HasEndMarker(rawMarkdown) )
+        {
+            await InsertValidationFailedLogSafeAsync(
+                request.CurrentUserId ,
+                cfg.Model ,
+                cfg.PromptVersion ,
+                contextHash ,
+                languageCode ,
+                "draft_incomplete_missing_end_marker" ,
+                "AI editorial draft appears incomplete because END_OF_EDITORIAL marker is missing." ,
+                ct);
 
-        var title = AiJsonReader.ReadString(
-            root ,
-            "title" ,
-            $"Editorial draft for {editorialContext.ProblemTitle}");
+            throw new InvalidOperationException(
+                "AI editorial draft appears incomplete. Please regenerate with higher MaxOutputTokens or shorter context.");
+        }
 
-        var summaryMd = AiJsonReader.ReadString(
-            root ,
-            "summaryMd" ,
-            "");
+        var contentMd = NormalizeEditorialMarkdown(
+            rawMarkdown ,
+            editorialContext.ProblemTitle);
 
-        var contentMd = AiJsonReader.ReadString(
-            root ,
-            "contentMd" ,
-            "");
+        if ( LooksIncompleteMarkdown(contentMd , includePseudocode) )
+        {
+            await InsertValidationFailedLogSafeAsync(
+                request.CurrentUserId ,
+                cfg.Model ,
+                cfg.PromptVersion ,
+                contextHash ,
+                languageCode ,
+                "draft_incomplete_validation_failed" ,
+                "AI editorial draft failed markdown completeness validation." ,
+                ct);
 
-        if ( string.IsNullOrWhiteSpace(contentMd) )
-            contentMd = "AI generated an empty editorial draft. Please regenerate or write manually.";
+            throw new InvalidOperationException(
+                "AI editorial draft appears incomplete. Please regenerate with higher MaxOutputTokens or shorter context.");
+        }
 
-        var confidence = AiJsonReader.ReadInt(
-            root ,
-            "confidence" ,
-            50);
+        var title = $"Editorial draft for {editorialContext.ProblemTitle}";
+        var summaryMd = BuildSummaryFromMarkdown(contentMd);
 
-        var confidenceLevelCode = AiJsonReader.ReadString(
-            root ,
-            "confidenceLevelCode" ,
-            "medium");
+        var confidence = 70;
+        var confidenceLevelCode = "medium";
 
-        var warningsJson = root.TryGetProperty("warnings" , out var warningsEl)
-            ? warningsEl.GetRawText()
-            : "[]";
+        var warnings = new[]
+        {
+            "This draft was generated by AI and may contain incorrect reasoning.",
+            "Teacher review is required before publishing."
+        };
 
-        var assumptionsJson = root.TryGetProperty("assumptions" , out var assumptionsEl)
-            ? assumptionsEl.GetRawText()
-            : "[]";
+        var assumptions = Array.Empty<string>();
 
-        var outline = root.TryGetProperty("outline" , out var outlineEl)
-            ? JsonSerializer.Deserialize<object>(outlineEl.GetRawText())
-            : null;
+        var outline = BuildOutlineFromMarkdown(contentMd);
+
+        var warningsJson = JsonSerializer.Serialize(warnings);
+        var assumptionsJson = JsonSerializer.Serialize(assumptions);
+
+        var responseJson = JsonSerializer.Serialize(new
+        {
+            title ,
+            summaryMd ,
+            contentMd ,
+            confidence ,
+            confidenceLevelCode ,
+            outline ,
+            warnings ,
+            assumptions ,
+            responseMode = ResponseMode
+        });
 
         var draftId = await _data.InsertEditorialDraftAsync(
             new AiEditorialDraftCreateDto(
@@ -281,7 +303,7 @@ public sealed class GenerateAiEditorialDraftCommandHandler
                 ConfidenceScore: confidence ,
                 WarningsJson: warningsJson ,
                 AssumptionsJson: assumptionsJson ,
-                ResponseJson: normalizedJson) ,
+                ResponseJson: responseJson) ,
             ct);
 
         return new AiEditorialDraftResponseDto(
@@ -293,12 +315,266 @@ public sealed class GenerateAiEditorialDraftCommandHandler
             Title: title ,
             ContentMd: contentMd ,
             Outline: outline ,
-            Warnings: AiJsonReader.ReadStringArray(root , "warnings") ,
+            Warnings: warnings ,
             CreatedAt: DateTimeOffset.UtcNow);
+    }
+
+    private async Task InsertFailedRequestLogSafeAsync(
+        Guid userId ,
+        string modelName ,
+        string promptVersion ,
+        string contextHash ,
+        string languageCode ,
+        string errorCode ,
+        string errorMessage ,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _data.InsertRequestLogAsync(
+                new AiRequestLogCreateDto(
+                    UserId: userId ,
+                    FeatureCode: FeatureCode ,
+                    ProviderCode: _options.Provider ,
+                    ModelName: modelName ,
+                    PromptVersion: promptVersion ,
+                    RequestHash: contextHash ,
+                    StatusCode: "failed" ,
+                    LanguageCode: languageCode ,
+                    PromptTokens: null ,
+                    CompletionTokens: null ,
+                    TotalTokens: null ,
+                    LatencyMs: null ,
+                    ErrorCode: errorCode ,
+                    ErrorMessage: errorMessage) ,
+                ct);
+        }
+        catch
+        {
+            // Do not hide the original provider/generation error because logging failed.
+        }
+    }
+
+    private async Task InsertValidationFailedLogSafeAsync(
+        Guid userId ,
+        string modelName ,
+        string promptVersion ,
+        string contextHash ,
+        string languageCode ,
+        string errorCode ,
+        string errorMessage ,
+        CancellationToken ct)
+    {
+        try
+        {
+            await _data.InsertRequestLogAsync(
+                new AiRequestLogCreateDto(
+                    UserId: userId ,
+                    FeatureCode: FeatureCode ,
+                    ProviderCode: _options.Provider ,
+                    ModelName: modelName ,
+                    PromptVersion: promptVersion ,
+                    RequestHash: contextHash ,
+                    StatusCode: "failed" ,
+                    LanguageCode: languageCode ,
+                    PromptTokens: null ,
+                    CompletionTokens: null ,
+                    TotalTokens: null ,
+                    LatencyMs: null ,
+                    ErrorCode: errorCode ,
+                    ErrorMessage: errorMessage) ,
+                ct);
+        }
+        catch
+        {
+            // Validation error should still be returned even if logging fails.
+        }
+    }
+
+    private static void ThrowFriendlyProviderException(string errorCode)
+    {
+        if ( errorCode == "provider_quota_exceeded" )
+            throw new InvalidOperationException("AI provider quota has been exceeded. Please check billing or try another provider.");
+
+        if ( errorCode == "provider_rate_limited" )
+            throw new InvalidOperationException("AI provider rate limit has been reached. Please try again later.");
+
+        if ( errorCode == "provider_unavailable" )
+            throw new InvalidOperationException("AI provider is temporarily overloaded. Please try again later.");
+
+        if ( errorCode == "provider_timeout" )
+            throw new InvalidOperationException("AI provider timed out. Please try again later.");
+
+        throw new InvalidOperationException("AI editorial generation is temporarily unavailable. Your problem data was not changed.");
     }
 
     private static string Normalize(string? value , string fallback)
         => string.IsNullOrWhiteSpace(value)
             ? fallback
             : value.Trim().ToLowerInvariant();
+
+    private static bool HasEndMarker(string raw)
+    {
+        return !string.IsNullOrWhiteSpace(raw)
+               && raw.Contains(EndMarker , StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeEditorialMarkdown(string raw , string? problemTitle)
+    {
+        raw = string.IsNullOrWhiteSpace(raw)
+            ? "# AI Editorial Draft\n\nAI returned an empty draft."
+            : raw.Trim();
+
+        if ( raw.StartsWith("```markdown" , StringComparison.OrdinalIgnoreCase) )
+            raw = raw["```markdown".Length..].Trim();
+
+        if ( raw.StartsWith("```" , StringComparison.OrdinalIgnoreCase) )
+            raw = raw["```".Length..].Trim();
+
+        if ( raw.EndsWith("```" , StringComparison.OrdinalIgnoreCase) )
+            raw = raw[..^3].Trim();
+
+        raw = raw.Replace(EndMarker , "" , StringComparison.OrdinalIgnoreCase).Trim();
+
+        if ( !raw.StartsWith("#") )
+            raw = $"# Editorial: {problemTitle ?? "Problem"}\n\n" + raw;
+
+        return raw;
+    }
+
+    private static string BuildSummaryFromMarkdown(string markdown)
+    {
+        var lines = markdown
+            .Split('\n')
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Where(x => !x.StartsWith("#"))
+            .Where(x => !x.StartsWith("```"))
+            .Take(4)
+            .ToArray();
+
+        var summary = string.Join(" " , lines);
+
+        if ( summary.Length > 700 )
+            summary = summary[..700];
+
+        return summary;
+    }
+
+    private static object BuildOutlineFromMarkdown(string markdown)
+    {
+        var sections = markdown
+            .Split('\n')
+            .Select(x => x.Trim())
+            .Where(x => x.StartsWith("## "))
+            .Select(x => x.TrimStart('#').Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .ToArray();
+
+        if ( sections.Length == 0 )
+        {
+            sections = new[]
+            {
+                "Problem Understanding",
+                "Key Observation",
+                "Algorithm",
+                "Correctness Idea",
+                "Complexity",
+                "Edge Cases"
+            };
+        }
+
+        return new
+        {
+            sections
+        };
+    }
+
+    private static string GetProviderErrorCode(Exception ex)
+    {
+        if ( ex is TimeoutException )
+            return "provider_timeout";
+
+        if ( ex is OperationCanceledException )
+            return "provider_cancelled";
+
+        if ( ex.Message.Contains("insufficient_quota" , StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("RESOURCE_EXHAUSTED" , StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("quota" , StringComparison.OrdinalIgnoreCase) )
+            return "provider_quota_exceeded";
+
+        if ( ex.Message.Contains("429" , StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("rate_limit_exceeded" , StringComparison.OrdinalIgnoreCase) )
+            return "provider_rate_limited";
+
+        if ( ex.Message.Contains("503" , StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("UNAVAILABLE" , StringComparison.OrdinalIgnoreCase) )
+            return "provider_unavailable";
+
+        if ( ex.Message.Contains("model_not_found" , StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("does not exist" , StringComparison.OrdinalIgnoreCase) )
+            return "provider_model_not_found";
+
+        return "provider_error";
+    }
+
+    private static bool LooksIncompleteMarkdown(string markdown , bool includePseudocode)
+    {
+        if ( string.IsNullOrWhiteSpace(markdown) )
+            return true;
+
+        var trimmed = markdown.Trim();
+
+        var requiredSections = includePseudocode
+            ? new[]
+            {
+                "## 1. Problem Understanding",
+                "## 2. Key Observation",
+                "## 3. Algorithm",
+                "## 4. Correctness Idea",
+                "## 5. Complexity",
+                "## 6. Edge Cases",
+                "## 7. Pseudocode"
+            }
+            : new[]
+            {
+                "## 1. Problem Understanding",
+                "## 2. Key Observation",
+                "## 3. Algorithm",
+                "## 4. Correctness Idea",
+                "## 5. Complexity",
+                "## 6. Edge Cases"
+            };
+
+        var minimumRequiredCount = includePseudocode ? 6 : 5;
+
+        var sectionCount = requiredSections.Count(section =>
+            trimmed.Contains(section , StringComparison.OrdinalIgnoreCase));
+
+        var hasTooFewSections = sectionCount < minimumRequiredCount;
+
+        var suspiciousEnding =
+            trimmed.EndsWith("<=" , StringComparison.Ordinal)
+            || trimmed.EndsWith(">=" , StringComparison.Ordinal)
+            || trimmed.EndsWith("=" , StringComparison.Ordinal)
+            || trimmed.EndsWith("`" , StringComparison.Ordinal)
+            || trimmed.EndsWith("and" , StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith("or" , StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith("to" , StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith("such that" , StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith("where" , StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith("because" , StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith("," , StringComparison.Ordinal)
+            || trimmed.EndsWith(":" , StringComparison.Ordinal)
+            || trimmed.EndsWith("-" , StringComparison.Ordinal);
+
+        var noFinalPunctuation =
+            !trimmed.EndsWith("." , StringComparison.Ordinal)
+            && !trimmed.EndsWith(")" , StringComparison.Ordinal)
+            && !trimmed.EndsWith("]" , StringComparison.Ordinal)
+            && !trimmed.EndsWith("```" , StringComparison.Ordinal);
+
+        return hasTooFewSections || suspiciousEnding || noFinalPunctuation;
+    }
 }

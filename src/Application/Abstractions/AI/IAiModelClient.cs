@@ -9,7 +9,15 @@ public interface IAiModelClient
         object responseSchema ,
         AiGenerationSettings settings ,
         CancellationToken ct = default);
+
+    Task<AiModelResult> GenerateTextAsync(
+      string model ,
+      string systemInstruction ,
+      string userPrompt ,
+      AiGenerationSettings settings ,
+      CancellationToken ct = default);
 }
+
 
 public sealed record AiModelResult(
     string JsonText ,

@@ -339,20 +339,74 @@ public sealed class AiDebugDataService : IAiDebugDataService
     {
         var sql =
             """
-            INSERT INTO ai_debug_sessions (
-                user_id, problem_id, submission_id, result_id, judge_run_id, runtime_id,
-                ai_request_log_id, context_hash, verdict_code, submission_status_code,
-                result_status_code, suspected_issue_code, confidence_level_code,
-                confidence_score, summary_md, response_json, response_status_code
-            )
-            VALUES (
-                @user_id, @problem_id, @submission_id, @result_id, @judge_run_id, @runtime_id,
-                @ai_request_log_id, @context_hash, @verdict_code, @submission_status_code,
-                @result_status_code, @suspected_issue_code, @confidence_level_code,
-                @confidence_score, @summary_md, CAST(@response_json AS jsonb), 'generated'
-            )
-            RETURNING id;
-            """;
+        INSERT INTO ai_debug_sessions (
+            user_id,
+            problem_id,
+            submission_id,
+            result_id,
+            judge_run_id,
+            runtime_id,
+            ai_request_log_id,
+            context_hash,
+            verdict_code,
+            submission_status_code,
+            result_status_code,
+            suspected_issue_code,
+            confidence_level_code,
+            confidence_score,
+            summary_md,
+            response_json,
+            response_status_code,
+            is_visible_to_user,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            @user_id,
+            @problem_id,
+            @submission_id,
+            @result_id,
+            @judge_run_id,
+            @runtime_id,
+            @ai_request_log_id,
+            @context_hash,
+            @verdict_code,
+            @submission_status_code,
+            @result_status_code,
+            @suspected_issue_code,
+            @confidence_level_code,
+            @confidence_score,
+            @summary_md,
+            CAST(@response_json AS jsonb),
+            'generated',
+            true,
+            now(),
+            now()
+        )
+        ON CONFLICT (
+            submission_id,
+            COALESCE(result_id, '00000000-0000-0000-0000-000000000000'::uuid),
+            context_hash
+        )
+        DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            problem_id = EXCLUDED.problem_id,
+            judge_run_id = EXCLUDED.judge_run_id,
+            runtime_id = EXCLUDED.runtime_id,
+            ai_request_log_id = EXCLUDED.ai_request_log_id,
+            verdict_code = EXCLUDED.verdict_code,
+            submission_status_code = EXCLUDED.submission_status_code,
+            result_status_code = EXCLUDED.result_status_code,
+            suspected_issue_code = EXCLUDED.suspected_issue_code,
+            confidence_level_code = EXCLUDED.confidence_level_code,
+            confidence_score = EXCLUDED.confidence_score,
+            summary_md = EXCLUDED.summary_md,
+            response_json = EXCLUDED.response_json,
+            response_status_code = 'generated',
+            is_visible_to_user = true,
+            updated_at = now()
+        RETURNING id;
+        """;
 
         return ExecuteScalarGuidAsync(sql , new Dictionary<string , object?>
         {

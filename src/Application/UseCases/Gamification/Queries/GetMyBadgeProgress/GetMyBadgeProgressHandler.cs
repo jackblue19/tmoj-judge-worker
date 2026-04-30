@@ -66,7 +66,14 @@ public class GetMyBadgeProgressHandler
                     break;
             }
 
-            var isEarned = userBadges.Any(x => x.BadgeId == badge.BadgeId);
+            var userBadge = userBadges.FirstOrDefault(x => x.BadgeId == badge.BadgeId);
+            var isEarned = userBadge != null;
+            bool isNotified = false;
+
+            if (userBadge != null && !string.IsNullOrEmpty(userBadge.MetaJson) && userBadge.MetaJson.Contains("\"isNotified\":true"))
+            {
+                isNotified = true;
+            }
             
             // 🔥 Tự động "bù" Huy hiệu nếu đã đạt mà chưa có (Self-healing)
             if (!isEarned && current >= rule.TargetValue && rule.TargetValue > 0)
@@ -97,7 +104,8 @@ public class GetMyBadgeProgressHandler
                 TargetValue = rule.TargetValue,
 
                 ProgressPercent = Math.Min(percent, 100),
-                IsCompleted = isEarned
+                IsCompleted = isEarned,
+                IsNotified = isNotified
             });
         }
 

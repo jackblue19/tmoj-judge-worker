@@ -60,6 +60,12 @@ public class GamificationRepository : IGamificationRepository
         await _db.Set<UserBadge>().AddAsync(badge);
     }
 
+    public Task UpdateUserBadgeAsync(UserBadge badge)
+    {
+        _db.Set<UserBadge>().Update(badge);
+        return Task.CompletedTask;
+    }
+
     public async Task<List<Badge>> GetAllBadgesAsync()
     {
         return await _db.Set<Badge>()

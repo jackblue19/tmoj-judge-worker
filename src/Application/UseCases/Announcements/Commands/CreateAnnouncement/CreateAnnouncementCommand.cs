@@ -11,4 +11,5 @@ public class CreateAnnouncementCommand : IRequest<Guid>
     public bool Pinned { get; set; }
     public string? ScopeType { get; set; }
     public Guid? ScopeId { get; set; }
+    public bool SendEmail { get; set; }
 }

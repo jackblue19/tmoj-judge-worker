@@ -24,4 +24,6 @@ public interface IUserRepository
     Task<List<Guid>> GetUserIdsByRoleAsync(string? roleName);
 
     Task<User?> GetUserWithSettingsAsync(Guid userId);
+    
+    Task<List<User>> GetAllActiveUsersWithSettingsAsync();
 }

@@ -123,4 +123,13 @@ public class UserRepository : IUserRepository
             .Include(u => u.UserNotificationSetting)
             .FirstOrDefaultAsync(u => u.UserId == userId);
     }
+
+    public async Task<List<User>> GetAllActiveUsersWithSettingsAsync()
+    {
+        return await _db.Users
+            .AsNoTracking()
+            .Include(u => u.UserNotificationSetting)
+            .Where(u => u.Status == true && !string.IsNullOrEmpty(u.Email))
+            .ToListAsync();
+    }
 }

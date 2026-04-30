@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq;
 using System.Threading.Tasks;
+using Application.Common.Models;
+using Application.UseCases.Store.Queries.GetAdminOrders;
 
 namespace Infrastructure.Persistence.Common.Repositories;
 
@@ -63,5 +66,59 @@ public class UserInventoryRepository : IUserInventoryRepository
             .Include(x => x.Item)
             .Where(x => x.UserId == userId && x.IsEquipped && x.Item.ItemType == itemType)
             .ToListAsync();
+    }
+
+    public async Task<PagedResult<AdminOrderDto>> GetAdminOrdersAsync(GetAdminOrdersQuery request)
+    {
+        var query = _context.UserInventories
+            .Include(x => x.User)
+            .Include(x => x.Item)
+            .Include(x => x.Transaction)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(request.SearchTerm))
+        {
+            var search = request.SearchTerm.ToLower();
+            query = query.Where(x => 
+                (x.User.DisplayName != null && x.User.DisplayName.ToLower().Contains(search)) ||
+                (x.User.FirstName != null && x.User.FirstName.ToLower().Contains(search)) ||
+                (x.User.LastName != null && x.User.LastName.ToLower().Contains(search)) ||
+                x.Item.Name.ToLower().Contains(search)
+            );
+        }
+
+        if (!string.IsNullOrEmpty(request.Status))
+        {
+            var status = request.Status.ToLower();
+            query = query.Where(x => x.Transaction != null && x.Transaction.Status.ToLower() == status);
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(x => x.AcquiredAt)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .Select(x => new AdminOrderDto
+            {
+                Id = x.InventoryId.ToString(), // Or TransactionId
+                ItemName = x.Item.Name,
+                ItemImage = x.Item.ImageUrl,
+                BuyerName = x.User.DisplayName ?? (x.User.FirstName + " " + x.User.LastName) ?? x.User.Username ?? x.User.Email!,
+                BuyerEmail = x.User.Email!,
+                Price = x.Transaction != null ? x.Transaction.Amount : x.Item.PriceCoin,
+                PurchaseDate = x.AcquiredAt,
+                Status = x.Transaction != null ? x.Transaction.Status : "Completed"
+            })
+            .ToListAsync();
+
+        return new PagedResult<AdminOrderDto>
+        {
+            Items = items,
+            Total = totalCount,
+            Page = request.Page,
+            PageSize = request.PageSize
+        };
     }
 }

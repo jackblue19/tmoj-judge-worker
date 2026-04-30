@@ -12,6 +12,7 @@ using Application.UseCases.Store.Commands.AddToCart;
 using Application.UseCases.Store.Commands.RemoveFromCart;
 using Application.UseCases.Store.Commands.Checkout;
 using Application.UseCases.Store.Queries.GetCartItems;
+using Application.UseCases.Store.Queries.GetAdminOrders;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -118,6 +119,25 @@ public class StoreController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// API Admin: Lấy danh sách các sản phẩm đã được mua
+    /// </summary>
+    [HttpGet("admin/orders")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> GetAdminOrders([FromQuery] GetAdminOrdersQuery query)
+    {
+        var result = await _mediator.Send(query);
+        return Ok(new
+        {
+            data = result.Items,
+            message = "Success",
+            success = true,
+            totalCount = result.Total,
+            page = result.Page,
+            pageSize = result.PageSize
+        });
     }
 
     /// <summary>

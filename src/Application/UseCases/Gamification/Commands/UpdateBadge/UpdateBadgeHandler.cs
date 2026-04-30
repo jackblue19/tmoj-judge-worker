@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -9,6 +9,7 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
         private readonly IGamificationRepository _repo;
         private readonly ICurrentUserService _currentUser;
         private readonly ILogger<UpdateBadgeHandler> _logger;
+        private readonly ICloudinaryService _cloudinary;
 
         private static readonly string[] AllowedCategories =
             { "contest", "course", "org", "streak", "problem" };
@@ -16,11 +17,13 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
         public UpdateBadgeHandler(
             IGamificationRepository repo,
             ICurrentUserService currentUser,
-            ILogger<UpdateBadgeHandler> logger)
+            ILogger<UpdateBadgeHandler> logger,
+            ICloudinaryService cloudinary)
         {
             _repo = repo;
             _currentUser = currentUser;
             _logger = logger;
+            _cloudinary = cloudinary;
         }
 
         public async Task<bool> Handle(UpdateBadgeCommand request, CancellationToken ct)
@@ -56,7 +59,20 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
             // ✏️ UPDATE
             badge.Name = request.Name;
             badge.Description = request.Description;
-            badge.IconUrl = request.IconUrl;
+            
+            if (request.IconFile != null && request.IconFile.Length > 0)
+            {
+                var uploadResult = await _cloudinary.UploadImageAsync(request.IconFile);
+                if (uploadResult != null && !string.IsNullOrEmpty(uploadResult.Url))
+                {
+                    badge.IconUrl = uploadResult.Url;
+                }
+            }
+            else if (!string.IsNullOrEmpty(request.IconUrl))
+            {
+                badge.IconUrl = request.IconUrl;
+            }
+
             badge.BadgeCategory = request.BadgeCategory;
             badge.BadgeLevel = request.BadgeLevel;
             badge.UpdatedAt = DateTime.UtcNow;

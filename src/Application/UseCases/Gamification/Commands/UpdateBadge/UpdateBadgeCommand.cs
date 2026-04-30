@@ -1,9 +1,10 @@
-﻿using MediatR;
+using MediatR;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace Application.UseCases.Gamification.Commands.UpdateBadge
 {
@@ -14,6 +15,7 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
         public string Name { get; set; } = default!;
         public string? Description { get; set; }
         public string? IconUrl { get; set; }
+        public IFormFile? IconFile { get; set; }
         public string BadgeCategory { get; set; } = default!;
         public int BadgeLevel { get; set; }
     }

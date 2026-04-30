@@ -1,4 +1,4 @@
-﻿namespace Application.UseCases.Gamification.Dtos;
+namespace Application.UseCases.Gamification.Dtos;
 
 public class BadgeProgressDto
 {
@@ -11,4 +11,5 @@ public class BadgeProgressDto
 
     public double ProgressPercent { get; set; }
     public bool IsCompleted { get; set; }
+    public bool IsNotified { get; set; }
 }

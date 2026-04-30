@@ -25,7 +25,7 @@ public class AnnouncementRepository : IAnnouncementRepository
     {
         try 
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
             
             _logger.LogInformation("FETCHING active announcements... now={now}", now);
 

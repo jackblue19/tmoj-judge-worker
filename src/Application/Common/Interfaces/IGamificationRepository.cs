@@ -26,6 +26,7 @@ public interface IGamificationRepository
     Task DeleteBadgeAsync(Badge badge);
 
     Task AddUserBadgeAsync(UserBadge badge);
+    Task UpdateUserBadgeAsync(UserBadge badge);
 
     Task CreateBadgeRuleAsync(BadgeRule rule);
     Task<List<BadgeRule>> GetAllBadgeRulesAsync();

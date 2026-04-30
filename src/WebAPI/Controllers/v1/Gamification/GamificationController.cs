@@ -63,6 +63,17 @@ public class GamificationController : ControllerBase
         return Ok(await _mediator.Send(new GetMyBadgeProgressQuery(), ct));
     }
 
+    [HttpPost("badges/{badgeId:guid}/mark-notified")]
+    [Authorize]
+    public async Task<IActionResult> MarkBadgeNotified(Guid badgeId, CancellationToken ct)
+    {
+        var success = await _mediator.Send(new Application.UseCases.Gamification.Commands.MarkBadgeNotified.MarkBadgeNotifiedCommand(badgeId), ct);
+        if (!success)
+            return NotFound(new { error = "Badge not found or not earned yet." });
+
+        return Ok(new { message = "Badge marked as notified." });
+    }
+
     [HttpGet("streak")]
     [Authorize]
     public async Task<IActionResult> GetMyStreak(CancellationToken ct)

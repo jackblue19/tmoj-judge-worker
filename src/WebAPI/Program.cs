@@ -21,6 +21,9 @@ using WebAPI.Extensions;
 using WebAPI.Middlewares;
 using WebAPI.OData;
 using WebAPI.Services.Judging;
+using Application.Common.AI;
+using Infrastructure.AI;
+using Application.Abstractions.AI;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -105,6 +108,14 @@ builder.Services.AddScoped<SubmissionRealtimeNotifier>();
 
 builder.Services.AddApplication();
 
+//  feat AI 
+builder.Services.Configure<AiOptions>(
+    builder.Configuration.GetSection("AI"));
+
+builder.Services.AddScoped<IAiDebugDataService , AiDebugDataService>();
+builder.Services.AddScoped<IAiEditorialDataService , AiEditorialDataService>();
+
+builder.Services.AddHttpClient<IAiModelClient , GeminiAiModelClient>();
 
 
 builder.Services.AddHttpLogging(o =>

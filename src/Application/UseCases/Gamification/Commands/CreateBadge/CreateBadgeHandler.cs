@@ -1,3 +1,4 @@
+using Application.Abstractions.Outbound.Services;
 using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
@@ -42,10 +43,13 @@ public class CreateBadgeHandler : IRequestHandler<CreateBadgeCommand, Guid>
         
         if (request.IconFile != null && request.IconFile.Length > 0)
         {
-            var uploadResult = await _cloudinary.UploadImageAsync(request.IconFile);
-            if (uploadResult != null && !string.IsNullOrEmpty(uploadResult.Url))
+            var ext = System.IO.Path.GetExtension(request.IconFile.FileName);
+            using var stream = request.IconFile.OpenReadStream();
+            var imageId = await _cloudinary.UploadImageAsync(stream, ext, "badges", cancellationToken);
+            var url = _cloudinary.GetImageUrl(imageId, "badges");
+            if (!string.IsNullOrEmpty(url))
             {
-                iconUrl = uploadResult.Url;
+                iconUrl = url;
             }
         }
 

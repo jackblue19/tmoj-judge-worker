@@ -16,25 +16,55 @@ public static class AiJsonSchemas
         } ,
         properties = new
         {
-            summary = new { type = "string" } ,
-            suspectedIssueCode = new { type = "string" } ,
-            confidence = new { type = "integer" } ,
-            confidenceLevelCode = new { type = "string" } ,
+            summary = new
+            {
+                type = "string" ,
+                description = "One short paragraph, maximum 350 characters."
+            } ,
+            suspectedIssueCode = new
+            {
+                type = "string" ,
+                description = "Short snake_case issue code."
+            } ,
+            confidence = new
+            {
+                type = "integer" ,
+                description = "Integer from 0 to 100."
+            } ,
+            confidenceLevelCode = new
+            {
+                type = "string" ,
+                description = "low, medium, or high."
+            } ,
             sections = new
             {
                 type = "array" ,
+                minItems = 4 ,
+                maxItems = 6 ,
                 items = new
                 {
                     type = "object" ,
                     required = new[] { "title" , "contentMd" } ,
                     properties = new
                     {
-                        title = new { type = "string" } ,
-                        contentMd = new { type = "string" }
+                        title = new
+                        {
+                            type = "string" ,
+                            description = "Short section title."
+                        } ,
+                        contentMd = new
+                        {
+                            type = "string" ,
+                            description = "Markdown bullet list. Maximum 700 characters. Do not include JSON."
+                        }
                     }
                 }
             } ,
-            safetyNote = new { type = "string" }
+            safetyNote = new
+            {
+                type = "string" ,
+                description = "Short safety disclaimer."
+            }
         }
     };
 
@@ -48,38 +78,52 @@ public static class AiJsonSchemas
             "contentMd",
             "confidence",
             "confidenceLevelCode",
-            "outline",
-            "warnings",
-            "assumptions"
+            "warnings"
         } ,
         properties = new
         {
-            title = new { type = "string" } ,
-            summaryMd = new { type = "string" } ,
-            contentMd = new { type = "string" } ,
-            confidence = new { type = "integer" } ,
-            confidenceLevelCode = new { type = "string" } ,
-            outline = new
+            title = new
             {
-                type = "object" ,
-                properties = new
-                {
-                    sections = new
-                    {
-                        type = "array" ,
-                        items = new { type = "string" }
-                    }
-                }
+                type = "string" ,
+                description = "Short editorial draft title."
+            } ,
+            summaryMd = new
+            {
+                type = "string" ,
+                description = "Short markdown summary, maximum 600 characters."
+            } ,
+            contentMd = new
+            {
+                type = "string" ,
+                description = "Markdown editorial content only. Do not include JSON inside this field."
+            } ,
+            confidence = new
+            {
+                type = "integer" ,
+                description = "Integer from 0 to 100."
+            } ,
+            confidenceLevelCode = new
+            {
+                type = "string" ,
+                description = "low, medium, or high."
             } ,
             warnings = new
             {
                 type = "array" ,
-                items = new { type = "string" }
+                maxItems = 3 ,
+                items = new
+                {
+                    type = "string"
+                }
             } ,
             assumptions = new
             {
                 type = "array" ,
-                items = new { type = "string" }
+                maxItems = 5 ,
+                items = new
+                {
+                    type = "string"
+                }
             }
         }
     };

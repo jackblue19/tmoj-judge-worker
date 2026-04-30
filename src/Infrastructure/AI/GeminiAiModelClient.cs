@@ -61,7 +61,7 @@ public sealed class GeminiAiModelClient : IAiModelClient
                 topP = settings.TopP ,
                 maxOutputTokens = settings.MaxOutputTokens ,
                 responseMimeType = settings.ResponseMimeType ,
-                responseJsonSchema = responseSchema
+                responseSchema = responseSchema
             }
         };
 

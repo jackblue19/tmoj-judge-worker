@@ -30,21 +30,17 @@ public static class AiPromptFactory
         - Do not say the judge is wrong.
 
         Output requirements:
-        - Return valid JSON only.
-        - Do not wrap JSON in markdown fences.
-        - Generate 5 to 7 sections.
-        - Each section contentMd should contain 2 to 5 bullet points.
-        - Keep each section under 900 characters.
-        - Prefer concise but useful debugging guidance.
-        - Do not stop in the middle of JSON.
-        - Make sure the JSON object is complete and valid.
-        - The response must include:
-          1. What likely happened
-          2. Evidence from visible result
-          3. Possible root causes
-          4. Code areas to inspect
-          5. Small testcase to try
-          6. Suggested debugging steps
+        - Return one valid JSON object only.
+        - Do not wrap output in markdown fences.
+        - Do not include JSON as a string inside any field.
+        - The JSON must be complete and parseable.
+        - summary must be short, maximum 350 characters.
+        - sections must contain 4 to 6 items.
+        - Each section contentMd must be markdown bullet list, maximum 700 characters.
+        - Do not generate full accepted solution code.
+        - Do not include long code blocks.
+        - Prefer direct debugging hints.
+        - Use lowercase issue codes like array_out_of_bounds, overflow, input_parsing, wrong_algorithm, runtime_error, unknown.
         """;
     }
 
@@ -94,6 +90,17 @@ public static class AiPromptFactory
 
         If problem mode is amateur/function-only, include:
         ## Function Contract
+
+        Output requirements:
+        - Return one valid JSON object only.
+        - Do not wrap output in markdown fences.
+        - Do not include JSON text inside contentMd.
+        - contentMd must be markdown only.
+        - contentMd must start with "# Editorial: {Problem Title}".
+        - Keep the draft concise enough to fit the token limit.
+        - Do not include full source code.
+        - Use pseudocode only if requested.
+        - The JSON object must be complete and parseable.
         """;
     }
 

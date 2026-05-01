@@ -9,6 +9,8 @@ public class ContestTeamsSpec : Specification<ContestTeam>
     {
         Query
             .Where(x => x.ContestId == contestId)
-            .Include(x => x.Team);
+            .Include(x => x.Team)
+                .ThenInclude(t => t.TeamMembers)
+                    .ThenInclude(m => m.User);
     }
 }

@@ -45,13 +45,7 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
             var finalType = request.Type?.ToLower() ?? "system";
             var finalScopeType = request.ScopeType;
 
-            // Nếu là report hoặc comment, ta đẩy sang cột ScopeType để né Check Constraint
-            if (finalType == "report" || finalType == "comment")
-            {
-                _logger.LogInformation("Mapping '{Type}' to ScopeType to match DB pattern", finalType);
-                if (string.IsNullOrEmpty(finalScopeType)) finalScopeType = finalType;
-                finalType = "system";
-            }
+            // Đã fix Check Constraint dưới DB nên không cần map lùi về system nữa
 
             var notification = new Notification
             {

@@ -47,7 +47,7 @@ public class ClassSlotController : ControllerBase
 
             var result = slots.Select(s => new ClassSlotDto(
                 s.Id, s.ClassSemesterId, s.SlotNo, s.Title, s.Description, s.Rules,
-                s.OpenAt, s.DueAt, s.CloseAt, s.Mode, s.ContestId, s.IsPublished,
+                s.OpenAt, s.DueAt, s.CloseAt, s.Mode, s.IsPublished,
                 s.CreatedAt, s.UpdatedAt,
                 (s.ClassSlotProblems ?? new List<ClassSlotProblem>()).OrderBy(sp => sp.Ordinal).Select(sp => new SlotProblemDto(
                     sp.ProblemId, sp.Problem.Title, sp.Problem.Slug,

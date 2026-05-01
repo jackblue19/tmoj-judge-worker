@@ -14,6 +14,7 @@ using Google.Apis.Auth;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Json;
@@ -28,11 +29,19 @@ public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly GoogleOptions _google;
+    private readonly GithubOptions _github;
+    private readonly ITimeLimitedDataProtector _protector;
 
-    public AuthController(IMediator mediator, IOptions<GoogleOptions> google)
+    public AuthController(
+        IMediator mediator,
+        IOptions<GoogleOptions> google,
+        IOptions<GithubOptions> github,
+        IDataProtectionProvider dp)
     {
         _mediator = mediator;
         _google = google.Value;
+        _github = github.Value;
+        _protector = dp.CreateProtector("github-oauth").ToTimeLimitedDataProtector();
     }
 
     [AllowAnonymous]
@@ -156,28 +165,73 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
-    [HttpPost("github-login")]
-    public async Task<IActionResult> GithubLogin([FromBody] GithubLoginRequest req, CancellationToken ct)
+    [HttpGet("github")]
+    public IActionResult GithubOAuth()
     {
+        var url = "https://github.com/login/oauth/authorize" +
+                  $"?client_id={_github.ClientId}" +
+                  $"&redirect_uri={Uri.EscapeDataString(_github.RedirectUri)}" +
+                  "&scope=user:email" +
+                  "&allow_signup=true";
+        return Redirect(url);
+    }
+
+    [AllowAnonymous]
+    [HttpGet("github/callback")]
+    public async Task<IActionResult> GithubCallback(
+        [FromQuery] string? code, [FromQuery] string? error, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(code))
+            return Redirect($"{_github.FrontendUrl}/login?error=github_denied");
+
         try
         {
             using var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("User-Agent", "TMOJ-Auth-App");
+            client.DefaultRequestHeaders.Add("User-Agent", "TMOJ-Auth");
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+
+            var tokenResp = await client.PostAsync(
+                "https://github.com/login/oauth/access_token",
+                new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"] = _github.ClientId,
+                    ["client_secret"] = _github.ClientSecret,
+                    ["code"] = code,
+                    ["redirect_uri"] = _github.RedirectUri
+                }), ct);
+
+            if (!tokenResp.IsSuccessStatusCode)
+                return Redirect($"{_github.FrontendUrl}/login?error=github_token");
+
+            var tokenContent = await tokenResp.Content.ReadAsStringAsync(ct);
+            using var tokenDoc = JsonDocument.Parse(tokenContent);
+
+            if (!tokenDoc.RootElement.TryGetProperty("access_token", out var atEl))
+                return Redirect($"{_github.FrontendUrl}/login?error=github_token");
+
+            var accessToken = atEl.GetString();
+            if (string.IsNullOrEmpty(accessToken))
+                return Redirect($"{_github.FrontendUrl}/login?error=github_token");
+
             client.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", req.AccessToken);
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
-            var response = await client.GetAsync("https://api.github.com/user", ct);
-            if (!response.IsSuccessStatusCode)
-                return BadRequest(new { Message = "Invalid GitHub Access Token" });
+            var userResp = await client.GetAsync("https://api.github.com/user", ct);
+            if (!userResp.IsSuccessStatusCode)
+                return Redirect($"{_github.FrontendUrl}/login?error=github_user");
 
-            var content = await response.Content.ReadAsStringAsync(ct);
-            using var doc = JsonDocument.Parse(content);
-            var root = doc.RootElement;
+            var userContent = await userResp.Content.ReadAsStringAsync(ct);
+            using var userDoc = JsonDocument.Parse(userContent);
+            var root = userDoc.RootElement;
 
             var githubId = root.GetProperty("id").GetInt64().ToString();
-            var name = root.GetProperty("name").GetString() ?? root.GetProperty("login").GetString();
-            var avatarUrl = root.GetProperty("avatar_url").GetString();
-            var email = root.GetProperty("email").GetString()?.ToLowerInvariant();
+            var login = root.GetProperty("login").GetString();
+            var name = root.TryGetProperty("name", out var nameEl) && nameEl.ValueKind != JsonValueKind.Null
+                ? nameEl.GetString() : null;
+            var avatarUrl = root.TryGetProperty("avatar_url", out var avatarEl) && avatarEl.ValueKind != JsonValueKind.Null
+                ? avatarEl.GetString() : null;
+            string? email = root.TryGetProperty("email", out var emailEl) && emailEl.ValueKind != JsonValueKind.Null
+                ? emailEl.GetString()?.ToLowerInvariant() : null;
 
             if (string.IsNullOrEmpty(email))
             {
@@ -186,33 +240,60 @@ public class AuthController : ControllerBase
                 {
                     var emailContent = await emailResp.Content.ReadAsStringAsync(ct);
                     using var emailDoc = JsonDocument.Parse(emailContent);
-                    email = emailDoc.RootElement.EnumerateArray()
-                        .FirstOrDefault(e => e.GetProperty("primary").GetBoolean())
-                        .GetProperty("email").GetString()?.ToLowerInvariant();
+                    var primary = emailDoc.RootElement.EnumerateArray()
+                        .FirstOrDefault(e => e.TryGetProperty("primary", out var p) && p.GetBoolean());
+                    if (primary.ValueKind != JsonValueKind.Undefined)
+                        email = primary.GetProperty("email").GetString()?.ToLowerInvariant();
                 }
             }
 
             if (string.IsNullOrEmpty(email))
-                return BadRequest(new { Message = "Could not retrieve email from GitHub account." });
+                return Redirect($"{_github.FrontendUrl}/login?error=github_no_email");
 
-            var command = new SocialLoginCommand(
+            var result = await _mediator.Send(new SocialLoginCommand(
                 Email: email,
                 FirstName: null,
                 LastName: null,
-                DisplayName: name,
+                DisplayName: name ?? login,
                 AvatarUrl: avatarUrl,
                 ProviderCode: "github",
                 ProviderSubject: githubId,
                 EmailVerified: true,
                 IpAddress: IpAddress(),
-                UserAgent: UserAgent());
+                UserAgent: UserAgent()), ct);
 
-            var result = await _mediator.Send(command, ct);
-            return Ok(ApiResponse<AuthResponseDto>.Ok(result, "Login with GitHub successful"));
+            var payload = JsonSerializer.Serialize(new GithubSessionPayload(result, UserAgent() ?? ""));
+            var token = _protector.Protect(payload, TimeSpan.FromSeconds(90));
+
+            return Redirect($"{_github.FrontendUrl}/auth/github/success?t={Uri.EscapeDataString(token)}");
         }
-        catch (Exception)
+        catch
         {
-            return StatusCode(500, new { Message = "Internal Server Error during GitHub Login." });
+            return Redirect($"{_github.FrontendUrl}/login?error=github_failed");
+        }
+    }
+
+    [AllowAnonymous]
+    [HttpGet("github/session")]
+    public IActionResult GithubSession([FromQuery] string t)
+    {
+        if (string.IsNullOrWhiteSpace(t))
+            return BadRequest(new { Message = "Missing token." });
+
+        try
+        {
+            var payload = _protector.Unprotect(t);
+            var session = JsonSerializer.Deserialize<GithubSessionPayload>(payload);
+            if (session is null) return BadRequest(new { Message = "Invalid token." });
+
+            if (session.UserAgent != (UserAgent() ?? ""))
+                return BadRequest(new { Message = "Token not valid for this client." });
+
+            return Ok(ApiResponse<AuthResponseDto>.Ok(session.Auth, "GitHub login successful"));
+        }
+        catch
+        {
+            return BadRequest(new { Message = "Token expired or invalid." });
         }
     }
 
@@ -300,3 +381,5 @@ public class AuthController : ControllerBase
     private string? IpAddress() => HttpContext.Connection.RemoteIpAddress?.ToString();
     private string? UserAgent() => Request.Headers["User-Agent"].ToString();
 }
+
+file record GithubSessionPayload(AuthResponseDto Auth, string UserAgent);

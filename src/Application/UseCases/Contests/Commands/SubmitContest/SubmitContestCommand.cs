@@ -10,7 +10,7 @@ public class SubmitContestCommand : IRequest<Guid>
     public Guid ContestProblemId { get; set; }
 
     public string Code { get; set; } = string.Empty;
-    public string Language { get; set; } = "cpp";
+    public string Language { get; set; } = string.Empty;
 
     public Guid? ClassSlotId { get; set; }
 }

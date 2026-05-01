@@ -92,7 +92,7 @@ public class GetContestLeaderboardHandler
             {
                 var member = team.TeamMembers.FirstOrDefault();
                 var user = member?.User;
-                return (user?.Id ?? team.Id, user?.DisplayName ?? team.TeamName, user?.AvatarUrl);
+                return (user?.UserId ?? team.Id, user?.DisplayName ?? team.TeamName, user?.AvatarUrl);
             }
             return (team.Id, team.TeamName, null);
         }

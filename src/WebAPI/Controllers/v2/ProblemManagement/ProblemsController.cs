@@ -1,4 +1,4 @@
-﻿using Application.Common.Pagination;
+using Application.Common.Pagination;
 using Application.UseCases.Problems.Commands.AttachProblemTags;
 using Application.UseCases.Problems.Commands.CreateProblem;
 using Application.UseCases.Problems.Commands.CreateRemixProblem;
@@ -350,6 +350,29 @@ public class ProblemsController : ControllerBase
     {
         var result = await _mediator.Send(
             new GetProblemBanksQuery(
+                Page: page ,
+                PageSize: pageSize ,
+                Search: search ,
+                Difficulty: difficulty) ,
+            ct);
+
+        return Ok(result);
+    }
+
+    // GET IN-PLAN PROBLEMS
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("in-plan")]
+    [ProducesResponseType(typeof(ApiPagedResponse<ProblemBankListItemDto>) , StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ApiPagedResponse<ProblemBankListItemDto>>> GetInPlanProblems(
+        [FromQuery] int page = 1 ,
+        [FromQuery] int pageSize = 20 ,
+        [FromQuery] string? search = null ,
+        [FromQuery] string? difficulty = null ,
+        CancellationToken ct = default)
+    {
+        var result = await _mediator.Send(
+            new Application.UseCases.Problems.Queries.GetInPlanProblems.GetInPlanProblemsQuery(
                 Page: page ,
                 PageSize: pageSize ,
                 Search: search ,

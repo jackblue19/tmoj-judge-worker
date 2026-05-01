@@ -40,11 +40,7 @@ public class BroadcastNotificationCommandHandler : IRequestHandler<BroadcastNoti
             var finalType = request.Type?.ToLower() ?? "system";
             var finalScopeType = request.ScopeType;
 
-            if (finalType == "report" || finalType == "comment")
-            {
-                if (string.IsNullOrEmpty(finalScopeType)) finalScopeType = finalType;
-                finalType = "system";
-            }
+            // Đã fix Check Constraint dưới DB nên không cần map lùi về system nữa
 
             // 1. Get targets
             var userIds = await _userRepo.GetUserIdsByRoleAsync(request.TargetRole);

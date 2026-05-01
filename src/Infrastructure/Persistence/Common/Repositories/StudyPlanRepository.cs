@@ -125,6 +125,7 @@ public class StudyPlanRepository : IStudyPlanRepository
     public async Task<List<StudyPlanItem>> GetItemsByPlanIdAsync(Guid studyPlanId)
     {
         return await _db.Set<StudyPlanItem>()
+            .Include(x => x.Problem)
             .Where(x => x.StudyPlanId == studyPlanId)
             .OrderBy(x => x.OrderIndex)
             .ToListAsync();

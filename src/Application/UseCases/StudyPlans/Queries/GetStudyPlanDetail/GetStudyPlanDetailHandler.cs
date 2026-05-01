@@ -68,6 +68,7 @@ public class GetStudyPlanDetailHandler
             {
                 StudyPlanItemId = item.Id,
                 ProblemId = item.ProblemId,
+                ProblemTitle = item.Problem.Title,
                 Order = item.OrderIndex,
 
                 // 🔥 FIX NULLABLE

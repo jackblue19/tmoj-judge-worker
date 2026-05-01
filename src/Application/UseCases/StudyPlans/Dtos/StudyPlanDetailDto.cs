@@ -18,6 +18,7 @@ public class StudyPlanItemDto
     public Guid StudyPlanItemId { get; set; } // ✅ ADD THIS
 
     public Guid ProblemId { get; set; }
+    public string ProblemTitle { get; set; } = "";
 
     public int Order { get; set; }
 

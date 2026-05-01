@@ -38,7 +38,7 @@ public class BroadcastNotificationCommandHandler : IRequestHandler<BroadcastNoti
             
             // --- CODE THEO DB (Dòng 58) ---
             var finalType = request.Type?.ToLower() ?? "system";
-            var finalScopeType = request.ScopeType;
+            var finalScopeType = request.ScopeType?.ToLower();
 
             // Đã fix Check Constraint dưới DB nên không cần map lùi về system nữa
 

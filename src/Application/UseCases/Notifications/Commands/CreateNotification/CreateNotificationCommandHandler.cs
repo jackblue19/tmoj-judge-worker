@@ -43,7 +43,7 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
         {
             // --- CODE THEO DB (Dựa trên dòng 58 bác chụp) ---
             var finalType = request.Type?.ToLower() ?? "system";
-            var finalScopeType = request.ScopeType;
+            var finalScopeType = request.ScopeType?.ToLower();
 
             // Đã fix Check Constraint dưới DB nên không cần map lùi về system nữa
 
@@ -58,7 +58,7 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
                 ScopeId = request.ScopeId,
                 CreatedBy = request.CreatedBy,
                 IsRead = false,
-                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                CreatedAt = DateTime.UtcNow
             };
 
             await _writeRepo.AddAsync(notification, cancellationToken);

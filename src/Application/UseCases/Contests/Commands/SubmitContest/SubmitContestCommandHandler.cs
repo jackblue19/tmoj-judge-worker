@@ -1,6 +1,5 @@
 using Application.Common.Interfaces;
 using Application.UseCases.Contests.Specs;
-using Ardalis.Specification;
 using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
@@ -136,7 +135,11 @@ public class SubmitContestCommandHandler
         // ======================
         // 5. GET RUNTIME BY LANGUAGE
         // ======================
-        var runtime = await _runtimeRepo.FirstOrDefaultAsync(
+        Runtime? runtime = null;
+        if (Guid.TryParse(request.Language, out var runtimeId))
+            runtime = await _runtimeRepo.GetByIdAsync(runtimeId, ct);
+
+        runtime ??= await _runtimeRepo.FirstOrDefaultAsync(
             new RuntimeByNameSpec(request.Language), ct);
 
         if (runtime == null)

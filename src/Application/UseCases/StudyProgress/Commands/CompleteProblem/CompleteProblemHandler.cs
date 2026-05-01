@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -51,7 +51,7 @@ public class CompleteProblemHandler : IRequestHandler<CompleteProblemCommand, Un
             _logger.LogInformation("🔄 Updating progress");
 
             progress.IsCompleted = true;
-            progress.CompletedAt = DateTime.UtcNow;
+            progress.CompletedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
         }
 
         await _repo.SaveChangesAsync();

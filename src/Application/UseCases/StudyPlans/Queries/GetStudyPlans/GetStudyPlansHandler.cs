@@ -2,16 +2,23 @@ using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
 using MediatR;
 
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+
 namespace Application.UseCases.StudyPlans.Queries.GetStudyPlans;
 
 public class GetStudyPlansHandler
     : IRequestHandler<GetStudyPlansQuery, List<StudyPlanDto>>
 {
     private readonly IStudyPlanRepository _repo;
+    private readonly IHttpContextAccessor _httpContext;
 
-    public GetStudyPlansHandler(IStudyPlanRepository repo)
+    public GetStudyPlansHandler(
+        IStudyPlanRepository repo,
+        IHttpContextAccessor httpContext)
     {
         _repo = repo;
+        _httpContext = httpContext;
     }
 
     public async Task<List<StudyPlanDto>> Handle(
@@ -31,9 +38,18 @@ public class GetStudyPlansHandler
 
         var result = new List<StudyPlanDto>();
 
+        var userIdStr = _httpContext.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        Guid? userId = string.IsNullOrEmpty(userIdStr) ? null : Guid.Parse(userIdStr);
+
         foreach (var p in ordered)
         {
             var problemCount = await _repo.GetItemCountAsync(p.Id);
+            
+            bool isUnlocked = !p.IsPaid;
+            if (p.IsPaid && userId.HasValue)
+            {
+                isUnlocked = await _repo.HasUserPurchasedPlanAsync(userId.Value, p.Id);
+            }
 
             result.Add(new StudyPlanDto
             {
@@ -44,7 +60,7 @@ public class GetStudyPlansHandler
                 IsPaid = p.IsPaid,    // ✅ thêm
                 ProblemCount = problemCount,
                 IsCompleted = false,
-                IsUnlocked = !p.IsPaid, // tạm basic rule: free = unlocked
+                IsUnlocked = isUnlocked,
                 ImageUrl = p.ImageUrl,
                 EnrollmentCount = p.EnrollmentCount
             });

@@ -86,6 +86,17 @@ public class GetContestLeaderboardHandler
             problemStats[p.Id] = (0, 0);
         }
 
+        static (Guid userId, string name, string? avatar) ResolveParticipant(Team team)
+        {
+            if (team.IsPersonal)
+            {
+                var member = team.TeamMembers.FirstOrDefault();
+                var user = member?.User;
+                return (user?.UserId ?? team.Id, user?.DisplayName ?? team.TeamName, user?.AvatarUrl);
+            }
+            return (team.Id, team.TeamName, null);
+        }
+
         // Build appropriate scoreboard based on mode
         if (isAcm)
         {
@@ -161,13 +172,14 @@ public class GetContestLeaderboardHandler
                     });
                 }
 
+                var (acmUserId, acmName, acmAvatar) = ResolveParticipant(team);
                 acmRows.Add(new ACMScoreboardRowDto
                 {
                     Rank = 0,
-                    UserId = team.Id,
-                    Username = team.TeamName,
-                    AvatarUrl = null,
-                    Fullname = team.TeamName,
+                    UserId = acmUserId,
+                    Username = acmName,
+                    AvatarUrl = acmAvatar,
+                    Fullname = acmName,
                     TotalSolved = totalSolved,
                     TotalPenalty = totalPenalty,
                     Problems = problemAttempts
@@ -259,13 +271,14 @@ public class GetContestLeaderboardHandler
                     });
                 }
 
+                var (ioiUserId, ioiName, ioiAvatar) = ResolveParticipant(team);
                 ioiRows.Add(new IOIScoreboardRowDto
                 {
                     Rank = 0,
-                    UserId = team.Id,
-                    Username = team.TeamName,
-                    AvatarUrl = null,
-                    Fullname = team.TeamName,
+                    UserId = ioiUserId,
+                    Username = ioiName,
+                    AvatarUrl = ioiAvatar,
+                    Fullname = ioiName,
                     TotalScore = totalScore,
                     Problems = problemAttempts
                 });

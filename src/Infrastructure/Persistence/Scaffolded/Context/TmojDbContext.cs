@@ -48,7 +48,7 @@ public partial class TmojDbContext : DbContext
 
     public virtual DbSet<CollectionItem> CollectionItems { get; set; }
 
-    public virtual DbSet<CommentVote> CommentVotes { get; set; }
+    public virtual DbSet<ContentVote> ContentVotes { get; set; }
 
     public virtual DbSet<ContentReport> ContentReports { get; set; }
 
@@ -775,35 +775,28 @@ public partial class TmojDbContext : DbContext
                 .HasConstraintName("fk_ci_problem");
         });
 
-        modelBuilder.Entity<CommentVote>(entity =>
+        modelBuilder.Entity<ContentVote>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("comment_votes_pkey");
+            entity.HasKey(e => e.Id).HasName("comment_votes_pkey"); // Or votes_pkey
 
-            entity.ToTable("comment_votes");
+            entity.ToTable("votes");
 
-            entity.HasIndex(e => e.CommentId , "idx_comment_votes_comment");
+            entity.HasIndex(e => new { e.TargetId, e.TargetType } , "idx_votes_target");
 
-            entity.HasIndex(e => e.UserId , "idx_comment_votes_user");
+            entity.HasIndex(e => e.UserId , "idx_votes_user");
 
-            entity.HasIndex(e => new { e.UserId , e.CommentId } , "uq_user_comment_vote").IsUnique();
+            entity.HasIndex(e => new { e.UserId , e.TargetId, e.TargetType } , "uq_user_target_vote").IsUnique();
 
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("gen_random_uuid()")
                 .HasColumnName("id");
-            entity.Property(e => e.CommentId).HasColumnName("comment_id");
+            entity.Property(e => e.TargetId).HasColumnName("target_id");
+            entity.Property(e => e.TargetType).HasColumnName("target_type").HasMaxLength(50);
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
             entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.Vote).HasColumnName("vote");
-
-            entity.HasOne(d => d.Comment).WithMany(p => p.CommentVotes)
-                .HasForeignKey(d => d.CommentId)
-                .HasConstraintName("fk_comment_votes_comment");
-
-            entity.HasOne(d => d.User).WithMany(p => p.CommentVotes)
-                .HasForeignKey(d => d.UserId)
-                .HasConstraintName("fk_comment_votes_user");
         });
 
         modelBuilder.Entity<ContentReport>(entity =>

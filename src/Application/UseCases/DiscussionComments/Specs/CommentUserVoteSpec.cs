@@ -1,14 +1,13 @@
-﻿using Ardalis.Specification;
+using Ardalis.Specification;
 using Domain.Entities;
 
 namespace Application.UseCases.DiscussionComments.Specs
 {
-    public class CommentUserVoteSpec : Specification<CommentVote>
+    public class CommentUserVoteSpec : Specification<ContentVote>
     {
         public CommentUserVoteSpec(Guid userId, List<Guid> commentIds)
         {
-            Query
-                .Where(v => v.UserId == userId && commentIds.Contains(v.CommentId));
+            Query.Where(x => x.UserId == userId && commentIds.Contains(x.TargetId) && x.TargetType == "comment");
         }
     }
 }

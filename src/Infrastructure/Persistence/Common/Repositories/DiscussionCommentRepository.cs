@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.DiscussionComments.Dtos;
 using Domain.Entities;
 using Infrastructure.Persistence.Scaffolded.Context;
@@ -59,8 +59,8 @@ namespace Infrastructure.Persistence.Common.Repositories
 
             if (comment == null) return null;
 
-            var votes = await _db.CommentVotes
-                .Where(v => v.CommentId == comment.CommentId)
+            var votes = await _db.ContentVotes
+                .Where(v => v.TargetId == comment.CommentId && v.TargetType == "comment")
                 .ToListAsync();
 
             comment.TotalVotes = votes.Count;
@@ -128,17 +128,17 @@ namespace Infrastructure.Persistence.Common.Repositories
             // ===============================
             // 2. GET ALL VOTES
             // ===============================
-            var votes = await _db.CommentVotes
-                .Where(v => commentIds.Contains(v.CommentId))
+            var votes = await _db.ContentVotes
+                .Where(v => commentIds.Contains(v.TargetId) && v.TargetType == "comment")
                 .ToListAsync();
 
             var voteLookup = votes
-                .GroupBy(v => v.CommentId)
+                .GroupBy(v => v.TargetId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var userVoteLookup = votes
                 .Where(v => v.UserId == userId)
-                .ToDictionary(v => v.CommentId, v => v.Vote);
+                .ToDictionary(v => v.TargetId, v => v.Vote);
 
             foreach (var c in flatList)
             {

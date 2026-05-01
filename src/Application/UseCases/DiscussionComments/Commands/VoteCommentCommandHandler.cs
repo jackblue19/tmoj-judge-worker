@@ -1,4 +1,4 @@
-﻿using Domain.Abstractions;
+using Domain.Abstractions;
 using Domain.Entities;
 using MediatR;
 using Application.Common.Interfaces;
@@ -10,15 +10,15 @@ public class VoteCommentCommandHandler
     : IRequestHandler<VoteCommentCommand, bool>
 {
     private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
-    private readonly IReadRepository<CommentVote, Guid> _voteReadRepo;
-    private readonly IWriteRepository<CommentVote, Guid> _voteWriteRepo;
+    private readonly IReadRepository<ContentVote, Guid> _voteReadRepo;
+    private readonly IWriteRepository<ContentVote, Guid> _voteWriteRepo;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
 
     public VoteCommentCommandHandler(
         IReadRepository<DiscussionComment, Guid> commentRepo,
-        IReadRepository<CommentVote, Guid> voteReadRepo,
-        IWriteRepository<CommentVote, Guid> voteWriteRepo,
+        IReadRepository<ContentVote, Guid> voteReadRepo,
+        IWriteRepository<ContentVote, Guid> voteWriteRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
@@ -67,13 +67,14 @@ public class VoteCommentCommandHandler
         // =========================
         if (existingVote == null)
         {
-            var vote = new CommentVote
+            var vote = new ContentVote
             {
                 Id = Guid.NewGuid(),
-                CommentId = request.CommentId,
+                TargetId = request.CommentId,
+                TargetType = "comment",
                 UserId = userId.Value,
                 Vote = (short)request.VoteType,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
             };
 
             await _voteWriteRepo.AddAsync(vote, ct);

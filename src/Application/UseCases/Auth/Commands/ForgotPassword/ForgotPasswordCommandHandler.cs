@@ -13,7 +13,10 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
     private readonly IEmailService _email;
     private readonly IConfiguration _config;
 
-    public ForgotPasswordCommandHandler(IAuthRepository repo , IEmailService email , IConfiguration config)
+    public ForgotPasswordCommandHandler(
+        IAuthRepository repo ,
+        IEmailService email ,
+        IConfiguration config)
     {
         _repo = repo;
         _email = email;
@@ -22,32 +25,52 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
 
     public async Task<string> Handle(ForgotPasswordCommand request , CancellationToken ct)
     {
-        var user = await _repo.FindByEmailAsync(request.Email.ToLowerInvariant() , ct);
-        if ( user == null ) return string.Empty;
+        var email = request.Email.Trim().ToLowerInvariant();
 
-        var v = new EmailVerification
+        var user = await _repo.FindByEmailAsync(email , ct);
+
+        // Không leak email tồn tại hay không.
+        if ( user == null )
+            return string.Empty;
+
+        var old = await _repo.GetVerificationsForUserAsync(user.UserId , ct);
+        _repo.RemoveVerifications(old);
+
+        var verification = new EmailVerification
         {
             UserId = user.UserId ,
-            Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) ,
+            Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)) ,
             ExpiresAt = DateTime.UtcNow.AddMinutes(30)
         };
-        _repo.AddVerification(v);
+
+        _repo.AddVerification(verification);
+
         await _repo.SaveAsync(ct);
 
-        //var resetLink = $"http://api.tmoj.id.vn/reset-password?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(v.Token)}";
-        var frontendBaseUrl = _config["EmailSettings:FrontendBaseUrl"]?.TrimEnd('/')
-                            ?? throw new InvalidOperationException("EmailSettings:FrontendBaseUrl is required.");
+        var frontendBaseUrl = _config["EmailSettings:FrontendBaseUrl"]?.TrimEnd('/');
+
+        if ( string.IsNullOrWhiteSpace(frontendBaseUrl) )
+            throw new InvalidOperationException("EmailSettings:FrontendBaseUrl is required.");
 
         var resetLink =
             $"{frontendBaseUrl}/reset-password" +
             $"?email={Uri.EscapeDataString(user.Email)}" +
-            $"&token={Uri.EscapeDataString(v.Token)}";
+            $"&token={Uri.EscapeDataString(verification.Token)}";
 
-        var template = _config.GetSection("EmailSettings")["ForgotPasswordEmailTemplate"]
-                       ?? "<a href='{LINK}'>Khôi phục mật khẩu</a>";
-        var body = template.Replace("{LINK}" , resetLink).Replace("{YEAR}" , DateTime.Now.Year.ToString());
-        await _email.SendEmailAsync(user.Email , "Khôi phục mật khẩu - TMOJ" , body , ct);
+        var template =
+            _config.GetSection("EmailSettings")["ForgotPasswordEmailTemplate"]
+            ?? "<a href='{LINK}'>Khôi phục mật khẩu</a>";
 
-        return v.Token;
+        var body = template
+            .Replace("{LINK}" , resetLink)
+            .Replace("{YEAR}" , DateTime.UtcNow.Year.ToString());
+
+        await _email.SendEmailAsync(
+            user.Email ,
+            "Khôi phục mật khẩu - TMOJ" ,
+            body ,
+            ct);
+
+        return verification.Token;
     }
 }

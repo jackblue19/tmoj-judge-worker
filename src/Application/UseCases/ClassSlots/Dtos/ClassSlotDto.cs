@@ -11,7 +11,6 @@ public record ClassSlotDto(
     DateTime? DueAt,
     DateTime? CloseAt,
     string Mode,
-    Guid? ContestId,
     bool IsPublished,
     DateTime CreatedAt,
     DateTime UpdatedAt,

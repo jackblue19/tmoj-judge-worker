@@ -80,7 +80,23 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
                         if (canSend)
                         {
                             _logger.LogInformation("Sending notification email to {Email}", user.Email);
-                            await _emailService.SendEmailAsync(user.Email, notification.Title, notification.Message ?? string.Empty);
+                            
+                            // Fire and forget to prevent 504 Gateway Timeout if SMTP is slow
+                            var email = user.Email;
+                            var title = notification.Title;
+                            var message = notification.Message ?? string.Empty;
+                            
+                            _ = Task.Run(async () => 
+                            {
+                                try
+                                {
+                                    await _emailService.SendEmailAsync(email, title, message);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(ex, "Background email sending failed for User {UserId}", notification.UserId);
+                                }
+                            });
                         }
                     }
                 }

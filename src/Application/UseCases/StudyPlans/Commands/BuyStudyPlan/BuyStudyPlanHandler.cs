@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -42,6 +42,13 @@ public class BuyStudyPlanHandler : IRequestHandler<BuyStudyPlanCommand, Unit>
         {
             _logger.LogInformation("FREE PLAN → GRANT ACCESS");
             await GrantAccess(userId, plan.Id);
+            return Unit.Value;
+        }
+
+        var exists = await _purchaseRepo.ExistsAsync(userId, plan.Id);
+        if (exists)
+        {
+            _logger.LogWarning("Already purchased | User={UserId} Plan={PlanId}", userId, plan.Id);
             return Unit.Value;
         }
 
@@ -89,13 +96,7 @@ public class BuyStudyPlanHandler : IRequestHandler<BuyStudyPlanCommand, Unit>
     {
         _logger.LogInformation("GRANT ACCESS START");
 
-        var exists = await _purchaseRepo.ExistsAsync(userId, studyPlanId);
 
-        if (exists)
-        {
-            _logger.LogWarning("Already purchased | User={UserId} Plan={PlanId}", userId, studyPlanId);
-            return;
-        }
 
         var entity = new UserStudyPlanPurchase
         {

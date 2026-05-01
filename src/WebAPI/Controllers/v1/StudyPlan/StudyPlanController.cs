@@ -58,6 +58,33 @@ public class StudyPlansController : ControllerBase
     }
 
     // =========================
+    // UPLOAD IMAGE
+    // =========================
+    [HttpPost("upload-image")]
+    [Authorize(Roles = "admin,manager")]
+    public async Task<IActionResult> UploadImage(IFormFile file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Message = "File is required." });
+
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext))
+            return BadRequest(new { Message = $"Invalid file type. Allowed: {string.Join(", ", allowedExtensions)}" });
+
+        try
+        {
+            var imageUrl = await _mediator.Send(
+                new Application.UseCases.StudyPlans.Commands.UploadStudyPlanImage.UploadStudyPlanImageCommand(file.OpenReadStream(), ext), ct);
+            return Ok(ApiResponse<object>.Ok(new { ImageUrl = imageUrl }, "Image uploaded successfully."));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // =========================
     // UPDATE PLAN
     // =========================
     [HttpPut("{id:guid}")]
@@ -391,12 +418,9 @@ public class StudyPlansController : ControllerBase
                 request.ProblemMode) ,
             ct);
 
-        return CreatedAtAction(
-            nameof(GetDetail) ,
-            new { problemId = result.Id } ,
-            ApiResponse<ProblemDetailDto>.Ok(
-                result ,
-                "In-plan problem created successfully." ,
-                HttpContext.TraceIdentifier));
+        return Ok(ApiResponse<ProblemDetailDto>.Ok(
+            result ,
+            "In-plan problem created successfully." ,
+            HttpContext.TraceIdentifier));
     }
 }

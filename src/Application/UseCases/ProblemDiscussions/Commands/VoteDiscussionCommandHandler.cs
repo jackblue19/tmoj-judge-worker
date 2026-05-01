@@ -10,17 +10,17 @@ public class VoteDiscussionCommandHandler
     : IRequestHandler<VoteDiscussionCommand, bool>
 {
     private readonly IProblemDiscussionRepository _discussionRepo;
-    private readonly IReadRepository<ContentReport, Guid> _voteReadRepo;
-    private readonly IWriteRepository<ContentReport, Guid> _voteWriteRepo;
+    private readonly IReadRepository<ContentVote, Guid> _voteReadRepo;
+    private readonly IWriteRepository<ContentVote, Guid> _voteWriteRepo;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
 
-    private const string VOTE_TYPE = "discussion_vote";
+
 
     public VoteDiscussionCommandHandler(
         IProblemDiscussionRepository discussionRepo,
-        IReadRepository<ContentReport, Guid> voteReadRepo,
-        IWriteRepository<ContentReport, Guid> voteWriteRepo,
+        IReadRepository<ContentVote, Guid> voteReadRepo,
+        IWriteRepository<ContentVote, Guid> voteWriteRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
@@ -57,7 +57,7 @@ public class VoteDiscussionCommandHandler
         int oldVoteValue = 0;
         if (existingVote != null)
         {
-            int.TryParse(existingVote.Reason, out oldVoteValue);
+            oldVoteValue = existingVote.Vote;
         }
 
         int newVoteValue = request.VoteType;
@@ -86,21 +86,20 @@ public class VoteDiscussionCommandHandler
         {
             if (existingVote == null)
             {
-                var vote = new ContentReport
+                var vote = new ContentVote
                 {
                     Id = Guid.NewGuid(),
-                    ReporterId = userId.Value,
+                    UserId = userId.Value,
                     TargetId = request.DiscussionId,
-                    TargetType = VOTE_TYPE,
-                    Reason = newVoteValue.ToString(),
-                    Status = "voted", 
+                    TargetType = "discussion",
+                    Vote = (short)newVoteValue,
                     CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
                 };
                 await _voteWriteRepo.AddAsync(vote, ct);
             }
             else
             {
-                existingVote.Reason = newVoteValue.ToString();
+                existingVote.Vote = (short)newVoteValue;
                 existingVote.CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
                 _voteWriteRepo.Update(existingVote);
             }

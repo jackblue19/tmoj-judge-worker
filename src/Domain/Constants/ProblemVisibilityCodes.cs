@@ -1,4 +1,4 @@
-﻿namespace Domain.Constants;
+namespace Domain.Constants;
 
 public static class ProblemVisibilityCodes
 {
@@ -6,4 +6,5 @@ public static class ProblemVisibilityCodes
     public const string Private = "private";
     public const string InClass = "in-class";
     public const string InBank = "in-bank";
+    public const string InPlan = "in-plan";
 }

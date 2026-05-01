@@ -18,7 +18,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Services;
 using Infrastructure.ExternalServices.Mailing;
-using Application.Common.Interfaces;
 
 namespace Infrastructure;
 

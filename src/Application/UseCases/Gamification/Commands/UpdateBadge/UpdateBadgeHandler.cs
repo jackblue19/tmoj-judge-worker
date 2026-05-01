@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Application.UseCases.Gamification.Commands.UpdateBadge
 {
-    public class UpdateBadgeHandler : IRequestHandler<UpdateBadgeCommand, bool>
+    public class UpdateBadgeHandler : IRequestHandler<UpdateBadgeCommand , bool>
     {
         private readonly IGamificationRepository _repo;
         private readonly ICurrentUserService _currentUser;
@@ -16,9 +16,9 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
             { "contest", "course", "org", "streak", "problem" };
 
         public UpdateBadgeHandler(
-            IGamificationRepository repo,
-            ICurrentUserService currentUser,
-            ILogger<UpdateBadgeHandler> logger,
+            IGamificationRepository repo ,
+            ICurrentUserService currentUser ,
+            ILogger<UpdateBadgeHandler> logger ,
             ICloudinaryService cloudinary)
         {
             _repo = repo;
@@ -27,31 +27,31 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
             _cloudinary = cloudinary;
         }
 
-        public async Task<bool> Handle(UpdateBadgeCommand request, CancellationToken ct)
+        public async Task<bool> Handle(UpdateBadgeCommand request , CancellationToken ct)
         {
-            _logger.LogInformation("Updating badge {BadgeId}", request.BadgeId);
+            _logger.LogInformation("Updating badge {BadgeId}" , request.BadgeId);
 
             // 🔐 ROLE CHECK
-            if (!_currentUser.IsInRole("admin"))
+            if ( !_currentUser.IsInRole("admin") )
                 throw new UnauthorizedAccessException("Only admin can update badge");
 
             // 🔥 VALIDATION
-            if (request.BadgeId == Guid.Empty)
+            if ( request.BadgeId == Guid.Empty )
                 throw new ArgumentException("BadgeId is required");
 
-            if (string.IsNullOrWhiteSpace(request.Name))
+            if ( string.IsNullOrWhiteSpace(request.Name) )
                 throw new ArgumentException("Name is required");
 
-            if (!AllowedCategories.Contains(request.BadgeCategory))
+            if ( !AllowedCategories.Contains(request.BadgeCategory) )
                 throw new ArgumentException("Invalid badge category");
 
-            if (request.BadgeLevel < 1 || request.BadgeLevel > 10)
+            if ( request.BadgeLevel < 1 || request.BadgeLevel > 10 )
                 throw new ArgumentException("BadgeLevel must be between 1 and 10");
 
             // 🧠 GET DATA
             var badge = await _repo.GetBadgeByIdAsync(request.BadgeId);
 
-            if (badge == null)
+            if ( badge == null )
             {
                 _logger.LogWarning("Badge not found");
                 return false;
@@ -60,33 +60,33 @@ namespace Application.UseCases.Gamification.Commands.UpdateBadge
             // ✏️ UPDATE
             badge.Name = request.Name;
             badge.Description = request.Description;
-            
-            if (request.IconFile != null && request.IconFile.Length > 0)
-            {
-                var ext = System.IO.Path.GetExtension(request.IconFile.FileName);
-                using var stream = request.IconFile.OpenReadStream();
-                var imageId = await _cloudinary.UploadImageAsync(stream, ext, "badges", ct);
-                var url = _cloudinary.GetImageUrl(imageId, "badges");
-                if (!string.IsNullOrEmpty(url))
-                {
-                    badge.IconUrl = url;
-                }
-            }
-            else if (!string.IsNullOrEmpty(request.IconUrl))
-            {
-                badge.IconUrl = request.IconUrl;
-            }
 
-            badge.BadgeCategory = request.BadgeCategory;
-            badge.BadgeLevel = request.BadgeLevel;
-            badge.UpdatedAt = DateTime.UtcNow;
+            if ( request.IconFile != null && request.IconFile.Length > 0 )
+{
+    var ext = System.IO.Path.GetExtension(request.IconFile.FileName);
+    using var stream = request.IconFile.OpenReadStream();
+    var imageId = await _cloudinary.UploadImageAsync(stream , ext , "badges" , ct);
+    var url = _cloudinary.GetImageUrl(imageId , "badges");
+    if ( !string.IsNullOrEmpty(url) )
+    {
+        badge.IconUrl = url;
+    }
+}
+else if ( !string.IsNullOrEmpty(request.IconUrl) )
+{
+    badge.IconUrl = request.IconUrl;
+}
 
-            await _repo.UpdateBadgeAsync(badge);
-            await _repo.SaveChangesAsync();
+badge.BadgeCategory = request.BadgeCategory;
+badge.BadgeLevel = request.BadgeLevel;
+badge.UpdatedAt = DateTime.UtcNow;
 
-            _logger.LogInformation("Badge updated successfully");
+await _repo.UpdateBadgeAsync(badge);
+await _repo.SaveChangesAsync();
 
-            return true;
+_logger.LogInformation("Badge updated successfully");
+
+return true;
         }
     }
 }

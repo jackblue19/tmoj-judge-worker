@@ -181,11 +181,14 @@ public class JoinContestByCodeCommandHandler
         }
         else
         {
+            var users = await _userRepo.GetUsersByIdsAsync(new List<Guid> { userId });
+            var displayName = users.FirstOrDefault()?.DisplayName ?? userId.ToString();
+
             var team = new Team
             {
                 Id = Guid.NewGuid(),
                 LeaderId = userId,
-                TeamName = $"User-{userId}",
+                TeamName = displayName,
                 IsPersonal = true,
                 TeamSize = 1,
                 CreatedAt = DateTime.UtcNow,

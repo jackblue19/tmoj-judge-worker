@@ -1640,7 +1640,7 @@ public record CreateContestBody(
     List<ContestProblemItem>? Problems,
     int? SlotNo, string? SlotTitle);
 public record ExtendContestBody(DateTime NewEndAt);
-public record ClassContestSubmitBody(Guid ContestProblemId, string Code, string Language = "cpp");
+public record ClassContestSubmitBody(Guid ContestProblemId, string Code, string Language);
 public record AddClassContestProblemBody(
     Guid ProblemId, string? Alias, int? Ordinal,
     int? Points, int? MaxScore, int? TimeLimitMs, int? MemoryLimitKb);

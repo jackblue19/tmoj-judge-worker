@@ -59,7 +59,11 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         {
             _logger.LogInformation(
                 "CP executor start. SubmissionId={SubmissionId}, RuntimeProfileKey={RuntimeProfileKey}, TestsetId={TestsetId}, TimeLimitMs={TimeLimitMs}, MemoryLimitKb={MemoryLimitKb}" ,
-                job.SubmissionId , job.RuntimeProfileKey , job.TestsetId , job.TimeLimitMs , job.MemoryLimitKb);
+                job.SubmissionId ,
+                job.RuntimeProfileKey ,
+                job.TestsetId ,
+                job.TimeLimitMs ,
+                job.MemoryLimitKb);
 
             await _ensureService.EnsureAsync(
                 job.ProblemSlug ,
@@ -97,7 +101,8 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                 var artifactPath = ResolveCompiledArtifactPath(workDir , plan);
                 if ( !string.IsNullOrWhiteSpace(artifactPath) && !File.Exists(artifactPath) )
                 {
-                    throw new InvalidOperationException($"Compiled artifact not found at {artifactPath}");
+                    throw new InvalidOperationException(
+                        $"Compiled artifact not found at {artifactPath}");
                 }
             }
 
@@ -133,7 +138,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
 
                 totalTimeMs += runResult.ElapsedMs;
 
-                if ( runResult.PeakMemoryKb.HasValue )
+                if ( runResult.PeakMemoryKb.HasValue && runResult.PeakMemoryKb.Value > 0 )
                 {
                     peakMemoryKb = !peakMemoryKb.HasValue
                         ? runResult.PeakMemoryKb.Value
@@ -181,6 +186,15 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                 if ( job.StopOnFirstFail && verdict != "ac" )
                     break;
             }
+
+            peakMemoryKb ??= caseResults
+                .Where(x => x.MemoryKb.HasValue && x.MemoryKb.Value > 0)
+                .Select(x => x.MemoryKb!.Value)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            if ( peakMemoryKb == 0 )
+                peakMemoryKb = null;
 
             var finalVerdict = caseResults.Any(x => x.Verdict != "ac")
                 ? caseResults.First(x => x.Verdict != "ac").Verdict
@@ -231,9 +245,11 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         }
         catch ( Exception ex )
         {
-            _logger.LogError(ex ,
+            _logger.LogError(
+                ex ,
                 "CP executor crashed. SubmissionId={SubmissionId}, JobId={JobId}" ,
-                job.SubmissionId , job.JobId);
+                job.SubmissionId ,
+                job.JobId);
 
             shouldCleanup = false;
 
@@ -259,7 +275,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
                     Passed = 0 ,
                     Total = job.Cases.Count ,
                     TimeMs = 0 ,
-                    MemoryKb = 0 ,
+                    MemoryKb = null ,
                     FinalScore = 0
                 } ,
                 Cases = new List<JudgeCaseCompletedContract>()
@@ -269,13 +285,20 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         {
             if ( shouldCleanup )
             {
-                try { Directory.Delete(workDir , recursive: true); } catch { }
+                try
+                {
+                    Directory.Delete(workDir , recursive: true);
+                }
+                catch
+                {
+                }
             }
             else
             {
                 _logger.LogWarning(
                     "Keeping workDir for debugging. SubmissionId={SubmissionId}, WorkDir={WorkDir}" ,
-                    job.SubmissionId , workDir);
+                    job.SubmissionId ,
+                    workDir);
             }
         }
     }
@@ -297,8 +320,13 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         RuntimeExecutionPlan plan ,
         PreparedJudgeCaseLayout prepared)
     {
-        var inputRelative = GetRelativeUnixPath(prepared.InputPath , GetWorkRoot(prepared.CaseDirectory));
-        var outputRelative = GetRelativeUnixPath(prepared.ActualPath , GetWorkRoot(prepared.CaseDirectory));
+        var inputRelative = GetRelativeUnixPath(
+            prepared.InputPath ,
+            GetWorkRoot(prepared.CaseDirectory));
+
+        var outputRelative = GetRelativeUnixPath(
+            prepared.ActualPath ,
+            GetWorkRoot(prepared.CaseDirectory));
 
         return $"-lc \"{plan.RunCommand} < '{inputRelative}' > '{outputRelative}'\"";
     }
@@ -306,6 +334,7 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
     private static string GetWorkRoot(string caseDirectory)
     {
         var dir = new DirectoryInfo(caseDirectory);
+
         while ( dir.Parent is not null && dir.Name != "cases" )
             dir = dir.Parent;
 
@@ -333,7 +362,9 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         if ( runResult.ExitCode != 0 )
             return "re";
 
-        return OutputComparer.Compare(expected , actual , compareMode) ? "ac" : "wa";
+        return OutputComparer.Compare(expected , actual , compareMode)
+            ? "ac"
+            : "wa";
     }
 
     private static string? BuildCheckerMessage(string verdict)
@@ -380,7 +411,11 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         DispatchJudgeJobContract job ,
         DockerRunResult compile)
     {
-        var compileVerdict = compile.OomKilled ? "mle" : compile.TimedOut ? "tle" : "ce";
+        var compileVerdict = compile.OomKilled
+            ? "mle"
+            : compile.TimedOut
+                ? "tle"
+                : "ce";
 
         return new JudgeJobCompletedContract
         {
@@ -411,7 +446,9 @@ public sealed class CompetitiveProgrammingExecutor : IRuntimeExecutor
         };
     }
 
-    private static string? ResolveCompiledArtifactPath(string workDir , RuntimeExecutionPlan plan)
+    private static string? ResolveCompiledArtifactPath(
+        string workDir ,
+        RuntimeExecutionPlan plan)
     {
         if ( string.IsNullOrWhiteSpace(plan.CompiledArtifactFileName) )
             return null;

@@ -65,7 +65,13 @@ public sealed class SubmissionJobProcessor
             var finalVerdict = BuildFinalVerdict(caseResults);
             var finalScore = CalculateScore(caseResults , job.Cases);
             var timeMs = caseResults.Count == 0 ? 0 : caseResults.Max(x => x.TimeMs ?? 0);
-            var memoryKb = caseResults.Count == 0 ? 0 : caseResults.Max(x => x.MemoryKb ?? 0);
+            //var memoryKb = caseResults.Count == 0 ? 0 : caseResults.Max(x => x.MemoryKb ?? 0);
+            var memoryKbValue = caseResults
+                            .Where(x => x.MemoryKb.HasValue && x.MemoryKb.Value > 0)
+                            .Select(x => x.MemoryKb!.Value)
+                            .DefaultIfEmpty(0)
+                            .Max();
+            int? memoryKb = memoryKbValue > 0 ? memoryKbValue : null;
 
             var completedOk = new JudgeJobCompletedContract
             {

@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 namespace Worker.Execution.Containers;
@@ -34,6 +36,7 @@ public sealed class DockerSandboxRunner
                 ElapsedMs = 0 ,
                 Stdout = create.Stdout ,
                 Stderr = create.Stderr ,
+                PeakMemoryKb = null ,
                 FailureReason = "docker create failed"
             };
         }
@@ -41,11 +44,20 @@ public sealed class DockerSandboxRunner
         var containerId = ExtractContainerId(create.Stdout) ?? containerName;
         var stopwatch = Stopwatch.StartNew();
 
+        using var memorySamplerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var peakMemoryTask = SamplePeakMemoryKbAsync(
+            containerId ,
+            TimeSpan.FromMilliseconds(50) ,
+            memorySamplerCts.Token);
+
         try
         {
             var start = await RunProcessAsync("docker" , $"start {containerId}" , ct);
             if ( start.ExitCode != 0 )
             {
+                stopwatch.Stop();
+                await StopMemorySamplerAsync(memorySamplerCts , peakMemoryTask);
+
                 return new DockerRunResult
                 {
                     ContainerId = containerId ,
@@ -55,6 +67,7 @@ public sealed class DockerSandboxRunner
                     ElapsedMs = 0 ,
                     Stdout = start.Stdout ,
                     Stderr = start.Stderr ,
+                    PeakMemoryKb = null ,
                     FailureReason = "docker start failed"
                 };
             }
@@ -69,6 +82,12 @@ public sealed class DockerSandboxRunner
             }
             catch ( OperationCanceledException ) when ( !ct.IsCancellationRequested )
             {
+                stopwatch.Stop();
+
+                var timeoutPeakMemoryKb = await StopMemorySamplerAsync(
+                    memorySamplerCts ,
+                    peakMemoryTask);
+
                 try
                 {
                     await RunProcessAsync("docker" , $"rm -f {containerId}" , CancellationToken.None);
@@ -77,8 +96,6 @@ public sealed class DockerSandboxRunner
                 {
                     // ignore cleanup failure
                 }
-
-                stopwatch.Stop();
 
                 return new DockerRunResult
                 {
@@ -89,6 +106,7 @@ public sealed class DockerSandboxRunner
                     ElapsedMs = (int) stopwatch.ElapsedMilliseconds ,
                     Stdout = "" ,
                     Stderr = "Docker execution timed out." ,
+                    PeakMemoryKb = timeoutPeakMemoryKb ,
                     FailureReason = "timeout"
                 };
             }
@@ -101,6 +119,10 @@ public sealed class DockerSandboxRunner
                 CancellationToken.None);
 
             var logs = await RunProcessAsync("docker" , $"logs {containerId}" , CancellationToken.None);
+
+            var peakMemoryKb = await StopMemorySamplerAsync(
+                memorySamplerCts ,
+                peakMemoryTask);
 
             var parsed = ParseInspect(inspect.Stdout);
 
@@ -124,12 +146,14 @@ public sealed class DockerSandboxRunner
                 Stderr = string.IsNullOrWhiteSpace(parsed.StateError)
                     ? logs.Stderr ?? ""
                     : $"{logs.Stderr}{Environment.NewLine}{parsed.StateError}".Trim() ,
-                PeakMemoryKb = null ,
+                PeakMemoryKb = peakMemoryKb ,
                 FailureReason = parsed.OomKilled ? "oom_killed" : null
             };
         }
         finally
         {
+            await StopMemorySamplerAsync(memorySamplerCts , peakMemoryTask);
+
             try
             {
                 await RunProcessAsync("docker" , $"rm -f {containerId}" , CancellationToken.None);
@@ -195,7 +219,11 @@ public sealed class DockerSandboxRunner
         if ( string.IsNullOrWhiteSpace(stdout) )
             return null;
 
-        return stdout.Trim().Split('\n' , StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim();
+        return stdout
+            .Trim()
+            .Split('\n' , StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault()
+            ?.Trim();
     }
 
     private static (int ExitCode, bool OomKilled, string? StateError) ParseInspect(string stdout)
@@ -222,6 +250,137 @@ public sealed class DockerSandboxRunner
         return (exitCode, oomKilled, stateError);
     }
 
+    private async Task<int?> SamplePeakMemoryKbAsync(
+        string containerId ,
+        TimeSpan interval ,
+        CancellationToken ct)
+    {
+        int? peakKb = null;
+
+        while ( !ct.IsCancellationRequested )
+        {
+            try
+            {
+                var stats = await RunProcessAsync(
+                    "docker" ,
+                    $"stats --no-stream --format \"{{{{.MemUsage}}}}\" {containerId}" ,
+                    ct);
+
+                if ( stats.ExitCode == 0 )
+                {
+                    var currentKb = ParseDockerMemUsageToKb(stats.Stdout);
+
+                    if ( currentKb.HasValue )
+                    {
+                        peakKb = !peakKb.HasValue
+                            ? currentKb.Value
+                            : Math.Max(peakKb.Value , currentKb.Value);
+                    }
+                }
+            }
+            catch ( OperationCanceledException ) when ( ct.IsCancellationRequested )
+            {
+                break;
+            }
+            catch ( Exception ex )
+            {
+                _logger.LogDebug(
+                    ex ,
+                    "Failed to sample docker memory. ContainerId={ContainerId}" ,
+                    containerId);
+            }
+
+            try
+            {
+                await Task.Delay(interval , ct);
+            }
+            catch ( OperationCanceledException ) when ( ct.IsCancellationRequested )
+            {
+                break;
+            }
+        }
+
+        return peakKb;
+    }
+
+    private static async Task<int?> StopMemorySamplerAsync(
+        CancellationTokenSource cts ,
+        Task<int?> samplerTask)
+    {
+        try
+        {
+            if ( !cts.IsCancellationRequested )
+                cts.Cancel();
+
+            return await samplerTask;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static int? ParseDockerMemUsageToKb(string stdout)
+    {
+        if ( string.IsNullOrWhiteSpace(stdout) )
+            return null;
+
+        // docker stats MemUsage examples:
+        // 1.234MiB / 512MiB
+        // 32KiB / 256MiB
+        // 0B / 256MiB
+        // 1.2GiB / 2GiB
+        var firstPart = stdout
+            .Trim()
+            .Split('/' , 2)[0]
+            .Trim();
+
+        return ParseDockerSizeToKb(firstPart);
+    }
+
+    private static int? ParseDockerSizeToKb(string value)
+    {
+        if ( string.IsNullOrWhiteSpace(value) )
+            return null;
+
+        var normalized = value.Trim();
+
+        var match = Regex.Match(
+            normalized ,
+            @"^(?<num>[0-9]+(?:\.[0-9]+)?)\s*(?<unit>[a-zA-Z]+)$");
+
+        if ( !match.Success )
+            return null;
+
+        if ( !double.TryParse(
+                match.Groups["num"].Value ,
+                NumberStyles.Float ,
+                CultureInfo.InvariantCulture ,
+                out var number) )
+        {
+            return null;
+        }
+
+        var unit = match.Groups["unit"].Value.Trim().ToLowerInvariant();
+
+        double bytes = unit switch
+        {
+            "b" => number,
+            "kb" => number * 1000,
+            "kib" => number * 1024,
+            "mb" => number * 1000 * 1000,
+            "mib" => number * 1024 * 1024,
+            "gb" => number * 1000 * 1000 * 1000,
+            "gib" => number * 1024 * 1024 * 1024,
+            _ => 0
+        };
+
+        if ( bytes <= 0 )
+            return null;
+
+        return (int) Math.Ceiling(bytes / 1024.0);
+    }
+
     private async Task<ProcessRunResult> RunProcessAsync(
         string fileName ,
         string arguments ,
@@ -239,7 +398,10 @@ public sealed class DockerSandboxRunner
 
         using var process = new Process { StartInfo = psi };
 
-        _logger.LogInformation("Running process: {FileName} {Arguments}" , fileName , arguments);
+        _logger.LogInformation(
+            "Running process: {FileName} {Arguments}" ,
+            fileName ,
+            arguments);
 
         process.Start();
 

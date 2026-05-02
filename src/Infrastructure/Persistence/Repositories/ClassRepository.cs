@@ -37,6 +37,7 @@ public class ClassRepository : IClassRepository
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Semester)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Subject)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Teacher)
+                .ThenInclude(t => t.UserInventories).ThenInclude(ui => ui.Item)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.ClassMembers)
             .Where(c => c.IsActive);
 
@@ -74,6 +75,7 @@ public class ClassRepository : IClassRepository
             .Include(x => x.ClassSemesters).ThenInclude(cs => cs.Semester)
             .Include(x => x.ClassSemesters).ThenInclude(cs => cs.Subject)
             .Include(x => x.ClassSemesters).ThenInclude(cs => cs.Teacher)
+                .ThenInclude(t => t.UserInventories).ThenInclude(ui => ui.Item)
             .Include(x => x.ClassSemesters).ThenInclude(cs => cs.ClassMembers)
             .FirstOrDefaultAsync(x => x.ClassId == classId, ct)
             ?? throw new KeyNotFoundException("Class not found.");
@@ -100,6 +102,7 @@ public class ClassRepository : IClassRepository
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Semester)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Subject)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Teacher)
+                .ThenInclude(t => t.UserInventories).ThenInclude(ui => ui.Item)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.ClassMembers)
             .Where(c => c.IsActive && c.ClassSemesters.Any(cs => memberCsIds.Contains(cs.Id)));
 
@@ -123,7 +126,10 @@ public class ClassRepository : IClassRepository
                 cs.Id, c.ClassCode, cs.Semester.SemesterId, cs.Semester.Code,
                 cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
                 cs.Semester.StartAt, cs.Semester.EndAt, null, null, cs.CreatedAt,
-                cs.Teacher != null ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl) : null,
+                cs.Teacher != null ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl,
+                    cs.Teacher.UserInventories
+                        .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                        .Select(ui => ui.Item.ImageUrl).FirstOrDefault()) : null,
                 cs.ClassMembers.Count(m => m.IsActive))).ToList();
 
             return new ClassDto(c.ClassId, c.ClassCode, c.IsActive, c.CreatedAt, c.UpdatedAt, instanceList, instanceList.Count);
@@ -138,6 +144,7 @@ public class ClassRepository : IClassRepository
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Semester)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Subject)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.Teacher)
+                .ThenInclude(t => t.UserInventories).ThenInclude(ui => ui.Item)
             .Include(c => c.ClassSemesters).ThenInclude(cs => cs.ClassMembers)
             .Where(c => c.IsActive && c.ClassSemesters.Any(cs => cs.TeacherId == userId));
 
@@ -165,11 +172,15 @@ public class ClassRepository : IClassRepository
     public Task<List<ClassMemberDto>> GetClassStudentsAsync(Guid classSemesterId, CancellationToken ct = default) =>
         _db.ClassMembers.AsNoTracking()
             .Include(m => m.User)
+                .ThenInclude(u => u.UserInventories).ThenInclude(ui => ui.Item)
             .Where(m => m.ClassSemesterId == classSemesterId)
             .OrderBy(m => m.User.DisplayName)
             .Select(m => new ClassMemberDto(
                 m.Id, m.ClassSemesterId, m.UserId,
                 m.User.DisplayName, m.User.Email, m.User.AvatarUrl,
+                m.User.UserInventories
+                    .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
                 m.JoinedAt, m.IsActive))
             .ToListAsync(ct);
 
@@ -861,7 +872,10 @@ public class ClassRepository : IClassRepository
             cs.Subject.SubjectId, cs.Subject.Code, cs.Subject.Name, cs.Subject.Description,
             cs.Semester.StartAt, cs.Semester.EndAt,
             cs.InviteCode, cs.InviteCodeExpiresAt, cs.CreatedAt,
-            cs.Teacher != null ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl) : null,
+            cs.Teacher != null ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl,
+                cs.Teacher.UserInventories
+                    .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault()) : null,
             cs.ClassMembers.Count(m => m.IsActive))).ToList();
 
         return new ClassDto(

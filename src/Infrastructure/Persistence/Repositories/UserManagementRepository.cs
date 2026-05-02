@@ -125,7 +125,10 @@ public class UserManagementRepository : IUserManagementRepository
                 (string?)null, (DateTime?)null, m.ClassSemester.CreatedAt,
                 m.ClassSemester.Teacher != null
                     ? new ClassTeacherDto(m.ClassSemester.Teacher.UserId, m.ClassSemester.Teacher.DisplayName,
-                        m.ClassSemester.Teacher.Email, m.ClassSemester.Teacher.AvatarUrl)
+                        m.ClassSemester.Teacher.Email, m.ClassSemester.Teacher.AvatarUrl,
+                        m.ClassSemester.Teacher.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl).FirstOrDefault())
                     : null,
                 m.ClassSemester.ClassMembers.Count(cm => cm.IsActive)))
             .ToListAsync(ct);
@@ -169,7 +172,10 @@ public class UserManagementRepository : IUserManagementRepository
                 cs.Semester.StartAt, cs.Semester.EndAt,
                 null, null, cs.CreatedAt,
                 cs.Teacher != null
-                    ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl)
+                    ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl,
+                        cs.Teacher.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl).FirstOrDefault())
                     : null,
                 cs.ClassMembers.Count(m => m.IsActive)))
             .ToList();

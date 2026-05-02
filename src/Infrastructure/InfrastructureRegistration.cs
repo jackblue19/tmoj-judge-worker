@@ -103,16 +103,23 @@ public static class InfrastructureRegistration
         // Email
         //services.Configure<Infrastructure.Configurations.Auth.EmailSettings>(config.GetSection("EmailSettings"));
         //services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService , Infrastructure.ExternalServices.Mailing.EmailService>();
-        services.Configure<EmailSettings>(config.GetSection("EmailSettings"));
-        services.Configure<AwsSettings>(config.GetSection("AWS"));
+        services.Configure<EmailSettings>(
+    config.GetSection("EmailSettings"));
 
-        var awsSettings = config.GetSection("AWS").Get<AwsSettings>()
-            ?? new AwsSettings();
+        services.Configure<AwsSettings>(
+            config.GetSection("AWS"));
 
-        var region = RegionEndpoint.GetBySystemName(awsSettings.Region);
+        var awsSettings = config
+            .GetSection("AWS")
+            .Get<AwsSettings>() ?? new AwsSettings();
 
-        if ( !string.IsNullOrWhiteSpace(awsSettings.AccessKeyId)
-            && !string.IsNullOrWhiteSpace(awsSettings.SecretAccessKey) )
+        var region = RegionEndpoint.GetBySystemName(
+            string.IsNullOrWhiteSpace(awsSettings.Region)
+                ? "ap-southeast-1"
+                : awsSettings.Region);
+
+        if ( !string.IsNullOrWhiteSpace(awsSettings.AccessKeyId) &&
+            !string.IsNullOrWhiteSpace(awsSettings.SecretAccessKey) )
         {
             var credentials = new BasicAWSCredentials(
                 awsSettings.AccessKeyId ,

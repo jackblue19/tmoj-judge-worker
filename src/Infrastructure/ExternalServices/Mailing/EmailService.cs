@@ -1,4 +1,4 @@
-using Amazon.SimpleEmailV2;
+﻿using Amazon.SimpleEmailV2;
 using Amazon.SimpleEmailV2.Model;
 using Application.Abstractions.Outbound.Services;
 using Infrastructure.Configurations.Auth;
@@ -33,25 +33,51 @@ public sealed class SesEmailService : IEmailService
     {
         if ( !_settings.Enabled )
         {
-            _logger.LogInformation("Email sending skipped because EmailSettings.Enabled is false. To={To}, Subject={Subject}" , to , subject);
+            _logger.LogInformation(
+                "Email sending skipped because EmailSettings.Enabled is false. To={To}, Subject={Subject}" ,
+                to ,
+                subject);
+
             return;
         }
 
-        if ( string.IsNullOrWhiteSpace(_settings.FromEmail) )
+        var fromEmail = NormalizeEmail(_settings.FromEmail);
+        var toEmail = NormalizeEmail(to);
+        var replyToEmail = NormalizeNullableEmail(_settings.ReplyToEmail);
+        var configurationSetName = NormalizeNullableText(_settings.ConfigurationSetName);
+
+        if ( string.IsNullOrWhiteSpace(fromEmail) )
             throw new InvalidOperationException("EmailSettings.FromEmail is required.");
 
-        if ( string.IsNullOrWhiteSpace(to) )
+        if ( string.IsNullOrWhiteSpace(toEmail) )
             throw new ArgumentException("Recipient email is required." , nameof(to));
 
-        var from = BuildFromAddress(_settings.DisplayName , _settings.FromEmail);
+        // IMPORTANT:
+        // Để tránh IAM/SES hiểu nhầm identity khi test, KHÔNG dùng:
+        // "TMOJ" <no-reply@tmoj.id.vn>
+        // Mà gửi thẳng email address.
+        var sourceEmailAddress = fromEmail;
+
+        _logger.LogInformation(
+            "SES sending email. Source={SourceEmailAddress}, ReplyTo={ReplyToEmail}, To={ToEmail}, ConfigurationSet={ConfigurationSetName}, Subject={Subject}" ,
+            sourceEmailAddress ,
+            replyToEmail ,
+            toEmail ,
+            configurationSetName ,
+            subject);
 
         var request = new SendEmailRequest
         {
-            FromEmailAddress = from ,
+            FromEmailAddress = sourceEmailAddress ,
+
             Destination = new Destination
             {
-                ToAddresses = new List<string> { to }
+                ToAddresses = new List<string>
+                {
+                    toEmail
+                }
             } ,
+
             Content = new EmailContent
             {
                 Simple = new Message
@@ -61,6 +87,7 @@ public sealed class SesEmailService : IEmailService
                         Charset = "UTF-8" ,
                         Data = subject
                     } ,
+
                     Body = new Body
                     {
                         Html = new Content
@@ -68,6 +95,7 @@ public sealed class SesEmailService : IEmailService
                             Charset = "UTF-8" ,
                             Data = body
                         } ,
+
                         Text = new Content
                         {
                             Charset = "UTF-8" ,
@@ -78,28 +106,66 @@ public sealed class SesEmailService : IEmailService
             }
         };
 
-        if ( !string.IsNullOrWhiteSpace(_settings.ReplyToEmail) )
-            request.ReplyToAddresses = new List<string> { _settings.ReplyToEmail };
+        if ( !string.IsNullOrWhiteSpace(replyToEmail) )
+        {
+            request.ReplyToAddresses = new List<string>
+            {
+                replyToEmail
+            };
+        }
 
-        if ( !string.IsNullOrWhiteSpace(_settings.ConfigurationSetName) )
-            request.ConfigurationSetName = _settings.ConfigurationSetName;
+        if ( !string.IsNullOrWhiteSpace(configurationSetName) )
+        {
+            request.ConfigurationSetName = configurationSetName;
+        }
 
-        var response = await _ses.SendEmailAsync(request , cancellationToken);
+        try
+        {
+            var response = await _ses.SendEmailAsync(request , cancellationToken);
 
-        _logger.LogInformation(
-            "SES email sent. MessageId={MessageId}, To={To}, Subject={Subject}" ,
-            response.MessageId ,
-            to ,
-            subject);
+            _logger.LogInformation(
+                "SES email sent successfully. MessageId={MessageId}, Source={SourceEmailAddress}, To={ToEmail}, Subject={Subject}" ,
+                response.MessageId ,
+                sourceEmailAddress ,
+                toEmail ,
+                subject);
+        }
+        catch ( AmazonSimpleEmailServiceV2Exception ex )
+        {
+            _logger.LogError(
+                ex ,
+                "SES email failed. ErrorCode={ErrorCode}, StatusCode={StatusCode}, Source={SourceEmailAddress}, ReplyTo={ReplyToEmail}, To={ToEmail}, ConfigurationSet={ConfigurationSetName}, Subject={Subject}" ,
+                ex.ErrorCode ,
+                ex.StatusCode ,
+                sourceEmailAddress ,
+                replyToEmail ,
+                toEmail ,
+                configurationSetName ,
+                subject);
+
+            throw;
+        }
     }
 
-    private static string BuildFromAddress(string displayName , string email)
+    private static string NormalizeEmail(string? email)
     {
-        if ( string.IsNullOrWhiteSpace(displayName) )
-            return email;
+        return email?.Trim() ?? string.Empty;
+    }
 
-        var safeName = displayName.Replace("\"" , string.Empty).Trim();
-        return $"\"{safeName}\" <{email}>";
+    private static string? NormalizeNullableEmail(string? email)
+    {
+        if ( string.IsNullOrWhiteSpace(email) )
+            return null;
+
+        return email.Trim();
+    }
+
+    private static string? NormalizeNullableText(string? value)
+    {
+        if ( string.IsNullOrWhiteSpace(value) )
+            return null;
+
+        return value.Trim();
     }
 
     private static string ToPlainText(string html)
@@ -107,9 +173,25 @@ public sealed class SesEmailService : IEmailService
         if ( string.IsNullOrWhiteSpace(html) )
             return string.Empty;
 
-        var text = Regex.Replace(html , "<br\\s*/?>" , "\n" , RegexOptions.IgnoreCase);
-        text = Regex.Replace(text , "</p>" , "\n" , RegexOptions.IgnoreCase);
-        text = Regex.Replace(text , "<.*?>" , string.Empty);
+        var text = html;
+
+        text = Regex.Replace(
+            text ,
+            "<br\\s*/?>" ,
+            "\n" ,
+            RegexOptions.IgnoreCase);
+
+        text = Regex.Replace(
+            text ,
+            "</p>" ,
+            "\n" ,
+            RegexOptions.IgnoreCase);
+
+        text = Regex.Replace(
+            text ,
+            "<.*?>" ,
+            string.Empty ,
+            RegexOptions.Singleline);
 
         return WebUtility.HtmlDecode(text).Trim();
     }

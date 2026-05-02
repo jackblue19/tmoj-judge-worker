@@ -114,7 +114,8 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, AuthRespo
             verificationToken = v.Token;
         }
 
-        var confirmLink = $"https://api.tmoj.id.vn/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(verificationToken)}";
+        var apiBaseUrl = _config.GetSection("EmailSettings")["ApiBaseUrl"] ?? "";
+        var confirmLink = $"{apiBaseUrl}/api/v1/Auth/confirm-email?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(verificationToken)}";
         await _email.SendEmailAsync(email, "Xác nhận địa chỉ email - TMOJ", MakeHtml(confirmLink), ct);
 
         return await _mediator.Send(new ConfirmEmailCommand(email, verificationToken, request.IpAddress, request.UserAgent), ct);

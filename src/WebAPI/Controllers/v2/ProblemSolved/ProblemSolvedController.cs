@@ -35,4 +35,25 @@ public sealed class ProblemSolvedController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpGet("me")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetMySolvedProblems(
+    [FromQuery] string? visibilityCode ,
+    [FromQuery] string? solvedSourceCode ,
+    [FromQuery] int page = 1 ,
+    [FromQuery] int pageSize = 20 ,
+    CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(
+            new GetMySolvedProblemsQuery(
+                visibilityCode ,
+                solvedSourceCode ,
+                page ,
+                pageSize) ,
+            cancellationToken);
+
+        return Ok(result);
+    }
 }

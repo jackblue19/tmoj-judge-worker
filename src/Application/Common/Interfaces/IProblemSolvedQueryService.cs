@@ -9,4 +9,12 @@ public interface IProblemSolvedQueryService
         string? visibilityCode ,
         string? solvedSourceCode ,
         CancellationToken cancellationToken = default);
+
+    Task<ProblemSolvedListDto> GetSolvedProblemsAsync(
+        Guid userId ,
+        string? visibilityCode ,
+        string? solvedSourceCode ,
+        int page ,
+        int pageSize ,
+        CancellationToken cancellationToken = default);
 }

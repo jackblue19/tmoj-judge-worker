@@ -74,9 +74,9 @@ public class SubmitContestCommandHandler
         if (now > contest.EndAt)
             throw new Exception("CONTEST_ENDED");
 
-        // Class contest: freeze chặn submit của student.
-        if (request.ClassSlotId is not null && contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value)
-            throw new Exception("CONTEST_FROZEN");
+        //// Class contest: freeze chặn submit của student.
+        //if ( request.ClassSlotId is not null && contest.FreezeAt.HasValue && now >= contest.FreezeAt.Value )
+        //    throw new Exception("CONTEST_FROZEN");
 
         // ======================
         // 2. CHECK CONTEST PROBLEM

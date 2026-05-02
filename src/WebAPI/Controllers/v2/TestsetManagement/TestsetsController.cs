@@ -36,7 +36,7 @@ public class TestsetsController : ControllerBase
             new UploadTestcasesZipCommand(
                 id ,
                 form.TestsetId ,
-                form.ReplaceExisting ,
+                form.ReplaceExisting , // true
                 form.File.FileName ,
                 stream) ,
             ct);

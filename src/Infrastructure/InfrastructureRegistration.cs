@@ -59,33 +59,33 @@ public static class InfrastructureRegistration
         services.AddScoped<IContestRepository , ContestRepository>();
         services.AddScoped<IProblemRepository , ProblemRepository>();
         services.AddScoped<ITagRepository , TagRepository>();
-        services.AddScoped<IContestStatusService, ContestStatusService>();
-        services.AddScoped<IWalletRepository, WalletRepository>();
-        services.AddScoped<ITeamRepository, TeamRepository>();
-        services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<IProblemEditorialRepository, ProblemEditorialRepository>();
-        services.AddScoped<IUserProblemQueries, UserProblemQueries>();
-        services.AddScoped<IWriteRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
-        services.AddScoped<IReadRepository<ContestProblem, Guid>, EfRepository<ContestProblem, Guid>>();
-        services.AddScoped<IUserStudyPlanPurchaseRepository, UserStudyPlanPurchaseRepository>();
-        services.AddScoped<IStudyPlanApplicationService, StudyPlanApplicationService>();
-        services.AddScoped<IStudyPlanRepository, StudyPlanRepository>();
-        services.AddScoped<IGamificationRepository, GamificationRepository>();
-        services.AddScoped<IFavoriteRepository, FavoriteRepository>();
-        services.AddScoped<IVnPayService, VnPayService>();
-        services.AddScoped<IPayOsService, PayOsService>();
-        services.AddScoped<IPaymentRepository, PaymentRepository>();
-        services.AddScoped<INotificationRepository, NotificationRepository>();
-        services.AddScoped<IUserManagementRepository, UserManagementRepository>();
-        services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
-        services.AddScoped<IFptItemRepository, FptItemRepository>();
-        services.AddScoped<IUserInventoryRepository, UserInventoryRepository>();
-        services.AddScoped<ICartItemRepository, CartItemRepository>();
-        services.AddScoped<IRankingRepository, RankingRepository>();
-        services.AddScoped<ISystemSettingsService, SystemSettingsService>();
-        services.AddScoped<ISemesterRepository, SemesterRepository>();
-        services.AddScoped<IClassSlotRepository, ClassSlotRepository>();
-        services.AddScoped<IClassRepository, ClassRepository>();
+        services.AddScoped<IContestStatusService , ContestStatusService>();
+        services.AddScoped<IWalletRepository , WalletRepository>();
+        services.AddScoped<ITeamRepository , TeamRepository>();
+        services.AddScoped<IUserRepository , UserRepository>();
+        services.AddScoped<IProblemEditorialRepository , ProblemEditorialRepository>();
+        services.AddScoped<IUserProblemQueries , UserProblemQueries>();
+        services.AddScoped<IWriteRepository<ContestProblem , Guid> , EfRepository<ContestProblem , Guid>>();
+        services.AddScoped<IReadRepository<ContestProblem , Guid> , EfRepository<ContestProblem , Guid>>();
+        services.AddScoped<IUserStudyPlanPurchaseRepository , UserStudyPlanPurchaseRepository>();
+        services.AddScoped<IStudyPlanApplicationService , StudyPlanApplicationService>();
+        services.AddScoped<IStudyPlanRepository , StudyPlanRepository>();
+        services.AddScoped<IGamificationRepository , GamificationRepository>();
+        services.AddScoped<IFavoriteRepository , FavoriteRepository>();
+        services.AddScoped<IVnPayService , VnPayService>();
+        services.AddScoped<IPayOsService , PayOsService>();
+        services.AddScoped<IPaymentRepository , PaymentRepository>();
+        services.AddScoped<INotificationRepository , NotificationRepository>();
+        services.AddScoped<IUserManagementRepository , UserManagementRepository>();
+        services.AddScoped<IAnnouncementRepository , AnnouncementRepository>();
+        services.AddScoped<IFptItemRepository , FptItemRepository>();
+        services.AddScoped<IUserInventoryRepository , UserInventoryRepository>();
+        services.AddScoped<ICartItemRepository , CartItemRepository>();
+        services.AddScoped<IRankingRepository , RankingRepository>();
+        services.AddScoped<ISystemSettingsService , SystemSettingsService>();
+        services.AddScoped<ISemesterRepository , SemesterRepository>();
+        services.AddScoped<IClassSlotRepository , ClassSlotRepository>();
+        services.AddScoped<IClassRepository , ClassRepository>();
         return services;
     }
 
@@ -102,16 +102,23 @@ public static class InfrastructureRegistration
         // Email
         //services.Configure<Infrastructure.Configurations.Auth.EmailSettings>(config.GetSection("EmailSettings"));
         //services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService , Infrastructure.ExternalServices.Mailing.EmailService>();
-        services.Configure<EmailSettings>(config.GetSection("EmailSettings"));
-        services.Configure<AwsSettings>(config.GetSection("AWS"));
+        services.Configure<EmailSettings>(
+    config.GetSection("EmailSettings"));
 
-        var awsSettings = config.GetSection("AWS").Get<AwsSettings>()
-            ?? new AwsSettings();
+        services.Configure<AwsSettings>(
+            config.GetSection("AWS"));
 
-        var region = RegionEndpoint.GetBySystemName(awsSettings.Region);
+        var awsSettings = config
+            .GetSection("AWS")
+            .Get<AwsSettings>() ?? new AwsSettings();
 
-        if ( !string.IsNullOrWhiteSpace(awsSettings.AccessKeyId)
-            && !string.IsNullOrWhiteSpace(awsSettings.SecretAccessKey) )
+        var region = RegionEndpoint.GetBySystemName(
+            string.IsNullOrWhiteSpace(awsSettings.Region)
+                ? "ap-southeast-1"
+                : awsSettings.Region);
+
+        if ( !string.IsNullOrWhiteSpace(awsSettings.AccessKeyId) &&
+            !string.IsNullOrWhiteSpace(awsSettings.SecretAccessKey) )
         {
             var credentials = new BasicAWSCredentials(
                 awsSettings.AccessKeyId ,

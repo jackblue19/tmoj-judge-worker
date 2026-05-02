@@ -105,6 +105,9 @@ public class VoteDiscussionCommandHandler
             }
         }
 
+        // Track Update
+        discussion.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
         await _uow.SaveChangesAsync(ct);
         return true;
     }

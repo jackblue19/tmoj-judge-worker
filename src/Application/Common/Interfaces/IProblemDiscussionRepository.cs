@@ -40,5 +40,7 @@ namespace Application.Common.Interfaces
 
         Task LockAsync(Guid discussionId);
         Task UnlockAsync(Guid discussionId);
+
+        Task<List<UserActivityDto>> GetUserActivitiesAsync(Guid userId, int limit);
     }
 }

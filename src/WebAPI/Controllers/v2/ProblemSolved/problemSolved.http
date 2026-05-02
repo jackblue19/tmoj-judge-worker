@@ -1,0 +1,32 @@
+# For more info on HTTP files go to https://aka.ms/vs/httpfile
+@baseUrl = https://localhost:7210
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMDkxOTM5My1iYTMyLTRhMjMtODU0ZS04YzZhMGE3ZWY0ZDgiLCJqdGkiOiI4MDdlN2MxZTZkNTY0NWVjYWQyMzgyYjAzNDQ1Zjk4YyIsImlhdCI6MTc3NzU1Nzk2OSwibmFtZSI6IkFkbWluIFBvd2VyZnVsIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjEwOTE5MzkzLWJhMzItNGEyMy04NTRlLThjNmEwYTdlZjRkOCIsIm5iZiI6MTc3NzU1Nzk2OSwiZXhwIjoxNzc4MTYyNzY5LCJpc3MiOiJmcHR1LXRtb2otYXBpIiwiYXVkIjoidG1vai11c2VycyJ9.8p48KkJeBhSpVXBOLWCI-L1TgDB42nbp0BfdA4ql0qg
+
+
+### Get all solved problems count
+GET {{baseUrl}}/api/v2/ProblemSolved/me/stats
+Authorization: Bearer {{authToken}}
+
+### Get solved public problems
+GET {{baseUrl}}/api/v2/ProblemSolved/me/stats?visibilityCode=public
+Authorization: Bearer {{authToken}}
+
+### Get solved in-class visibility problems
+GET {{baseUrl}}/api/v2/ProblemSolved/me/stats?visibilityCode=in-class
+Authorization: Bearer {{authToken}}
+
+### Get solved in-bank problems
+GET {{baseUrl}}/api/v2/ProblemSolved/me/stats?visibilityCode=in-bank
+Authorization: Bearer {{authToken}}
+
+### Get solved by contest source
+GET {{baseUrl}}/api/v2/ProblemSolved/me/stats?solvedSourceCode=contest
+Authorization: Bearer {{authToken}}
+
+### Get solved by class source
+GET {{baseUrl}}/api/v2/ProblemSolved/me/stats?solvedSourceCode=in-class
+Authorization: Bearer {{authToken}}
+
+### Get solved public problems through contest
+GET {{baseUrl}}/api/v2/ProblemSolved/me/stats?visibilityCode=public&solvedSourceCode=contest
+Authorization: Bearer {{authToken}}

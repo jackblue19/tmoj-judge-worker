@@ -104,6 +104,7 @@ builder.Services.AddSignalR();
 
 builder.Services.AddScoped<SubmissionNoteService>();
 builder.Services.AddScoped<SubmissionRealtimeNotifier>();
+builder.Services.AddHostedService<WebAPI.Services.DashboardRealtimeWorker>();
 
 //builder.WebHost.UseUrls("http://+:8080"); //  comment cái này là test local được deploy thì mở ra
 
@@ -251,6 +252,7 @@ app.UseMiddleware<RequestLogScopeMiddleware>();
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.MapHub<WebAPI.Hubs.SubmissionHub>("/hubs/submissions");
+app.MapHub<WebAPI.Hubs.DashboardHub>("/hubs/dashboard");
 
 
 //  minimal apis    +   judge-server (vnoj-tier)

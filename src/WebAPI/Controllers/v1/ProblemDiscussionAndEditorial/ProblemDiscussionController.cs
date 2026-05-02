@@ -177,5 +177,20 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
             string message = dto.IsHidden ? "Discussion hidden successfully" : "Discussion unhidden successfully";
             return Ok(ApiResponse<object?>.Ok(null, message));
         }
+        [HttpGet("/api/v{version:apiVersion}/discussions/me/history")]
+        [Authorize]
+        public async Task<IActionResult> GetMyHistory(
+            [FromServices] ICurrentUserService currentUserService,
+            [FromQuery] int limit = 20,
+            CancellationToken ct = default)
+        {
+            var userId = currentUserService.UserId;
+            if (userId == null || userId == Guid.Empty) return Unauthorized();
+
+            var result = await _mediator.Send(new GetUserActivitiesQuery(userId.Value, limit), ct);
+
+            return Ok(ApiResponse<List<UserActivityDto>>
+                .Ok(result, "Fetched your activity history successfully"));
+        }
     }
 }

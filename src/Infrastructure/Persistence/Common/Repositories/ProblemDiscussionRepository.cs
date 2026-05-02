@@ -296,5 +296,53 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<UserActivityDto>> GetUserActivitiesAsync(Guid userId, int limit)
+        {
+            var discussions = await _db.ProblemDiscussions
+                .AsNoTracking()
+                .Include(d => d.Problem)
+                .Where(d => d.UserId == userId)
+                .OrderByDescending(d => d.CreatedAt)
+                .Take(limit)
+                .Select(d => new UserActivityDto
+                {
+                    Id = d.Id,
+                    DiscussionId = d.Id,
+                    ProblemId = d.ProblemId,
+                    ProblemTitle = d.Problem != null ? d.Problem.Title : "Unknown Problem",
+                    Type = "discussion",
+                    Title = d.Title,
+                    Content = d.Content,
+                    CreatedAt = d.CreatedAt ?? DateTime.MinValue
+                })
+                .ToListAsync();
+
+            var comments = await _db.DiscussionComments
+                .AsNoTracking()
+                .Include(c => c.Discussion)
+                    .ThenInclude(d => d.Problem)
+                .Where(c => c.UserId == userId)
+                .OrderByDescending(c => c.CreatedAt)
+                .Take(limit)
+                .Select(c => new UserActivityDto
+                {
+                    Id = c.Id,
+                    DiscussionId = c.DiscussionId,
+                    ProblemId = c.Discussion != null ? c.Discussion.ProblemId : Guid.Empty,
+                    ProblemTitle = (c.Discussion != null && c.Discussion.Problem != null) ? c.Discussion.Problem.Title : "Unknown Problem",
+                    Type = "comment",
+                    Title = "Commented on: " + (c.Discussion != null ? c.Discussion.Title : "Deleted Discussion"),
+                    Content = c.Content,
+                    CreatedAt = c.CreatedAt ?? DateTime.MinValue
+                })
+                .ToListAsync();
+
+            var combined = discussions.Concat(comments)
+                .OrderByDescending(a => a.CreatedAt)
+                .Take(limit)
+                .ToList();
+
+            return combined;
+        }
     }
 }

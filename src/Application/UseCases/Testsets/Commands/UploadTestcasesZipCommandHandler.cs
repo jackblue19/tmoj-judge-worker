@@ -86,7 +86,7 @@ public sealed class UploadTestcasesZipCommandHandler
             var extractDir = Path.Combine(tempRoot , "extracted");
             Directory.CreateDirectory(extractDir);
 
-            ZipFile.ExtractToDirectory(zipPath , extractDir);
+            ZipFile.ExtractToDirectory(zipPath , extractDir);   //  #v1
 
             //var pairs = CollectTestcasePairsByFolder(extractDir);
             //if ( pairs.Count == 0 )
@@ -94,6 +94,9 @@ public sealed class UploadTestcasesZipCommandHandler
             //    throw new InvalidOperationException(
             //        "No valid testcase pairs found. Expected folder structure like 001/input.inp + output.out");
             //}
+
+            //  #v2
+            //ExtractZipSafely(zipPath , extractDir);
 
             var pairs = CollectTestcasePairsFlexible(extractDir);
             if ( pairs.Count == 0 )
@@ -507,6 +510,41 @@ public sealed class UploadTestcasesZipCommandHandler
         public TestcasesByTestsetForWriteSpec(Guid testsetId)
         {
             Query.Where(x => x.TestsetId == testsetId);
+        }
+    }
+
+    private static void ExtractZipSafely(string zipPath , string destinationDirectory)
+    {
+        var destinationFullPath = Path.GetFullPath(destinationDirectory);
+
+        using var archive = ZipFile.OpenRead(zipPath);
+
+        foreach ( var entry in archive.Entries )
+        {
+            if ( string.IsNullOrWhiteSpace(entry.FullName) )
+                continue;
+
+            var entryDestinationPath = Path.GetFullPath(
+                Path.Combine(destinationDirectory , entry.FullName));
+
+            if ( !entryDestinationPath.StartsWith(
+                    destinationFullPath ,
+                    StringComparison.OrdinalIgnoreCase) )
+            {
+                throw new InvalidOperationException(
+                    $"Invalid zip entry path detected: {entry.FullName}");
+            }
+
+            if ( string.IsNullOrWhiteSpace(entry.Name) )
+            {
+                Directory.CreateDirectory(entryDestinationPath);
+                continue;
+            }
+
+            Directory.CreateDirectory(
+                Path.GetDirectoryName(entryDestinationPath)!);
+
+            entry.ExtractToFile(entryDestinationPath , overwrite: true);
         }
     }
 }

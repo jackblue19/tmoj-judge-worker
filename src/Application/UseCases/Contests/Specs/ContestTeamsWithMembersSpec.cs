@@ -11,6 +11,8 @@ public class ContestTeamsWithMembersSpec : Specification<ContestTeam>
             .Where(x => x.ContestId == contestId)
             .Include(x => x.Team)
                 .ThenInclude(t => t.TeamMembers)
-                    .ThenInclude(tm => tm.User);
+                    .ThenInclude(tm => tm.User)
+                        .ThenInclude(u => u.UserInventories)
+                            .ThenInclude(ui => ui.Item);
     }
 }

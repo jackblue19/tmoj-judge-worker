@@ -58,6 +58,10 @@ public class GetContestParticipantsQueryHandler
                     ?? $"{tm.User.FirstName} {tm.User.LastName}".Trim(),
                 Email = tm.User.Email,
                 AvatarUrl = tm.User.AvatarUrl,
+                EquippedFrameUrl = tm.User.UserInventories
+                    .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl)
+                    .FirstOrDefault(),
                 Username = tm.User.Username,
                 RollNumber = tm.User.RollNumber
             }).ToList()

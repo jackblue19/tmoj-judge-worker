@@ -7,6 +7,7 @@ namespace Application.UseCases.ProblemDiscussions.Dtos
         public Guid UserId { get; set; }
         public string UserDisplayName { get; set; } = string.Empty;
         public string? UserAvatarUrl { get; set; }
+        public string? UserEquippedFrameUrl { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public bool IsPinned { get; set; }

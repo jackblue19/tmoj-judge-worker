@@ -10,6 +10,7 @@ public record UserProfileDto(
     string? DisplayName,
     string? Username,
     string? AvatarUrl,
+    string? EquippedFrameUrl,
     bool EmailVerified,
     bool Status,
     DateTime CreatedAt);
@@ -24,6 +25,7 @@ public record UserDto(
     string? RollNumber,
     string? MemberCode,
     string? AvatarUrl,
+    string? EquippedFrameUrl,
     bool EmailVerified,
     bool Status,
     string? Role);
@@ -32,7 +34,8 @@ public record SimpleUserDto(
     Guid UserId,
     string? DisplayName,
     string Email,
-    string? AvatarUrl);
+    string? AvatarUrl,
+    string? EquippedFrameUrl);
 
 public record StudentProfileWithClassesDto(
     UserDto Student,

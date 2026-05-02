@@ -16,6 +16,7 @@ public class GlobalLeaderboardRowDto
     public string Username { get; set; } = string.Empty;
     public string Fullname { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public string? EquippedFrameUrl { get; set; }
     public string? RollNumber { get; set; }
     public int Solved { get; set; }
     public int TotalAttempts { get; set; }

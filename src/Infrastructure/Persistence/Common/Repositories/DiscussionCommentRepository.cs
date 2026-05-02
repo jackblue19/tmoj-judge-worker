@@ -45,6 +45,12 @@ namespace Infrastructure.Persistence.Common.Repositories
                             : "Unknown User",
 
                     UserAvatarUrl = x.User != null ? x.User.AvatarUrl : null,
+                    UserEquippedFrameUrl = x.User != null
+                        ? x.User.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl)
+                            .FirstOrDefault()
+                        : null,
 
                     Content = x.Content,
                     CreatedAt = x.CreatedAt ?? DateTime.MinValue,
@@ -140,8 +146,26 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .Where(v => v.UserId == userId)
                 .ToDictionary(v => v.TargetId, v => v.Vote);
 
+            // ===============================
+            // 2.1 GET ALL EQUIPPED FRAMES (NO N+1)
+            // ===============================
+            var userIds = flatList.Select(x => x.UserId).Distinct().ToList();
+            var equippedFrames = await _db.UserInventories
+                .AsNoTracking()
+                .Where(ui => userIds.Contains(ui.UserId) && ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                .Select(ui => new { ui.UserId, ui.Item.ImageUrl })
+                .ToListAsync();
+
+            var frameLookup = equippedFrames
+                .GroupBy(x => x.UserId)
+                .ToDictionary(g => g.Key, g => g.First().ImageUrl);
+
             foreach (var c in flatList)
             {
+                if (frameLookup.TryGetValue(c.UserId, out var frameUrl))
+                {
+                    c.UserEquippedFrameUrl = frameUrl;
+                }
                 voteLookup.TryGetValue(c.CommentId, out var cVotes);
 
                 c.TotalVotes = cVotes?.Count ?? 0;

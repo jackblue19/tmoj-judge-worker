@@ -7,6 +7,7 @@ public record StudentInfoDto(
     string? DisplayName,
     string? Email,
     string? AvatarUrl,
+    string? EquippedFrameUrl,
     DateTime JoinedAt,
     bool IsActive,
     int SubmissionCount,

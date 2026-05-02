@@ -31,6 +31,7 @@ namespace Application.UseCases.DiscussionComments.Dtos
 
         public string UserDisplayName { get; set; } = string.Empty;
         public string? UserAvatarUrl { get; set; }
+        public string? UserEquippedFrameUrl { get; set; }
 
         public string Content { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }

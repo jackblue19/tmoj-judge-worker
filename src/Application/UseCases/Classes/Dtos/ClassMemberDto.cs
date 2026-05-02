@@ -7,5 +7,6 @@ public record ClassMemberDto(
     string? DisplayName,
     string? Email,
     string? AvatarUrl,
+    string? EquippedFrameUrl,
     DateTime JoinedAt,
     bool IsActive);

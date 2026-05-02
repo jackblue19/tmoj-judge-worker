@@ -305,6 +305,8 @@ namespace Infrastructure.Persistence.Common.Repositories
             var discussion = await _db.ProblemDiscussions.FindAsync(discussionId);
             if (discussion != null)
                 _db.ProblemDiscussions.Remove(discussion);
+
+            await _db.SaveChangesAsync();
         }
 
         // ===============================

@@ -1,5 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
+using Application.Common;
+using Microsoft.AspNetCore.Mvc;
 
 namespace WebAPI.Middlewares;
 
@@ -37,6 +38,14 @@ public sealed class GlobalExceptionMiddleware
             await WriteProblemDetails(context , StatusCodes.Status401Unauthorized , "Unauthorized" , ex.Message);
         }
         catch ( InvalidOperationException ex )
+        {
+            await WriteProblemDetails(context , StatusCodes.Status409Conflict , "Conflict" , ex.Message);
+        }
+        catch ( NotFoundException ex )
+        {
+            await WriteProblemDetails(context , StatusCodes.Status404NotFound , "Not found" , ex.Message);
+        }
+        catch ( ConflictException ex )
         {
             await WriteProblemDetails(context , StatusCodes.Status409Conflict , "Conflict" , ex.Message);
         }

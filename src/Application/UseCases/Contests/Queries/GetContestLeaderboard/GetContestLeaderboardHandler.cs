@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Contests.Specs;
 using Domain.Abstractions;
@@ -86,15 +86,20 @@ public class GetContestLeaderboardHandler
             problemStats[p.Id] = (0, 0);
         }
 
-        static (Guid userId, string name, string? avatar) ResolveParticipant(Team team)
+        static (Guid userId, string name, string? avatar, string? frame) ResolveParticipant(Team team)
         {
             if (team.IsPersonal)
             {
                 var member = team.TeamMembers.FirstOrDefault();
                 var user = member?.User;
-                return (user?.UserId ?? team.Id, user?.DisplayName ?? team.TeamName, user?.AvatarUrl);
+                var frame = user?.UserInventories
+                    .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl)
+                    .FirstOrDefault();
+
+                return (user?.UserId ?? team.Id, user?.DisplayName ?? team.TeamName, user?.AvatarUrl, frame);
             }
-            return (team.Id, team.TeamName, null);
+            return (team.Id, team.TeamName, null, null);
         }
 
         // Build appropriate scoreboard based on mode
@@ -172,13 +177,14 @@ public class GetContestLeaderboardHandler
                     });
                 }
 
-                var (acmUserId, acmName, acmAvatar) = ResolveParticipant(team);
+                var (acmUserId, acmName, acmAvatar, acmFrame) = ResolveParticipant(team);
                 acmRows.Add(new ACMScoreboardRowDto
                 {
                     Rank = 0,
                     UserId = acmUserId,
                     Username = acmName,
                     AvatarUrl = acmAvatar,
+                    EquippedFrameUrl = acmFrame,
                     Fullname = acmName,
                     TotalSolved = totalSolved,
                     TotalPenalty = totalPenalty,
@@ -271,13 +277,14 @@ public class GetContestLeaderboardHandler
                     });
                 }
 
-                var (ioiUserId, ioiName, ioiAvatar) = ResolveParticipant(team);
+                var (ioiUserId, ioiName, ioiAvatar, ioiFrame) = ResolveParticipant(team);
                 ioiRows.Add(new IOIScoreboardRowDto
                 {
                     Rank = 0,
                     UserId = ioiUserId,
                     Username = ioiName,
                     AvatarUrl = ioiAvatar,
+                    EquippedFrameUrl = ioiFrame,
                     Fullname = ioiName,
                     TotalScore = totalScore,
                     Problems = problemAttempts

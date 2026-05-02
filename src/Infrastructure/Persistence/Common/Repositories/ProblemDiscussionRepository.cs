@@ -47,11 +47,15 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .ThenByDescending(x => x.CreatedAt ?? DateTime.MinValue)
                 .ThenByDescending(x => x.Id);
 
-            if (cursorCreatedAt.HasValue && cursorId.HasValue)
+            var cursorCreatedAtUtc = cursorCreatedAt.HasValue 
+                ? DateTime.SpecifyKind(cursorCreatedAt.Value, DateTimeKind.Utc) 
+                : (DateTime?)null;
+
+            if (cursorCreatedAtUtc.HasValue && cursorId.HasValue)
             {
                 query = query.Where(x =>
-                    (x.CreatedAt ?? DateTime.MinValue) < cursorCreatedAt.Value ||
-                    ((x.CreatedAt ?? DateTime.MinValue) == cursorCreatedAt.Value &&
+                    (x.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)) < cursorCreatedAtUtc.Value ||
+                    ((x.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)) == cursorCreatedAtUtc.Value &&
                      x.Id.CompareTo(cursorId.Value) < 0));
             }
 
@@ -66,12 +70,18 @@ namespace Infrastructure.Persistence.Common.Repositories
                         ? (x.User.DisplayName ?? x.User.Username ?? "Anonymous")
                         : "Anonymous",
                     UserAvatarUrl = x.User != null ? x.User.AvatarUrl : null,
+                    UserEquippedFrameUrl = x.User != null 
+                        ? x.User.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl)
+                            .FirstOrDefault()
+                        : null,
                     Title = x.Title,
                     Content = x.Content,
                     IsPinned = x.IsPinned ?? false,
                     IsLocked = x.IsLocked ?? false,
                     IsHidden = x.IsHidden ?? false,
-                    CreatedAt = x.CreatedAt ?? DateTime.MinValue
+                    CreatedAt = x.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)
                 })
                 .ToListAsync();
 
@@ -104,11 +114,15 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .OrderByDescending(x => x.CreatedAt ?? DateTime.MinValue)
                 .ThenByDescending(x => x.Id);
 
-            if (cursorCreatedAt.HasValue && cursorId.HasValue)
+            var cursorCreatedAtUtc = cursorCreatedAt.HasValue 
+                ? DateTime.SpecifyKind(cursorCreatedAt.Value, DateTimeKind.Utc) 
+                : (DateTime?)null;
+
+            if (cursorCreatedAtUtc.HasValue && cursorId.HasValue)
             {
                 query = query.Where(x =>
-                    (x.CreatedAt ?? DateTime.MinValue) < cursorCreatedAt.Value ||
-                    ((x.CreatedAt ?? DateTime.MinValue) == cursorCreatedAt.Value &&
+                    (x.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)) < cursorCreatedAtUtc.Value ||
+                    ((x.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)) == cursorCreatedAtUtc.Value &&
                      x.Id.CompareTo(cursorId.Value) < 0));
             }
 
@@ -123,12 +137,18 @@ namespace Infrastructure.Persistence.Common.Repositories
                         ? (x.User.DisplayName ?? x.User.Username ?? "Anonymous")
                         : "Anonymous",
                     UserAvatarUrl = x.User != null ? x.User.AvatarUrl : null,
+                    UserEquippedFrameUrl = x.User != null 
+                        ? x.User.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl)
+                            .FirstOrDefault()
+                        : null,
                     Title = x.Title,
                     Content = x.Content,
                     IsPinned = x.IsPinned ?? false,
                     IsLocked = x.IsLocked ?? false,
                     IsHidden = x.IsHidden ?? false,
-                    CreatedAt = x.CreatedAt ?? DateTime.MinValue
+                    CreatedAt = x.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)
                 })
                 .ToListAsync();
 
@@ -164,12 +184,18 @@ namespace Infrastructure.Persistence.Common.Repositories
                         ? (x.User.DisplayName ?? x.User.Username ?? "Anonymous")
                         : "Anonymous",
                     UserAvatarUrl = x.User != null ? x.User.AvatarUrl : null,
+                    UserEquippedFrameUrl = x.User != null 
+                        ? x.User.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl)
+                            .FirstOrDefault()
+                        : null,
                     Title = x.Title,
                     Content = x.Content,
                     IsPinned = x.IsPinned ?? false,
                     IsLocked = x.IsLocked ?? false,
                     IsHidden = x.IsHidden ?? false,
-                    CreatedAt = x.CreatedAt ?? DateTime.MinValue
+                    CreatedAt = x.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)
                 })
                 .FirstOrDefaultAsync();
         }
@@ -213,6 +239,17 @@ namespace Infrastructure.Persistence.Common.Repositories
                 .Where(c => c.DiscussionId == discussionId)
                 .ToListAsync();
 
+            var userIdsInComments = comments.Select(c => c.UserId).Distinct().ToList();
+            var equippedFramesList = await _db.UserInventories
+                .AsNoTracking()
+                .Where(ui => userIdsInComments.Contains(ui.UserId) && ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                .Select(ui => new { ui.UserId, ui.Item.ImageUrl })
+                .ToListAsync();
+
+            var equippedFrames = equippedFramesList
+                .GroupBy(x => x.UserId)
+                .ToDictionary(g => g.Key, g => g.First().ImageUrl);
+
             var lookup = comments.ToLookup(c => c.ParentId);
 
             List<DiscussionCommentResponseDto> Build(Guid? parentId)
@@ -228,8 +265,9 @@ namespace Infrastructure.Persistence.Common.Repositories
                                 ? (c.User.DisplayName ?? c.User.Username ?? "Anonymous")
                                 : "Anonymous",
                             UserAvatarUrl = c.User != null ? c.User.AvatarUrl : null,
+                            UserEquippedFrameUrl = equippedFrames.TryGetValue(c.UserId, out var frame) ? frame : null,
                             Content = c.Content,
-                            CreatedAt = c.CreatedAt ?? DateTime.MinValue,
+                            CreatedAt = c.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc),
                             IsHidden = c.IsHidden ?? false
                         };
 
@@ -313,7 +351,7 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Type = "discussion",
                     Title = d.Title,
                     Content = d.Content,
-                    CreatedAt = d.CreatedAt ?? DateTime.MinValue
+                    CreatedAt = d.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)
                 })
                 .ToListAsync();
 
@@ -333,7 +371,7 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Type = "comment",
                     Title = "Commented on: " + (c.Discussion != null ? c.Discussion.Title : "Deleted Discussion"),
                     Content = c.Content,
-                    CreatedAt = c.CreatedAt ?? DateTime.MinValue
+                    CreatedAt = c.CreatedAt ?? DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc)
                 })
                 .ToListAsync();
 

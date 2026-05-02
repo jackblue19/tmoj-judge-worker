@@ -12,6 +12,7 @@ namespace Application.UseCases.ProblemDiscussions.Dtos
         public Guid UserId { get; set; }
         public string UserDisplayName { get; set; } = string.Empty;
         public string? UserAvatarUrl { get; set; }
+        public string? UserEquippedFrameUrl { get; set; }
         public string Content { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public bool IsHidden { get; set; }

@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.Common.Services;
 using Application.UseCases.Problems;
 using Application.UseCases.Problems.Queries.GetProblemsByUser;
@@ -86,6 +86,7 @@ public static class InfrastructureRegistration
         services.AddScoped<ISemesterRepository, SemesterRepository>();
         services.AddScoped<IClassSlotRepository, ClassSlotRepository>();
         services.AddScoped<IClassRepository, ClassRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
         return services;
     }
 

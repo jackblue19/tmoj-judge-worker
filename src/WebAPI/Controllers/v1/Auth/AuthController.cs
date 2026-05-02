@@ -65,7 +65,7 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Register failed");
-            return StatusCode(500, new { Message = "An error occurred during registration." });
+            return StatusCode(500, new { Message = "An error occurred during registration.", Debug = ex.ToString() });
         }
     }
 
@@ -333,7 +333,7 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "ForgotPassword failed for email={Email}", req.Email);
-            return StatusCode(500, new { Message = "Error processing forgot password request." });
+            return StatusCode(500, new { Message = "Error processing forgot password request.", Debug = ex.ToString() });
         }
     }
 

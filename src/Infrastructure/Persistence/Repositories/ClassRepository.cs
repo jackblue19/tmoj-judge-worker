@@ -631,6 +631,67 @@ public class ClassRepository : IClassRepository
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task FreezeContestAsync(Guid classSemesterId, Guid contestId, Guid userId, CancellationToken ct = default)
+    {
+        if (!await _db.ClassSemesters.AnyAsync(cs => cs.Id == classSemesterId, ct))
+            throw new KeyNotFoundException("Class instance not found.");
+
+        var slotExists = await _db.ClassSlots.AnyAsync(
+            s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+        if (!slotExists)
+            throw new KeyNotFoundException("Contest not found in this class instance.");
+
+        var contest = await _db.Contests.FirstOrDefaultAsync(c => c.Id == contestId, ct)
+            ?? throw new KeyNotFoundException("Contest not found.");
+
+        var now = DateTime.UtcNow;
+
+        if (contest.StartAt > now)
+            throw new InvalidOperationException("CONTEST_NOT_STARTED");
+
+        if (contest.EndAt <= now)
+            throw new InvalidOperationException("CONTEST_ALREADY_ENDED");
+
+        if (contest.FreezeAt.HasValue &&
+            (!contest.UnfreezeAt.HasValue || now < contest.UnfreezeAt.Value))
+            throw new InvalidOperationException("ALREADY_FROZEN");
+
+        contest.FreezeAt = now;
+        contest.UnfreezeAt = null;
+        contest.UpdatedAt = now;
+        contest.UpdatedBy = userId;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task UnfreezeContestAsync(Guid classSemesterId, Guid contestId, Guid userId, CancellationToken ct = default)
+    {
+        if (!await _db.ClassSemesters.AnyAsync(cs => cs.Id == classSemesterId, ct))
+            throw new KeyNotFoundException("Class instance not found.");
+
+        var slotExists = await _db.ClassSlots.AnyAsync(
+            s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+        if (!slotExists)
+            throw new KeyNotFoundException("Contest not found in this class instance.");
+
+        var contest = await _db.Contests.FirstOrDefaultAsync(c => c.Id == contestId, ct)
+            ?? throw new KeyNotFoundException("Contest not found.");
+
+        if (!contest.FreezeAt.HasValue)
+            throw new InvalidOperationException("NOT_FROZEN");
+
+        var now = DateTime.UtcNow;
+
+        if (contest.UnfreezeAt.HasValue && now >= contest.UnfreezeAt.Value)
+            throw new InvalidOperationException("ALREADY_UNFROZEN");
+
+        contest.UnfreezeAt = now;
+        contest.UpdatedAt = now;
+        contest.UpdatedBy = userId;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task JoinContestAsync(Guid classSemesterId, Guid contestId, Guid userId, CancellationToken ct = default)
     {
         var isMember = await _db.ClassMembers.AnyAsync(

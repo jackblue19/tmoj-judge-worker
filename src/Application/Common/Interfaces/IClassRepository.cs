@@ -46,6 +46,8 @@ public interface IClassRepository
     // ── Contest operations ────────────────────────────────
     Task ExtendContestTimeAsync(Guid classSemesterId, Guid contestId, DateTime newEndAt, CancellationToken ct = default);
     Task JoinContestAsync(Guid classSemesterId, Guid contestId, Guid userId, CancellationToken ct = default);
+    Task FreezeContestAsync(Guid classSemesterId, Guid contestId, Guid userId, CancellationToken ct = default);
+    Task UnfreezeContestAsync(Guid classSemesterId, Guid contestId, Guid userId, CancellationToken ct = default);
 
     Task<Guid> AddContestProblemAsync(Guid classSemesterId, Guid contestId, Guid createdBy,
         Guid problemId, string? alias, int? ordinal, int? points, int? maxScore,

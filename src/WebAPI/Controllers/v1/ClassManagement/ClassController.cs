@@ -26,6 +26,8 @@ using Application.UseCases.Classes.Commands.UpdateStudentStatus;
 using Application.UseCases.Classes.Commands.RemoveStudent;
 using Application.UseCases.Classes.Commands.CreateClassContest;
 using Application.UseCases.Classes.Commands.ExtendContestTime;
+using Application.UseCases.Classes.Commands.FreezeClassContest;
+using Application.UseCases.Classes.Commands.UnfreezeClassContest;
 using Application.UseCases.Classes.Commands.JoinContest;
 using Application.UseCases.Classes.Queries.GetClasses;
 using Application.UseCases.Classes.Queries.GetClassById;
@@ -1352,6 +1354,62 @@ public class ClassController : ControllerBase
         {
             return StatusCode(500, new { Message = "An error occurred while extending contest time." });
         }
+    }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{classSemesterId}/contests/{contestId}/freeze
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("{classSemesterId:guid}/contests/{contestId:guid}/freeze")]
+    public async Task<IActionResult> FreezeClassContest(
+        Guid classSemesterId, Guid contestId, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            await _mediator.Send(new FreezeClassContestCommand(classSemesterId, contestId, userId.Value), ct);
+            return Ok(ApiResponse<object>.Ok(new { contestId }, "Scoreboard frozen successfully"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+    }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{classSemesterId}/contests/{contestId}/unfreeze
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("{classSemesterId:guid}/contests/{contestId:guid}/unfreeze")]
+    public async Task<IActionResult> UnfreezeClassContest(
+        Guid classSemesterId, Guid contestId, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            await _mediator.Send(new UnfreezeClassContestCommand(classSemesterId, contestId, userId.Value), ct);
+            return Ok(ApiResponse<object>.Ok(new { contestId }, "Scoreboard unfrozen successfully"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
     }
 
     // ──────────────────────────────────────────

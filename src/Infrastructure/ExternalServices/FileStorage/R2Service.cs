@@ -25,7 +25,7 @@ public sealed class R2Service : IR2Service
         {
             ServiceURL = _settings.ServiceUrl ,
             ForcePathStyle = true ,
-            SignatureVersion = "4" ,
+            //SignatureVersion = "4" ,
             AuthenticationRegion = "auto"
         };
 
@@ -132,9 +132,9 @@ public sealed class R2Service : IR2Service
                 await _s3Client.DeleteObjectsAsync(deleteRequest , cancellationToken);
             }
 
-            continuationToken = listResponse.IsTruncated
-                ? listResponse.NextContinuationToken
-                : null;
+            continuationToken = listResponse.IsTruncated == true
+                             ? listResponse.NextContinuationToken
+                             : null;
 
         } while ( !string.IsNullOrEmpty(continuationToken) );
     }
@@ -162,9 +162,9 @@ public sealed class R2Service : IR2Service
 
             result.AddRange(listResponse.S3Objects.Select(x => x.Key));
 
-            continuationToken = listResponse.IsTruncated
-                ? listResponse.NextContinuationToken
-                : null;
+            continuationToken = listResponse.IsTruncated == true
+                              ? listResponse.NextContinuationToken
+                              : null;
 
         } while ( !string.IsNullOrEmpty(continuationToken) );
 

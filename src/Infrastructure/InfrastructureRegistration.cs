@@ -1,4 +1,4 @@
-using Application.Common.Interfaces;
+﻿using Application.Common.Interfaces;
 using Application.Common.Services;
 using Application.UseCases.Problems;
 using Application.UseCases.Problems.Queries.GetProblemsByUser;
@@ -18,6 +18,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Infrastructure.Services;
 using Infrastructure.ExternalServices.Mailing;
+using Infrastructure.Configurations.Auth;
+using Infrastructure.Configurations.Aws;
+using Amazon;
+using Amazon.Runtime;
+using Amazon.SimpleEmailV2;
+using Application.Abstractions.Outbound.Services;
 
 namespace Infrastructure;
 
@@ -94,8 +100,33 @@ public static class InfrastructureRegistration
     public static IServiceCollection AddExternalServices(this IServiceCollection services , IConfiguration config)
     {
         // Email
-        services.Configure<Infrastructure.Configurations.Auth.EmailSettings>(config.GetSection("EmailSettings"));
-        services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService , Infrastructure.ExternalServices.Mailing.EmailService>();
+        //services.Configure<Infrastructure.Configurations.Auth.EmailSettings>(config.GetSection("EmailSettings"));
+        //services.AddScoped<Application.Abstractions.Outbound.Services.IEmailService , Infrastructure.ExternalServices.Mailing.EmailService>();
+        services.Configure<EmailSettings>(config.GetSection("EmailSettings"));
+        services.Configure<AwsSettings>(config.GetSection("AWS"));
+
+        var awsSettings = config.GetSection("AWS").Get<AwsSettings>()
+            ?? new AwsSettings();
+
+        var region = RegionEndpoint.GetBySystemName(awsSettings.Region);
+
+        if ( !string.IsNullOrWhiteSpace(awsSettings.AccessKeyId)
+            && !string.IsNullOrWhiteSpace(awsSettings.SecretAccessKey) )
+        {
+            var credentials = new BasicAWSCredentials(
+                awsSettings.AccessKeyId ,
+                awsSettings.SecretAccessKey);
+
+            services.AddSingleton<IAmazonSimpleEmailServiceV2>(
+                new AmazonSimpleEmailServiceV2Client(credentials , region));
+        }
+        else
+        {
+            services.AddSingleton<IAmazonSimpleEmailServiceV2>(
+                new AmazonSimpleEmailServiceV2Client(region));
+        }
+
+        services.AddScoped<IEmailService , SesEmailService>();
 
         // Cloudinary
         services.Configure<CloudinarySettings>(config.GetSection("FileStorage:CloudinarySettings"));

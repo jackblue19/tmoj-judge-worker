@@ -57,4 +57,7 @@ public interface IClassRepository
 
     Task RemoveContestProblemAsync(Guid classSemesterId, Guid contestId, Guid contestProblemId,
         CancellationToken ct = default);
+
+    Task<ContestProblemDto> GetContestProblemByIdAsync(Guid classSemesterId, Guid contestId, Guid contestProblemId,
+        CancellationToken ct = default);
 }

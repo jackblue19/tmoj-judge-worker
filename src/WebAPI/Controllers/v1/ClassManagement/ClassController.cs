@@ -37,6 +37,7 @@ using Application.UseCases.Classes.Queries.GetClassContests;
 using Application.UseCases.Classes.Queries.GetClassContestById;
 using Application.UseCases.Auth.Hasher;
 using Application.UseCases.Classes.Commands.AddClassContestProblem;
+using Application.UseCases.Classes.Queries.GetClassContestProblemById;
 using Application.UseCases.Classes.Commands.UpdateClassContestProblem;
 using Application.UseCases.Classes.Commands.RemoveClassContestProblem;
 
@@ -1497,6 +1498,38 @@ public class ClassController : ControllerBase
         {
             return StatusCode(500, new { Message = "An error occurred while fetching the scoreboard." });
         }
+    }
+
+    // ──────────────────────────────────────────
+    // GET api/v1/class/{classSemesterId}/contests/{contestId}/problems/{contestProblemId}
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("{classSemesterId:guid}/contests/{contestId:guid}/problems/{contestProblemId:guid}")]
+    public async Task<IActionResult> GetContestProblemById(
+        Guid classSemesterId,
+        Guid contestId,
+        Guid contestProblemId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var dto = await _mediator.Send(
+                new GetClassContestProblemByIdQuery(classSemesterId, contestId, contestProblemId), ct);
+
+            return Ok(ApiResponse<ContestProblemDto>.Ok(dto, "Contest problem fetched successfully"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
     }
 
     // ──────────────────────────────────────────

@@ -770,6 +770,26 @@ public class ClassRepository : IClassRepository
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task<ContestProblemDto> GetContestProblemByIdAsync(
+        Guid classSemesterId, Guid contestId, Guid contestProblemId, CancellationToken ct = default)
+    {
+        var slotExists = await _db.ClassSlots.AnyAsync(
+            s => s.ClassSemesterId == classSemesterId && s.ContestId == contestId, ct);
+        if (!slotExists)
+            throw new KeyNotFoundException("Contest not found in this class.");
+
+        var cp = await _db.ContestProblems.AsNoTracking()
+            .Include(p => p.Problem)
+            .FirstOrDefaultAsync(p => p.Id == contestProblemId && p.ContestId == contestId, ct)
+            ?? throw new KeyNotFoundException("Contest problem not found.");
+
+        return new ContestProblemDto(
+            cp.Id, cp.ProblemId,
+            cp.Problem?.Title, cp.Problem?.Slug,
+            cp.Alias, cp.Ordinal, cp.Points, cp.MaxScore,
+            cp.TimeLimitMs, cp.MemoryLimitKb);
+    }
+
     // ── Private helpers ────────────────────────────────────
 
     private static ClassDto MapToClassDto(Class c, List<ClassSemester> instanceList)

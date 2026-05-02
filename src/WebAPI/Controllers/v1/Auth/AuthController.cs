@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using WebAPI.Models.Common;
 
 namespace WebAPI.Controllers.v1.Auth;
@@ -31,17 +32,20 @@ public class AuthController : ControllerBase
     private readonly GoogleOptions _google;
     private readonly GithubOptions _github;
     private readonly ITimeLimitedDataProtector _protector;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IMediator mediator,
         IOptions<GoogleOptions> google,
         IOptions<GithubOptions> github,
-        IDataProtectionProvider dp)
+        IDataProtectionProvider dp,
+        ILogger<AuthController> logger)
     {
         _mediator = mediator;
         _google = google.Value;
         _github = github.Value;
         _protector = dp.CreateProtector("github-oauth").ToTimeLimitedDataProtector();
+        _logger = logger;
     }
 
     [AllowAnonymous]
@@ -60,7 +64,8 @@ public class AuthController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Message = "An error occurred during registration.", Error = ex.Message });
+            _logger.LogError(ex, "Register failed");
+            return StatusCode(500, new { Message = "An error occurred during registration." });
         }
     }
 
@@ -323,10 +328,11 @@ public class AuthController : ControllerBase
         try
         {
             var token = await _mediator.Send(new ForgotPasswordCommand(req.Email), ct);
-            return Ok(new { Message = "If an account exists for this email, a reset link has been sent.", Token = token });
+            return Ok(new { Message = "If an account exists for this email, a reset link has been sent." });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "ForgotPassword failed for email={Email}", req.Email);
             return StatusCode(500, new { Message = "Error processing forgot password request." });
         }
     }
@@ -360,14 +366,15 @@ public class AuthController : ControllerBase
             if (userId == null) return Unauthorized();
 
             var token = await _mediator.Send(new ChangePasswordCommand(userId.Value, req.CurrentPassword, req.NewPassword), ct);
-            return Ok(new { Message = "Password changed successfully. Please check your email to verify your account.", Token = token });
+            return Ok(new { Message = "Password changed successfully. Please check your email to verify your account." });
         }
         catch (UnauthorizedAccessException ex)
         {
             return BadRequest(new { Message = ex.Message });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "ChangePassword failed for userId={UserId}", GetUserId());
             return StatusCode(500, new { Message = "Error changing password." });
         }
     }

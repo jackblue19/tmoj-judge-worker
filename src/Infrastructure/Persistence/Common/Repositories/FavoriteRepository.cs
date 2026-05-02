@@ -57,7 +57,8 @@ public class FavoriteRepository : IFavoriteRepository
             .Include(x => x.Problem)
             .Include(x => x.Contest)
             .Where(x => x.CollectionId == collectionId)
-            .OrderByDescending(x => x.CreatedAt)
+            .OrderBy(x => x.OrderIndex) // ✅ FIX: Order by custom index
+            .ThenByDescending(x => x.CreatedAt) // Fallback
             .ToListAsync();
     }
 

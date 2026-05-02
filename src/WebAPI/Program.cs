@@ -102,6 +102,8 @@ builder.Services.AddScoped<SubmissionRejudgeService>();
 
 builder.Services.AddSignalR();
 
+builder.Services.AddScoped<JudgeJobCompleteService>();
+
 builder.Services.AddScoped<SubmissionNoteService>();
 builder.Services.AddScoped<SubmissionRealtimeNotifier>();
 builder.Services.AddHostedService<WebAPI.Services.DashboardRealtimeWorker>();

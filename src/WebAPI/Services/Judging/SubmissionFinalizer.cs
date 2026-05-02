@@ -7,13 +7,26 @@ public static class SubmissionFinalizer
 {
     public static void ApplySubmissionSummary(
         Submission submission ,
-        JudgeSummaryResultContract summary)
+        JudgeSummaryResultContract summary ,
+        int? resolvedTimeMs ,
+        int? resolvedMemoryKb)
     {
         submission.StatusCode = "done";
         submission.VerdictCode = ResultStatusMapper.NormalizeVerdict(summary.Verdict);
-        submission.TimeMs = summary.TimeMs;
-        submission.MemoryKb = summary.MemoryKb;
+        submission.TimeMs = resolvedTimeMs;
+        submission.MemoryKb = resolvedMemoryKb;
         submission.FinalScore = summary.FinalScore ?? 0;
         submission.JudgedAt = DateTime.UtcNow;
+    }
+
+    public static void ApplySubmissionSummary(
+        Submission submission ,
+        JudgeSummaryResultContract summary)
+    {
+        ApplySubmissionSummary(
+            submission ,
+            summary ,
+            summary.TimeMs ,
+            summary.MemoryKb);
     }
 }

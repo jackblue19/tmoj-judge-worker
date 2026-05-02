@@ -1,6 +1,6 @@
 # For more info on HTTP files go to https://aka.ms/vs/httpfile
 @baseUrl = https://localhost:7210
-@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMDkxOTM5My1iYTMyLTRhMjMtODU0ZS04YzZhMGE3ZWY0ZDgiLCJqdGkiOiI4MDdlN2MxZTZkNTY0NWVjYWQyMzgyYjAzNDQ1Zjk4YyIsImlhdCI6MTc3NzU1Nzk2OSwibmFtZSI6IkFkbWluIFBvd2VyZnVsIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4iLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjEwOTE5MzkzLWJhMzItNGEyMy04NTRlLThjNmEwYTdlZjRkOCIsIm5iZiI6MTc3NzU1Nzk2OSwiZXhwIjoxNzc4MTYyNzY5LCJpc3MiOiJmcHR1LXRtb2otYXBpIiwiYXVkIjoidG1vai11c2VycyJ9.8p48KkJeBhSpVXBOLWCI-L1TgDB42nbp0BfdA4ql0qg
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwODJiMjZmNS01OTk5LTQ5YzktOWI0ZC05NDhlNjljOTYyMTMiLCJqdGkiOiI0YWJhNzZiODEwZTM0ZDE5ODRmMGNjNWUyMmNjNmZiMiIsImlhdCI6MTc3NzczNDc5MywibmFtZSI6IkdvZCBNZXJ5IiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoic3R1ZGVudCIsInJvbGUiOiJzdHVkZW50IiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIwODJiMjZmNS01OTk5LTQ5YzktOWI0ZC05NDhlNjljOTYyMTMiLCJuYmYiOjE3Nzc3MzQ3OTMsImV4cCI6MTc3ODMzOTU5MywiaXNzIjoiZnB0dS10bW9qLWFwaSIsImF1ZCI6InRtb2otdXNlcnMifQ.X-tusXvFc6ly0hboSUdrEOgOM2-0mzy_DZixePfnnEM
 
 
 ### Get all solved problems count
@@ -29,4 +29,38 @@ Authorization: Bearer {{authToken}}
 
 ### Get solved public problems through contest
 GET {{baseUrl}}/api/v2/ProblemSolved/me/stats?visibilityCode=public&solvedSourceCode=contest
+Authorization: Bearer {{authToken}}
+
+### list problem solved
+
+### List all solved problems
+GET {{baseUrl}}/api/v2/ProblemSolved/me?page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### List solved public problems
+GET {{baseUrl}}/api/v2/ProblemSolved/me?visibilityCode=public&page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### List solved in-class visibility problems
+GET {{baseUrl}}/api/v2/ProblemSolved/me?visibilityCode=in-class&page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### List solved in-bank problems
+GET {{baseUrl}}/api/v2/ProblemSolved/me?visibilityCode=in-bank&page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### List solved by contest source
+GET {{baseUrl}}/api/v2/ProblemSolved/me?solvedSourceCode=contest&page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### List solved by class source
+GET {{baseUrl}}/api/v2/ProblemSolved/me?solvedSourceCode=in-class&page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### List solved by practice source
+GET {{baseUrl}}/api/v2/ProblemSolved/me?solvedSourceCode=practice&page=1&pageSize=20
+Authorization: Bearer {{authToken}}
+
+### List solved public problems in contest
+GET {{baseUrl}}/api/v2/ProblemSolved/me?visibilityCode=public&solvedSourceCode=contest&page=1&pageSize=20
 Authorization: Bearer {{authToken}}

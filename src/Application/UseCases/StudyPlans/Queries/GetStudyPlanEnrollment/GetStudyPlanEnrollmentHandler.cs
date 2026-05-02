@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.StudyPlans.Dtos;
 using Application.UseCases.StudyPlans.Queries.GetStudyPlanEnrollment;
 using MediatR;
@@ -40,6 +40,8 @@ public class GetStudyPlanEnrollmentHandler
         var items = await _repo.GetItemsByPlanIdAsync(request.StudyPlanId);
         var totalItems = items.Count;
 
+        var isPurchased = await _repo.HasUserPurchasedPlanAsync(userId, request.StudyPlanId);
+
         if (totalItems == 0)
         {
             return new StudyPlanEnrollmentDto
@@ -47,6 +49,7 @@ public class GetStudyPlanEnrollmentHandler
                 StudyPlanId = request.StudyPlanId,
                 UserId = userId,
                 IsEnrolled = false,
+                IsPurchased = isPurchased,
                 IsCompleted = false,
                 TotalItems = 0,
                 CompletedItems = 0,
@@ -80,6 +83,7 @@ public class GetStudyPlanEnrollmentHandler
             StudyPlanId = request.StudyPlanId,
             UserId = userId,
             IsEnrolled = isEnrolled,
+            IsPurchased = isPurchased,
             IsCompleted = isCompleted,
             TotalItems = totalItems,
             CompletedItems = completedCount,

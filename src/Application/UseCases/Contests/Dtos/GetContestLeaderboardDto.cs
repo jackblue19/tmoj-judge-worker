@@ -36,6 +36,7 @@ public class ACMScoreboardRowDto
     public Guid UserId { get; set; }
     public string Username { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public string? EquippedFrameUrl { get; set; }
     public string? Fullname { get; set; }
     public int TotalSolved { get; set; }
     public int TotalPenalty { get; set; }
@@ -48,6 +49,7 @@ public class IOIScoreboardRowDto
     public Guid UserId { get; set; }
     public string Username { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public string? EquippedFrameUrl { get; set; }
     public string? Fullname { get; set; }
     public int TotalScore { get; set; }
     public List<IOIProblemAttemptDto> Problems { get; set; } = new();
@@ -75,6 +77,7 @@ public class ScoreboardRowDto
     public Guid UserId { get; set; }
     public string Username { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public string? EquippedFrameUrl { get; set; }
     public string? Fullname { get; set; }
     public int TotalSolved { get; set; }
     public int TotalPenalty { get; set; }

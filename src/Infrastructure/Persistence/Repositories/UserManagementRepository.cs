@@ -17,7 +17,10 @@ public class UserManagementRepository : IUserManagementRepository
         _db.Users
             .Include(u => u.Role)
             .Select(u => new UserDto(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName,
-                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl, u.EmailVerified, u.Status,
+                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
+                u.EmailVerified, u.Status,
                 u.Role != null ? u.Role.RoleCode : null))
             .ToListAsync(ct);
 
@@ -26,7 +29,10 @@ public class UserManagementRepository : IUserManagementRepository
             .Where(u => u.UserId == id && u.DeletedAt == null)
             .Include(u => u.Role)
             .Select(u => new UserDto(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName,
-                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl, u.EmailVerified, u.Status,
+                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
+                u.EmailVerified, u.Status,
                 u.Role != null ? u.Role.RoleCode : null))
             .FirstOrDefaultAsync(ct);
 
@@ -34,7 +40,10 @@ public class UserManagementRepository : IUserManagementRepository
         _db.Users
             .Where(u => u.UserId == id && u.DeletedAt == null)
             .Select(u => new UserProfileDto(u.UserId, u.Email, u.FirstName, u.LastName,
-                u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
+                u.DisplayName, u.Username, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
+                u.EmailVerified, u.Status, u.CreatedAt))
             .FirstOrDefaultAsync(ct);
 
     public Task<List<SimpleUserDto>> GetActiveUsersAsync(CancellationToken ct) =>
@@ -42,14 +51,18 @@ public class UserManagementRepository : IUserManagementRepository
             .AsNoTracking()
             .Where(u => u.DeletedAt == null && u.Status == true)
             .OrderBy(u => u.DisplayName)
-            .Select(u => new SimpleUserDto(u.UserId, u.DisplayName, u.Email, u.AvatarUrl))
+            .Select(u => new SimpleUserDto(u.UserId, u.DisplayName, u.Email, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault()))
             .ToListAsync(ct);
 
     public Task<SimpleUserDto?> GetActiveUserByEmailAsync(string email, CancellationToken ct) =>
         _db.Users
             .AsNoTracking()
             .Where(u => u.Email == email && u.DeletedAt == null && u.Status == true)
-            .Select(u => new SimpleUserDto(u.UserId, u.DisplayName, u.Email, u.AvatarUrl))
+            .Select(u => new SimpleUserDto(u.UserId, u.DisplayName, u.Email, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault()))
             .FirstOrDefaultAsync(ct);
 
     public async Task<List<UserDto>> GetUsersByRoleAsync(string roleCode, CancellationToken ct)
@@ -63,7 +76,10 @@ public class UserManagementRepository : IUserManagementRepository
             .Where(u => u.RoleId == role.RoleId)
             .OrderBy(u => u.DisplayName)
             .Select(u => new UserDto(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName,
-                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl, u.EmailVerified, u.Status,
+                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
+                u.EmailVerified, u.Status,
                 u.Role != null ? u.Role.RoleCode : null))
             .ToListAsync(ct);
     }
@@ -72,7 +88,10 @@ public class UserManagementRepository : IUserManagementRepository
         _db.Users
             .Where(u => u.Status == status)
             .Select(u => new UserProfileDto(u.UserId, u.Email, u.FirstName, u.LastName,
-                u.DisplayName, u.Username, u.AvatarUrl, u.EmailVerified, u.Status, u.CreatedAt))
+                u.DisplayName, u.Username, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
+                u.EmailVerified, u.Status, u.CreatedAt))
             .ToListAsync(ct);
 
     public async Task<StudentProfileWithClassesDto?> GetStudentDetailAsync(
@@ -82,7 +101,10 @@ public class UserManagementRepository : IUserManagementRepository
             .Include(u => u.Role)
             .Where(u => u.UserId == id && u.DeletedAt == null)
             .Select(u => new UserDto(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName,
-                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl, u.EmailVerified, u.Status,
+                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
+                u.EmailVerified, u.Status,
                 u.Role != null ? u.Role.RoleCode : null))
             .FirstOrDefaultAsync(ct);
 
@@ -103,7 +125,10 @@ public class UserManagementRepository : IUserManagementRepository
                 (string?)null, (DateTime?)null, m.ClassSemester.CreatedAt,
                 m.ClassSemester.Teacher != null
                     ? new ClassTeacherDto(m.ClassSemester.Teacher.UserId, m.ClassSemester.Teacher.DisplayName,
-                        m.ClassSemester.Teacher.Email, m.ClassSemester.Teacher.AvatarUrl)
+                        m.ClassSemester.Teacher.Email, m.ClassSemester.Teacher.AvatarUrl,
+                        m.ClassSemester.Teacher.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl).FirstOrDefault())
                     : null,
                 m.ClassSemester.ClassMembers.Count(cm => cm.IsActive)))
             .ToListAsync(ct);
@@ -118,7 +143,10 @@ public class UserManagementRepository : IUserManagementRepository
             .Include(u => u.Role)
             .Where(u => u.UserId == id && u.DeletedAt == null)
             .Select(u => new UserDto(u.UserId, u.Email, u.FirstName, u.LastName, u.DisplayName,
-                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl, u.EmailVerified, u.Status,
+                u.Username, u.RollNumber, u.MemberCode, u.AvatarUrl,
+                u.UserInventories.Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                    .Select(ui => ui.Item.ImageUrl).FirstOrDefault(),
+                u.EmailVerified, u.Status,
                 u.Role != null ? u.Role.RoleCode : null))
             .FirstOrDefaultAsync(ct);
 
@@ -144,7 +172,10 @@ public class UserManagementRepository : IUserManagementRepository
                 cs.Semester.StartAt, cs.Semester.EndAt,
                 null, null, cs.CreatedAt,
                 cs.Teacher != null
-                    ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl)
+                    ? new ClassTeacherDto(cs.Teacher.UserId, cs.Teacher.DisplayName, cs.Teacher.Email, cs.Teacher.AvatarUrl,
+                        cs.Teacher.UserInventories
+                            .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                            .Select(ui => ui.Item.ImageUrl).FirstOrDefault())
                     : null,
                 cs.ClassMembers.Count(m => m.IsActive)))
             .ToList();

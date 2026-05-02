@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace WebAPI.Hubs
 {
-    public class NotificationHub : Hub
+    public class NotificationHub : Microsoft.AspNetCore.SignalR.Hub
     {
     }
 }

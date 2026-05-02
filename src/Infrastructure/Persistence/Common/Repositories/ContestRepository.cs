@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.Common.Models;
 using Application.UseCases.Contests.Dtos;
 using Application.UseCases.Score.Helpers;
@@ -305,6 +305,10 @@ public class ContestRepository : IContestRepository
                     DisplayName = m.User.DisplayName,
                     Email = m.User.Email,
                     AvatarUrl = m.User.AvatarUrl,
+                    EquippedFrameUrl = m.User.UserInventories
+                        .Where(ui => ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+                        .Select(ui => ui.Item.ImageUrl)
+                        .FirstOrDefault(),
                     JoinedAt = m.JoinedAt
                 }).ToList()
             })

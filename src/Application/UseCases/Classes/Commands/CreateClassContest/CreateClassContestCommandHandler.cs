@@ -153,6 +153,7 @@ public class CreateClassContestCommandHandler
                     // Tạo personal team mới cho member chưa có
                     personalTeam = new Team
                     {
+                        Id = Guid.NewGuid(),
                         LeaderId = member.UserId,
                         TeamSize = 1,
                         TeamName = member.User?.DisplayName ?? "Personal Team",

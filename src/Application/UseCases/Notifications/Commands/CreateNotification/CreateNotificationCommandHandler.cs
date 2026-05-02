@@ -43,15 +43,9 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
         {
             // --- CODE THEO DB (Dựa trên dòng 58 bác chụp) ---
             var finalType = request.Type?.ToLower() ?? "system";
-            var finalScopeType = request.ScopeType;
+            var finalScopeType = request.ScopeType?.ToLower();
 
-            // Nếu là report hoặc comment, ta đẩy sang cột ScopeType để né Check Constraint
-            if (finalType == "report" || finalType == "comment")
-            {
-                _logger.LogInformation("Mapping '{Type}' to ScopeType to match DB pattern", finalType);
-                if (string.IsNullOrEmpty(finalScopeType)) finalScopeType = finalType;
-                finalType = "system";
-            }
+            // Đã fix Check Constraint dưới DB nên không cần map lùi về system nữa
 
             var notification = new Notification
             {
@@ -64,7 +58,7 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
                 ScopeId = request.ScopeId,
                 CreatedBy = request.CreatedBy,
                 IsRead = false,
-                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified)
+                CreatedAt = DateTime.UtcNow
             };
 
             await _writeRepo.AddAsync(notification, cancellationToken);
@@ -86,7 +80,23 @@ public class CreateNotificationCommandHandler : IRequestHandler<CreateNotificati
                         if (canSend)
                         {
                             _logger.LogInformation("Sending notification email to {Email}", user.Email);
-                            await _emailService.SendEmailAsync(user.Email, notification.Title, notification.Message ?? string.Empty);
+                            
+                            // Fire and forget to prevent 504 Gateway Timeout if SMTP is slow
+                            var email = user.Email;
+                            var title = notification.Title;
+                            var message = notification.Message ?? string.Empty;
+                            
+                            _ = Task.Run(async () => 
+                            {
+                                try
+                                {
+                                    await _emailService.SendEmailAsync(email, title, message);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(ex, "Background email sending failed for User {UserId}", notification.UserId);
+                                }
+                            });
                         }
                     }
                 }

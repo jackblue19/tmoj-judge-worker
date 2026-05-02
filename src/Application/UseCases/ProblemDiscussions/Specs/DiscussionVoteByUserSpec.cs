@@ -1,15 +1,12 @@
-﻿using Ardalis.Specification;
+using Ardalis.Specification;
 using Domain.Entities;
 
 namespace Application.UseCases.ProblemDiscussions.Specs;
 
-public class DiscussionVoteByUserSpec : Specification<ContentReport>
+public class DiscussionVoteByUserSpec : Specification<ContentVote>
 {
     public DiscussionVoteByUserSpec(Guid userId, Guid discussionId)
     {
-        Query.Where(x =>
-            x.ReporterId == userId &&
-            x.TargetId == discussionId &&
-            x.TargetType == "discussion_vote");
+        Query.Where(v => v.UserId == userId && v.TargetId == discussionId && v.TargetType == "discussion");
     }
 }

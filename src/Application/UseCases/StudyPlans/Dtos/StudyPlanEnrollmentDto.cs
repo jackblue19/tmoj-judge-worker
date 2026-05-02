@@ -1,4 +1,4 @@
-﻿namespace Application.UseCases.StudyPlans.Dtos;
+namespace Application.UseCases.StudyPlans.Dtos;
 
 public class StudyPlanEnrollmentDto
 {
@@ -6,6 +6,7 @@ public class StudyPlanEnrollmentDto
     public Guid UserId { get; set; }
 
     public bool IsEnrolled { get; set; }
+    public bool IsPurchased { get; set; }
     public bool IsCompleted { get; set; }
 
     public int TotalItems { get; set; }

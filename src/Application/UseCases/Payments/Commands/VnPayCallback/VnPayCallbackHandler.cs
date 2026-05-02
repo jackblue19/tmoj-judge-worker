@@ -1,4 +1,4 @@
-﻿using Application.Common.Interfaces;
+using Application.Common.Interfaces;
 using Application.UseCases.Payments.Dtos;
 using Domain.Entities;
 using MediatR;
@@ -60,10 +60,10 @@ namespace Application.UseCases.Payments.Commands.VnPayCallback
                     return new VnPayCallbackResult { Status = "failed" };
                 }
 
-                // =========================
                 // MARK PAYMENT PAID
                 // =========================
                 payment.Status = "paid";
+                payment.PaidAt = DateTime.UtcNow;
                 await _paymentRepo.UpdateAsync(payment);
 
                 if (payment.UserId == null)

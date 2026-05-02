@@ -27,6 +27,7 @@ public class ContestParticipantUserDto
     public string DisplayName { get; set; } = null!;
     public string? Email { get; set; }
     public string? AvatarUrl { get; set; }
+    public string? EquippedFrameUrl { get; set; }
     public string? Username { get; set; }
     public string? RollNumber { get; set; }
 }

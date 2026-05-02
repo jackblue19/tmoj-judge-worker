@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Domain.Entities;
@@ -23,7 +23,7 @@ public partial class DiscussionComment
 
     public bool? IsHidden { get; set; }
 
-    public virtual ICollection<CommentVote> CommentVotes { get; set; } = new List<CommentVote>();
+
 
     public virtual ProblemDiscussion Discussion { get; set; } = null!;
 

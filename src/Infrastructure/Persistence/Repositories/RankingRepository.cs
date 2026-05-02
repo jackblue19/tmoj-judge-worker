@@ -88,6 +88,17 @@ public class RankingRepository : IRankingRepository
             .Take(pageSize)
             .ToListAsync(ct);
 
+        var userIds = rows.Select(x => x.UserId).ToList();
+        var equippedFramesList = await _db.UserInventories
+            .AsNoTracking()
+            .Where(ui => userIds.Contains(ui.UserId) && ui.IsEquipped && ui.Item.ItemType == "avatar_frame")
+            .Select(ui => new { ui.UserId, ui.Item.ImageUrl })
+            .ToListAsync(ct);
+
+        var equippedFrames = equippedFramesList
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => g.First().ImageUrl);
+
         var ranked = rows.Select((x, i) => new GlobalLeaderboardRowDto
         {
             Rank = (page - 1) * pageSize + i + 1,
@@ -95,6 +106,7 @@ public class RankingRepository : IRankingRepository
             Username = x.Username,
             Fullname = x.DisplayName ?? $"{x.FirstName} {x.LastName}".Trim(),
             AvatarUrl = x.AvatarUrl,
+            EquippedFrameUrl = equippedFrames.TryGetValue(x.UserId, out var frame) ? frame : null,
             RollNumber = x.RollNumber ?? x.MemberCode,
             Solved = x.Solved,
             TotalAttempts = x.TotalAttempts,

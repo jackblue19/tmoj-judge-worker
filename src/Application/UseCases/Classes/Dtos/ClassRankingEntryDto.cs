@@ -5,6 +5,7 @@ public record ClassRankingEntryDto(
     Guid UserId,
     string? DisplayName,
     string? AvatarUrl,
+    string? EquippedFrameUrl,
     int SolvedCount,
     decimal TotalScore,
     int SubmissionCount);

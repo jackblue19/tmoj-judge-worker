@@ -26,6 +26,8 @@ using Application.UseCases.Classes.Commands.UpdateStudentStatus;
 using Application.UseCases.Classes.Commands.RemoveStudent;
 using Application.UseCases.Classes.Commands.CreateClassContest;
 using Application.UseCases.Classes.Commands.ExtendContestTime;
+using Application.UseCases.Classes.Commands.FreezeClassContest;
+using Application.UseCases.Classes.Commands.UnfreezeClassContest;
 using Application.UseCases.Classes.Commands.JoinContest;
 using Application.UseCases.Classes.Queries.GetClasses;
 using Application.UseCases.Classes.Queries.GetClassById;
@@ -37,6 +39,7 @@ using Application.UseCases.Classes.Queries.GetClassContests;
 using Application.UseCases.Classes.Queries.GetClassContestById;
 using Application.UseCases.Auth.Hasher;
 using Application.UseCases.Classes.Commands.AddClassContestProblem;
+using Application.UseCases.Classes.Queries.GetClassContestProblemById;
 using Application.UseCases.Classes.Commands.UpdateClassContestProblem;
 using Application.UseCases.Classes.Commands.RemoveClassContestProblem;
 
@@ -64,7 +67,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateClassBody req, CancellationToken ct)
+    public async Task<IActionResult> Create([FromBody] CreateClassRequestDto req, CancellationToken ct)
     {
         try
         {
@@ -196,7 +199,7 @@ public class ClassController : ControllerBase
 
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClassBody req, CancellationToken ct)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateClassRequestDto req, CancellationToken ct)
     {
         try
         {
@@ -265,7 +268,7 @@ public class ClassController : ControllerBase
     // POST api/v1/class/join  →  Submit Invite Code (Student)
     // ──────────────────────────────────────────
     [HttpPost("join")]
-    public async Task<IActionResult> JoinByInviteCode([FromBody] JoinByCodeBody req, CancellationToken ct)
+    public async Task<IActionResult> JoinByInviteCode([FromBody] JoinClassByCodeRequestDto req, CancellationToken ct)
     {
         try
         {
@@ -433,7 +436,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager")]
     [HttpPost("{id:guid}/semesters")]
-    public async Task<IActionResult> AddSemester(Guid id, [FromBody] AddClassSemesterBody req, CancellationToken ct)
+    public async Task<IActionResult> AddSemester(Guid id, [FromBody] AddClassSemesterRequestDto req, CancellationToken ct)
     {
         try
         {
@@ -483,7 +486,7 @@ public class ClassController : ControllerBase
     [HttpPut("{id:guid}/semesters/{classSemesterId:guid}")]
     public async Task<IActionResult> UpdateSemester(
         Guid id, Guid classSemesterId,
-        [FromBody] UpdateClassSemesterBody req,
+        [FromBody] UpdateClassSemesterRequestDto req,
         CancellationToken ct)
     {
         try
@@ -1024,7 +1027,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost("{classSemesterId:guid}/invite-code")]
-    public async Task<IActionResult> GenerateInviteCode(Guid classSemesterId, [FromBody] GenerateInviteCodeBody req, CancellationToken ct)
+    public async Task<IActionResult> GenerateInviteCode(Guid classSemesterId, [FromBody] GenerateInviteCodeRequestDto req, CancellationToken ct)
     {
         try
         {
@@ -1121,7 +1124,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPost("{classSemesterId:guid}/students/manual")]
-    public async Task<IActionResult> AddStudentManually(Guid classSemesterId, [FromBody] AddStudentManuallyBody req, CancellationToken ct)
+    public async Task<IActionResult> AddStudentManually(Guid classSemesterId, [FromBody] AddStudentManuallyRequestDto req, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.RollNumber) && string.IsNullOrWhiteSpace(req.MemberCode))
             return BadRequest(new { Message = "Must provide either RollNumber or MemberCode." });
@@ -1163,7 +1166,7 @@ public class ClassController : ControllerBase
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
     [HttpPut("{classSemesterId:guid}/students/{studentId:guid}")]
-    public async Task<IActionResult> UpdateStudentStatus(Guid classSemesterId, Guid studentId, [FromBody] UpdateStudentStatusBody req, CancellationToken ct)
+    public async Task<IActionResult> UpdateStudentStatus(Guid classSemesterId, Guid studentId, [FromBody] UpdateStudentStatusRequestDto req, CancellationToken ct)
     {
         try
         {
@@ -1248,7 +1251,7 @@ public class ClassController : ControllerBase
     [HttpPost("{classSemesterId:guid}/contests")]
     public async Task<IActionResult> CreateContest(
         Guid classSemesterId,
-        [FromBody] CreateContestBody req,
+        [FromBody] CreateClassContestRequestDto req,
         CancellationToken ct)
     {
         try
@@ -1262,14 +1265,10 @@ public class ClassController : ControllerBase
             var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
             if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
 
-            var problems = req.Problems?.Select(p =>
-                new ContestProblemItem(p.ProblemId, p.Ordinal, p.Alias, p.Points, p.MaxScore, p.TimeLimitMs, p.MemoryLimitKb))
-                .ToList();
-
             var (contestId, slotId) = await _mediator.Send(
                 new CreateClassContestCommand(
                     classSemesterId, userId.Value, req.Title, req.Slug, req.DescriptionMd,
-                    req.StartAt, req.EndAt, req.FreezeAt, req.Rules, problems, req.SlotNo, req.SlotTitle), ct);
+                    req.StartAt, req.EndAt, req.FreezeAt, req.Rules, req.Problems, req.SlotNo, req.SlotTitle), ct);
 
             return CreatedAtAction(nameof(GetContestById), new { classSemesterId, contestId, version = "1.0" },
                 new { Message = "Contest created successfully.", contestId, slotId });
@@ -1326,7 +1325,7 @@ public class ClassController : ControllerBase
     [HttpPut("{classSemesterId:guid}/contests/{contestId:guid}/extend")]
     public async Task<IActionResult> ExtendContestTime(
         Guid classSemesterId, Guid contestId,
-        [FromBody] ExtendContestBody req,
+        [FromBody] ExtendContestTimeRequestDto req,
         CancellationToken ct)
     {
         try
@@ -1355,6 +1354,62 @@ public class ClassController : ControllerBase
         {
             return StatusCode(500, new { Message = "An error occurred while extending contest time." });
         }
+    }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{classSemesterId}/contests/{contestId}/freeze
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("{classSemesterId:guid}/contests/{contestId:guid}/freeze")]
+    public async Task<IActionResult> FreezeClassContest(
+        Guid classSemesterId, Guid contestId, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            await _mediator.Send(new FreezeClassContestCommand(classSemesterId, contestId, userId.Value), ct);
+            return Ok(ApiResponse<object>.Ok(new { contestId }, "Scoreboard frozen successfully"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+    }
+
+    // ──────────────────────────────────────────
+    // POST api/v1/class/{classSemesterId}/contests/{contestId}/unfreeze
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpPost("{classSemesterId:guid}/contests/{contestId:guid}/unfreeze")]
+    public async Task<IActionResult> UnfreezeClassContest(
+        Guid classSemesterId, Guid contestId, CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            await _mediator.Send(new UnfreezeClassContestCommand(classSemesterId, contestId, userId.Value), ct);
+            return Ok(ApiResponse<object>.Ok(new { contestId }, "Scoreboard unfrozen successfully"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
     }
 
     // ──────────────────────────────────────────
@@ -1425,7 +1480,7 @@ public class ClassController : ControllerBase
     public async Task<IActionResult> SubmitContest(
         Guid classSemesterId,
         Guid contestId,
-        [FromBody] ClassContestSubmitBody req,
+        [FromBody] ClassContestSubmitRequestDto req,
         CancellationToken ct)
     {
         try
@@ -1504,6 +1559,38 @@ public class ClassController : ControllerBase
     }
 
     // ──────────────────────────────────────────
+    // GET api/v1/class/{classSemesterId}/contests/{contestId}/problems/{contestProblemId}
+    // ──────────────────────────────────────────
+    [Authorize(Roles = "admin,manager,teacher")]
+    [HttpGet("{classSemesterId:guid}/contests/{contestId:guid}/problems/{contestProblemId:guid}")]
+    public async Task<IActionResult> GetContestProblemById(
+        Guid classSemesterId,
+        Guid contestId,
+        Guid contestProblemId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var classSemester = await _db.ClassSemesters.AsNoTracking()
+                .FirstOrDefaultAsync(cs => cs.Id == classSemesterId, ct);
+            if (classSemester is null) return NotFound(new { Message = "Class instance not found." });
+
+            var isAdmin = User.IsInRole("admin") || User.IsInRole("manager");
+            if (!isAdmin && classSemester.TeacherId != userId) return Forbid();
+
+            var dto = await _mediator.Send(
+                new GetClassContestProblemByIdQuery(classSemesterId, contestId, contestProblemId), ct);
+
+            return Ok(ApiResponse<ContestProblemDto>.Ok(dto, "Contest problem fetched successfully"));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { Message = ex.Message }); }
+    }
+
+    // ──────────────────────────────────────────
     // POST api/v1/class/{classSemesterId}/contests/{contestId}/problems
     // ──────────────────────────────────────────
     [Authorize(Roles = "admin,manager,teacher")]
@@ -1511,7 +1598,7 @@ public class ClassController : ControllerBase
     public async Task<IActionResult> AddContestProblem(
         Guid classSemesterId,
         Guid contestId,
-        [FromBody] AddClassContestProblemBody req,
+        [FromBody] AddClassContestProblemRequestDto req,
         CancellationToken ct)
     {
         try
@@ -1548,7 +1635,7 @@ public class ClassController : ControllerBase
         Guid classSemesterId,
         Guid contestId,
         Guid contestProblemId,
-        [FromBody] UpdateClassContestProblemBody req,
+        [FromBody] UpdateClassContestProblemRequestDto req,
         CancellationToken ct)
     {
         try
@@ -1623,27 +1710,3 @@ public class ClassController : ControllerBase
         return Guid.TryParse(idStr, out var id) ? id : null;
     }
 }
-
-// ── Inline HTTP body records (replace WebAPI ClassRequest.cs) ──────────────
-public record CreateClassBody(Guid SubjectId, Guid SemesterId, string ClassCode, Guid? TeacherId);
-public record UpdateClassBody(bool? IsActive);
-public record JoinByCodeBody(string InviteCode);
-public record AddClassSemesterBody(Guid SemesterId, Guid SubjectId, Guid? TeacherId);
-public record UpdateClassSemesterBody(Guid? ClassId, Guid? SemesterId, Guid? SubjectId, Guid? TeacherId);
-public record GenerateInviteCodeBody(int MinutesValid = 15);
-public record AddStudentManuallyBody(string? RollNumber, string? MemberCode);
-public record UpdateStudentStatusBody(bool IsActive);
-public record CreateContestBody(
-    string Title, string? Slug, string? DescriptionMd,
-    DateTime StartAt, DateTime EndAt, DateTime? FreezeAt,
-    string? Rules,
-    List<ContestProblemItem>? Problems,
-    int? SlotNo, string? SlotTitle);
-public record ExtendContestBody(DateTime NewEndAt);
-public record ClassContestSubmitBody(Guid ContestProblemId, string Code, string Language = "cpp");
-public record AddClassContestProblemBody(
-    Guid ProblemId, string? Alias, int? Ordinal,
-    int? Points, int? MaxScore, int? TimeLimitMs, int? MemoryLimitKb);
-public record UpdateClassContestProblemBody(
-    string? Alias, int? Ordinal,
-    int? Points, int? MaxScore, int? TimeLimitMs, int? MemoryLimitKb);

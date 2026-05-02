@@ -163,5 +163,19 @@ namespace WebAPI.Controllers.v1.ProblemDiscussionAndEditorial
 
             return Ok(ApiResponse<object?>.Ok(null, "Discussion updated successfully"));
         }
+
+        // PATCH hide/unhide discussion
+        [HttpPatch("/api/v{version:apiVersion}/discussions/{id:guid}/visibility")]
+        [Authorize]
+        public async Task<IActionResult> UpdateVisibility(
+            Guid id,
+            [FromBody] HideUnhideDiscussionDto dto,
+            CancellationToken ct)
+        {
+            await _mediator.Send(new HideUnhideDiscussionCommand(id, dto.IsHidden), ct);
+
+            string message = dto.IsHidden ? "Discussion hidden successfully" : "Discussion unhidden successfully";
+            return Ok(ApiResponse<object?>.Ok(null, message));
+        }
     }
 }

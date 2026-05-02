@@ -11,10 +11,12 @@ namespace Infrastructure.Persistence.Common.Repositories
     public class ProblemDiscussionRepository : IProblemDiscussionRepository
     {
         private readonly TmojDbContext _db;
+        private readonly ICurrentUserService _currentUser;
 
-        public ProblemDiscussionRepository(TmojDbContext db)
+        public ProblemDiscussionRepository(TmojDbContext db, ICurrentUserService currentUser)
         {
             _db = db;
+            _currentUser = currentUser;
         }
 
         // ===============================
@@ -26,10 +28,19 @@ namespace Infrastructure.Persistence.Common.Repositories
             Guid? cursorId,
             int pageSize)
         {
+            var userId = _currentUser.UserId;
+            var isAdmin = _currentUser.IsInRole("admin") || _currentUser.IsInRole("manager");
+
             var query = _db.ProblemDiscussions
                 .AsNoTracking()
                 .Include(d => d.User)
                 .Where(d => d.ProblemId == problemId);
+
+            // Visibility Filter
+            if (!isAdmin)
+            {
+                query = query.Where(d => d.IsHidden != true || d.UserId == userId);
+            }
 
             query = query
                 .OrderByDescending(x => x.IsPinned)
@@ -59,6 +70,7 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Content = x.Content,
                     IsPinned = x.IsPinned ?? false,
                     IsLocked = x.IsLocked ?? false,
+                    IsHidden = x.IsHidden ?? false,
                     CreatedAt = x.CreatedAt ?? DateTime.MinValue
                 })
                 .ToListAsync();
@@ -115,6 +127,7 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Content = x.Content,
                     IsPinned = x.IsPinned ?? false,
                     IsLocked = x.IsLocked ?? false,
+                    IsHidden = x.IsHidden ?? false,
                     CreatedAt = x.CreatedAt ?? DateTime.MinValue
                 })
                 .ToListAsync();
@@ -155,6 +168,7 @@ namespace Infrastructure.Persistence.Common.Repositories
                     Content = x.Content,
                     IsPinned = x.IsPinned ?? false,
                     IsLocked = x.IsLocked ?? false,
+                    IsHidden = x.IsHidden ?? false,
                     CreatedAt = x.CreatedAt ?? DateTime.MinValue
                 })
                 .FirstOrDefaultAsync();
@@ -179,10 +193,22 @@ namespace Infrastructure.Persistence.Common.Repositories
         // ===============================
         public async Task<DiscussionResponseDto?> GetDiscussionWithCommentsTreeAsync(Guid discussionId)
         {
+            var userId = _currentUser.UserId;
+            var isAdmin = _currentUser.IsInRole("admin") || _currentUser.IsInRole("manager");
+
             var discussion = await GetByIdAsync(discussionId);
             if (discussion == null) return null;
 
+            // Visibility Check for Discussion
+            bool canSeeHidden = isAdmin || discussion.UserId == userId;
+            if (discussion.IsHidden && !canSeeHidden)
+            {
+                discussion.Title = "[Discussion hidden]";
+                discussion.Content = "[This discussion has been hidden by moderation]";
+            }
+
             var comments = await _db.DiscussionComments
+                .AsNoTracking()
                 .Include(c => c.User)
                 .Where(c => c.DiscussionId == discussionId)
                 .ToListAsync();
@@ -192,17 +218,29 @@ namespace Infrastructure.Persistence.Common.Repositories
             List<DiscussionCommentResponseDto> Build(Guid? parentId)
             {
                 return lookup[parentId]
-                    .Select(c => new DiscussionCommentResponseDto
+                    .Select(c =>
                     {
-                        Id = c.Id,
-                        UserId = c.UserId,
-                        UserDisplayName = c.User != null
-                            ? (c.User.DisplayName ?? c.User.Username ?? "Anonymous")
-                            : "Anonymous",
-                        UserAvatarUrl = c.User != null ? c.User.AvatarUrl : null,
-                        Content = c.Content,
-                        CreatedAt = c.CreatedAt ?? DateTime.MinValue,
-                        Children = Build(c.Id)
+                        var dto = new DiscussionCommentResponseDto
+                        {
+                            Id = c.Id,
+                            UserId = c.UserId,
+                            UserDisplayName = c.User != null
+                                ? (c.User.DisplayName ?? c.User.Username ?? "Anonymous")
+                                : "Anonymous",
+                            UserAvatarUrl = c.User != null ? c.User.AvatarUrl : null,
+                            Content = c.Content,
+                            CreatedAt = c.CreatedAt ?? DateTime.MinValue,
+                            IsHidden = c.IsHidden ?? false
+                        };
+
+                        // Hide content if discussion is hidden OR comment itself is hidden
+                        if ((discussion.IsHidden || dto.IsHidden) && !canSeeHidden && dto.UserId != userId)
+                        {
+                            dto.Content = "[Comment hidden]";
+                        }
+
+                        dto.Children = Build(c.Id);
+                        return dto;
                     }).ToList();
             }
 

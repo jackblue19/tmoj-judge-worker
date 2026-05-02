@@ -1,4 +1,4 @@
-﻿namespace Application.UseCases.ProblemDiscussions.Dtos
+namespace Application.UseCases.ProblemDiscussions.Dtos
 {
     public class DiscussionResponseDto
     {
@@ -14,6 +14,7 @@
         public DateTime CreatedAt { get; set; }
         public int VoteCount { get; set; }
         public int UserVote { get; set; }
+        public bool IsHidden { get; set; }
 
         // Tree comment
         public List<DiscussionCommentResponseDto> Comments { get; set; } = new();

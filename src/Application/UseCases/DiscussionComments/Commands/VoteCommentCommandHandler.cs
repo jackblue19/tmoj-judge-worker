@@ -9,20 +9,23 @@ namespace Application.UseCases.DiscussionComments.Commands;
 public class VoteCommentCommandHandler
     : IRequestHandler<VoteCommentCommand, bool>
 {
-    private readonly IReadRepository<DiscussionComment, Guid> _commentRepo;
+    private readonly IReadRepository<DiscussionComment, Guid> _commentReadRepo;
+    private readonly IWriteRepository<DiscussionComment, Guid> _commentWriteRepo;
     private readonly IReadRepository<ContentVote, Guid> _voteReadRepo;
     private readonly IWriteRepository<ContentVote, Guid> _voteWriteRepo;
     private readonly ICurrentUserService _currentUser;
     private readonly IUnitOfWork _uow;
 
     public VoteCommentCommandHandler(
-        IReadRepository<DiscussionComment, Guid> commentRepo,
+        IReadRepository<DiscussionComment, Guid> commentReadRepo,
+        IWriteRepository<DiscussionComment, Guid> commentWriteRepo,
         IReadRepository<ContentVote, Guid> voteReadRepo,
         IWriteRepository<ContentVote, Guid> voteWriteRepo,
         ICurrentUserService currentUser,
         IUnitOfWork uow)
     {
-        _commentRepo = commentRepo;
+        _commentReadRepo = commentReadRepo;
+        _commentWriteRepo = commentWriteRepo;
         _voteReadRepo = voteReadRepo;
         _voteWriteRepo = voteWriteRepo;
         _currentUser = currentUser;
@@ -39,33 +42,39 @@ public class VoteCommentCommandHandler
             throw new UnauthorizedAccessException();
 
         // check comment tồn tại
-        var commentExists = await _commentRepo.AnyAsync(
-            new CommentByIdSpec(request.CommentId), ct);
+        var comment = await _commentReadRepo.GetByIdAsync(request.CommentId, ct);
 
-        if (!commentExists)
+        if (comment == null)
             throw new Exception("Comment not found");
 
         var existingVote = await _voteReadRepo.FirstOrDefaultAsync(
       new CommentUserVoteSingleSpec(userId.Value, request.CommentId), ct);
 
-        // =========================
-        // CASE 1: UNVOTE
-        // =========================
-        if (request.VoteType == 0)
-        {
-            if (existingVote != null)
-            {
-                _voteWriteRepo.Remove(existingVote);
-                await _uow.SaveChangesAsync(ct);
-            }
+        int oldVoteValue = existingVote?.Vote ?? 0;
+        int newVoteValue = request.VoteType;
 
-            return true;
+        // Toggle logic: if same vote type, unvote
+        if (existingVote != null && existingVote.Vote == request.VoteType)
+        {
+            newVoteValue = 0;
         }
 
         // =========================
-        // CASE 2: FIRST TIME VOTE
+        // UPDATE SCORE
         // =========================
-        if (existingVote == null)
+        comment.VoteCount += (newVoteValue - oldVoteValue);
+        comment.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        _commentWriteRepo.Update(comment);
+
+        // =========================
+        // SAVE VOTE RECORD
+        // =========================
+        if (newVoteValue == 0)
+        {
+            if (existingVote != null)
+                _voteWriteRepo.Remove(existingVote);
+        }
+        else if (existingVote == null)
         {
             var vote = new ContentVote
             {
@@ -73,33 +82,19 @@ public class VoteCommentCommandHandler
                 TargetId = request.CommentId,
                 TargetType = "comment",
                 UserId = userId.Value,
-                Vote = (short)request.VoteType,
+                Vote = (short)newVoteValue,
                 CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified),
             };
-
             await _voteWriteRepo.AddAsync(vote, ct);
-            await _uow.SaveChangesAsync(ct);
-
-            return true;
-        }
-
-        // =========================
-        // CASE 3: TOGGLE / CHANGE VOTE
-        // =========================
-        if (existingVote.Vote == request.VoteType)
-        {
-            // click lại => unvote
-            _voteWriteRepo.Remove(existingVote);
         }
         else
         {
-            // đổi vote
-            existingVote.Vote = (short)request.VoteType;
+            existingVote.Vote = (short)newVoteValue;
+            existingVote.CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
             _voteWriteRepo.Update(existingVote);
         }
 
         await _uow.SaveChangesAsync(ct);
-
         return true;
     }
 }

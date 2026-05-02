@@ -6,10 +6,40 @@ namespace Application.UseCases.Dashboard.Dtos;
 public class DashboardDto
 {
     public SummaryDto Summary { get; set; } = new();
+    public EngagementDto Engagement { get; set; } = new();
+    public ProblemDistributionDto ProblemStats { get; set; } = new();
+    public EconomyDto Economy { get; set; } = new();
+    public OperationalDto Operational { get; set; } = new();
     public List<TimeSeriesDto> UserGrowth { get; set; } = new();
     public List<PackageRevenueDto> RevenueByPackage { get; set; } = new();
     public SubmissionVerdictStatsDto SubmissionStats { get; set; } = new();
     public List<SystemAlertDto> Alerts { get; set; } = new();
+}
+
+public class EngagementDto
+{
+    public int DAU { get; set; }
+    public int MAU { get; set; }
+    public int OnlineNow { get; set; }
+}
+
+public class ProblemDistributionDto
+{
+    public int Easy { get; set; }
+    public int Medium { get; set; }
+    public int Hard { get; set; }
+}
+
+public class EconomyDto
+{
+    public decimal TotalCoinsInWorld { get; set; }
+    public int ItemsSoldToday { get; set; }
+}
+
+public class OperationalDto
+{
+    public int PendingSubmissions { get; set; }
+    public double AverageJudgeLatencySeconds { get; set; }
 }
 
 public class SummaryDto

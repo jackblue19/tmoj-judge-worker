@@ -14,22 +14,37 @@ public sealed class R2Service : IR2Service
     private static readonly HashSet<string> TextExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".txt", ".md", ".json", ".cpp", ".py", ".cs",
-        ".java", ".c", ".h", ".html", ".css", ".xml"
+        ".java", ".c", ".h", ".html", ".css", ".xml",
+        ".inp", ".out"
     };
 
     public R2Service(IOptions<R2Settings> settings)
     {
-        _settings = settings.Value;
+        _settings = settings.Value ?? throw new ArgumentNullException(nameof(settings));
+
+        if ( string.IsNullOrWhiteSpace(_settings.ServiceUrl) )
+            throw new InvalidOperationException("R2Settings.ServiceUrl is required.");
+
+        if ( string.IsNullOrWhiteSpace(_settings.AccessKey) )
+            throw new InvalidOperationException("R2Settings.AccessKey is required.");
+
+        if ( string.IsNullOrWhiteSpace(_settings.SecretKey) )
+            throw new InvalidOperationException("R2Settings.SecretKey is required.");
+
+        if ( _settings.Buckets is null || _settings.Buckets.Count == 0 )
+            throw new InvalidOperationException("R2Settings.Buckets is required.");
 
         var config = new AmazonS3Config
         {
             ServiceURL = _settings.ServiceUrl ,
             ForcePathStyle = true ,
-            //SignatureVersion = "4" ,
             AuthenticationRegion = "auto"
         };
 
-        _s3Client = new AmazonS3Client(_settings.AccessKey , _settings.SecretKey , config);
+        _s3Client = new AmazonS3Client(
+            _settings.AccessKey ,
+            _settings.SecretKey ,
+            config);
     }
 
     // ─────────────────────────────────────────────
@@ -81,14 +96,25 @@ public sealed class R2Service : IR2Service
         string? contentType = null ,
         CancellationToken cancellationToken = default)
     {
+        if ( string.IsNullOrWhiteSpace(objectKey) )
+            throw new ArgumentException("Object key is required." , nameof(objectKey));
+
+        if ( fileStream is null )
+            throw new ArgumentNullException(nameof(fileStream));
+
+        if ( fileStream.CanSeek )
+            fileStream.Position = 0;
+
         var bucketName = ResolveBucket(type);
 
         var request = new PutObjectRequest
         {
             BucketName = bucketName ,
-            Key = objectKey ,
+            Key = NormalizeObjectKey(objectKey) ,
             InputStream = fileStream ,
             ContentType = contentType ?? "application/octet-stream" ,
+
+            // Cloudflare R2/S3-compatible storage thường ổn hơn khi tắt payload signing.
             DisablePayloadSigning = true
         };
 
@@ -104,7 +130,11 @@ public sealed class R2Service : IR2Service
         string prefix ,
         CancellationToken cancellationToken = default)
     {
+        if ( string.IsNullOrWhiteSpace(prefix) )
+            throw new ArgumentException("Prefix is required." , nameof(prefix));
+
         var bucketName = ResolveBucket(type);
+        var normalizedPrefix = NormalizePrefix(prefix);
 
         string? continuationToken = null;
 
@@ -113,30 +143,33 @@ public sealed class R2Service : IR2Service
             var listRequest = new ListObjectsV2Request
             {
                 BucketName = bucketName ,
-                Prefix = prefix ,
+                Prefix = normalizedPrefix ,
                 ContinuationToken = continuationToken
             };
 
             var listResponse = await _s3Client.ListObjectsV2Async(listRequest , cancellationToken);
+            var objects = listResponse.S3Objects ?? new List<S3Object>();
 
-            if ( listResponse.S3Objects.Count > 0 )
+            if ( objects.Count > 0 )
             {
                 var deleteRequest = new DeleteObjectsRequest
                 {
                     BucketName = bucketName ,
-                    Objects = listResponse.S3Objects
+                    Objects = objects
+                        .Where(x => !string.IsNullOrWhiteSpace(x.Key))
                         .Select(x => new KeyVersion { Key = x.Key })
                         .ToList()
                 };
 
-                await _s3Client.DeleteObjectsAsync(deleteRequest , cancellationToken);
+                if ( deleteRequest.Objects.Count > 0 )
+                    await _s3Client.DeleteObjectsAsync(deleteRequest , cancellationToken);
             }
 
             continuationToken = listResponse.IsTruncated == true
-                             ? listResponse.NextContinuationToken
-                             : null;
+                ? listResponse.NextContinuationToken
+                : null;
 
-        } while ( !string.IsNullOrEmpty(continuationToken) );
+        } while ( !string.IsNullOrWhiteSpace(continuationToken) );
     }
 
     public async Task<IReadOnlyList<string>> ListObjectKeysAsync(
@@ -145,8 +178,9 @@ public sealed class R2Service : IR2Service
         CancellationToken cancellationToken = default)
     {
         var bucketName = ResolveBucket(type);
-        var result = new List<string>();
+        var normalizedPrefix = NormalizePrefix(prefix);
 
+        var result = new List<string>();
         string? continuationToken = null;
 
         do
@@ -154,21 +188,50 @@ public sealed class R2Service : IR2Service
             var listRequest = new ListObjectsV2Request
             {
                 BucketName = bucketName ,
-                Prefix = prefix ,
+                Prefix = normalizedPrefix ,
                 ContinuationToken = continuationToken
             };
 
             var listResponse = await _s3Client.ListObjectsV2Async(listRequest , cancellationToken);
+            var objects = listResponse.S3Objects ?? new List<S3Object>();
 
-            result.AddRange(listResponse.S3Objects.Select(x => x.Key));
+            result.AddRange(
+                objects
+                    .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+                    .Select(x => x.Key));
 
             continuationToken = listResponse.IsTruncated == true
-                              ? listResponse.NextContinuationToken
-                              : null;
+                ? listResponse.NextContinuationToken
+                : null;
 
-        } while ( !string.IsNullOrEmpty(continuationToken) );
+        } while ( !string.IsNullOrWhiteSpace(continuationToken) );
 
         return result;
+    }
+
+    public async Task<string?> DeleteAsync(
+        string type ,
+        Guid id ,
+        CancellationToken cancellationToken = default)
+    {
+        var bucketName = ResolveBucket(type);
+
+        var fullKey = await FindFirstObjectKeyByIdAsync(
+            bucketName ,
+            id ,
+            cancellationToken);
+
+        if ( string.IsNullOrWhiteSpace(fullKey) )
+            return null;
+
+        var request = new DeleteObjectRequest
+        {
+            BucketName = bucketName ,
+            Key = fullKey
+        };
+
+        await _s3Client.DeleteObjectAsync(request , cancellationToken);
+        return fullKey;
     }
 
     // ─────────────────────────────────────────────
@@ -180,14 +243,24 @@ public sealed class R2Service : IR2Service
         Guid id ,
         int? presignUrlMinute = null ,
         CancellationToken cancellationToken = default)
-        => GeneratePresignedUrlAsync(type , id , presignUrlMinute , false , cancellationToken);
+        => GeneratePresignedUrlAsync(
+            type ,
+            id ,
+            presignUrlMinute ,
+            forDownload: false ,
+            cancellationToken);
 
     public Task<string?> GetPresignedUrlForDownloadAsync(
         string type ,
         Guid id ,
         int? presignUrlMinute = null ,
         CancellationToken cancellationToken = default)
-        => GeneratePresignedUrlAsync(type , id , presignUrlMinute , true , cancellationToken);
+        => GeneratePresignedUrlAsync(
+            type ,
+            id ,
+            presignUrlMinute ,
+            forDownload: true ,
+            cancellationToken);
 
     private async Task<string?> GeneratePresignedUrlAsync(
         string type ,
@@ -198,17 +271,12 @@ public sealed class R2Service : IR2Service
     {
         var bucketName = ResolveBucket(type);
 
-        var listRequest = new ListObjectsV2Request
-        {
-            BucketName = bucketName ,
-            Prefix = id.ToString() ,
-            MaxKeys = 1
-        };
+        var fullKey = await FindFirstObjectKeyByIdAsync(
+            bucketName ,
+            id ,
+            cancellationToken);
 
-        var listResponse = await _s3Client.ListObjectsV2Async(listRequest , cancellationToken);
-        var fullKey = listResponse.S3Objects.FirstOrDefault()?.Key;
-
-        if ( string.IsNullOrEmpty(fullKey) )
+        if ( string.IsNullOrWhiteSpace(fullKey) )
             return null;
 
         var fileName = Path.GetFileName(fullKey);
@@ -235,7 +303,7 @@ public sealed class R2Service : IR2Service
 
             var ext = Path.GetExtension(fullKey);
 
-            if ( !string.IsNullOrEmpty(ext) && TextExtensions.Contains(ext) )
+            if ( !string.IsNullOrWhiteSpace(ext) && TextExtensions.Contains(ext) )
             {
                 request.ResponseHeaderOverrides.ContentType =
                     "text/plain; charset=utf-8";
@@ -252,22 +320,15 @@ public sealed class R2Service : IR2Service
     {
         var bucketName = ResolveBucket(type);
 
-        var listRequest = new ListObjectsV2Request
-        {
-            BucketName = bucketName ,
-            Prefix = id.ToString() ,
-            MaxKeys = 1
-        };
+        var fullKey = await FindFirstObjectKeyByIdAsync(
+            bucketName ,
+            id ,
+            cancellationToken);
 
-        var listResponse = await _s3Client.ListObjectsV2Async(listRequest , cancellationToken);
-        var fullKey = listResponse.S3Objects.FirstOrDefault()?.Key;
-
-        if ( string.IsNullOrEmpty(fullKey) )
+        if ( string.IsNullOrWhiteSpace(fullKey) )
             return null;
 
-        var bucketKey = string.IsNullOrEmpty(type)
-            ? ""
-            : char.ToUpper(type[0]) + type.Substring(1).ToLower();
+        var bucketKey = BuildBucketKey(type);
 
         if ( _settings.PublicDomains != null &&
             _settings.PublicDomains.TryGetValue(bucketKey , out var publicDomain) &&
@@ -279,48 +340,19 @@ public sealed class R2Service : IR2Service
         return $"{_settings.ServiceUrl.TrimEnd('/')}/{bucketName}/{fullKey}";
     }
 
-    public async Task<string?> DeleteAsync(
-        string type ,
-        Guid id ,
+    public Task<string> GetPresignedObjectUrlForViewAsync(
+        string bucketType ,
+        string objectKey ,
+        TimeSpan? expiresIn = null ,
         CancellationToken cancellationToken = default)
     {
-        var bucketName = ResolveBucket(type);
-
-        var listRequest = new ListObjectsV2Request
-        {
-            BucketName = bucketName ,
-            Prefix = id.ToString() ,
-            MaxKeys = 1
-        };
-
-        var listResponse = await _s3Client.ListObjectsV2Async(listRequest , cancellationToken);
-        var fullKey = listResponse.S3Objects.FirstOrDefault()?.Key;
-
-        if ( string.IsNullOrEmpty(fullKey) )
-            return null;
-
-        var request = new DeleteObjectRequest
-        {
-            BucketName = bucketName ,
-            Key = fullKey
-        };
-
-        await _s3Client.DeleteObjectAsync(request , cancellationToken);
-        return fullKey;
-    }
-
-    public Task<string> GetPresignedObjectUrlForViewAsync(
-    string bucketType ,
-    string objectKey ,
-    TimeSpan? expiresIn = null ,
-    CancellationToken cancellationToken = default)
-    {
         var bucketName = ResolveBucket(bucketType);
+        var normalizedObjectKey = NormalizeObjectKey(objectKey);
 
         var request = new GetPreSignedUrlRequest
         {
             BucketName = bucketName ,
-            Key = objectKey ,
+            Key = normalizedObjectKey ,
             Verb = HttpVerb.GET ,
             Expires = DateTime.UtcNow.Add(
                 expiresIn ?? TimeSpan.FromMinutes(_settings.PresignedUrlExpirationMinutes))
@@ -331,10 +363,12 @@ public sealed class R2Service : IR2Service
             ContentDisposition = "inline"
         };
 
-        var ext = Path.GetExtension(objectKey);
+        var ext = Path.GetExtension(normalizedObjectKey);
+
         if ( !string.IsNullOrWhiteSpace(ext) && TextExtensions.Contains(ext) )
         {
-            request.ResponseHeaderOverrides.ContentType = "text/plain; charset=utf-8";
+            request.ResponseHeaderOverrides.ContentType =
+                "text/plain; charset=utf-8";
         }
 
         return Task.FromResult(_s3Client.GetPreSignedURL(request));
@@ -348,11 +382,12 @@ public sealed class R2Service : IR2Service
         CancellationToken cancellationToken = default)
     {
         var bucketName = ResolveBucket(bucketType);
+        var normalizedObjectKey = NormalizeObjectKey(objectKey);
 
         var request = new GetPreSignedUrlRequest
         {
             BucketName = bucketName ,
-            Key = objectKey ,
+            Key = normalizedObjectKey ,
             Verb = HttpVerb.GET ,
             Expires = DateTime.UtcNow.Add(
                 expiresIn ?? TimeSpan.FromMinutes(_settings.PresignedUrlExpirationMinutes))
@@ -371,12 +406,15 @@ public sealed class R2Service : IR2Service
         string objectKey ,
         CancellationToken cancellationToken = default)
     {
+        if ( string.IsNullOrWhiteSpace(objectKey) )
+            throw new ArgumentException("Object key is required." , nameof(objectKey));
+
         var bucketName = ResolveBucket(bucketType);
 
         var request = new GetObjectRequest
         {
             BucketName = bucketName ,
-            Key = objectKey
+            Key = NormalizeObjectKey(objectKey)
         };
 
         using var response = await _s3Client.GetObjectAsync(request , cancellationToken);
@@ -390,26 +428,88 @@ public sealed class R2Service : IR2Service
     // Helpers
     // ─────────────────────────────────────────────
 
+    private async Task<string?> FindFirstObjectKeyByIdAsync(
+        string bucketName ,
+        Guid id ,
+        CancellationToken cancellationToken)
+    {
+        var listRequest = new ListObjectsV2Request
+        {
+            BucketName = bucketName ,
+            Prefix = id.ToString("D") ,
+            MaxKeys = 1
+        };
+
+        var listResponse = await _s3Client.ListObjectsV2Async(
+            listRequest ,
+            cancellationToken);
+
+        return listResponse.S3Objects?
+            .Where(x => !string.IsNullOrWhiteSpace(x.Key))
+            .Select(x => x.Key)
+            .FirstOrDefault();
+    }
+
     private static string BuildObjectKey(Guid fileId , string fileExtension)
     {
-        if ( !string.IsNullOrEmpty(fileExtension) && !fileExtension.StartsWith('.') )
+        if ( !string.IsNullOrWhiteSpace(fileExtension) &&
+            !fileExtension.StartsWith('.') )
+        {
             fileExtension = "." + fileExtension;
+        }
 
-        return $"{fileId}{fileExtension}";
+        return $"{fileId:D}{fileExtension}";
     }
 
     private string ResolveBucket(string type)
     {
-        var bucketKey = string.IsNullOrEmpty(type)
-            ? ""
-            : char.ToUpper(type[0]) + type.Substring(1).ToLower();
+        var bucketKey = BuildBucketKey(type);
 
-        if ( !_settings.Buckets.TryGetValue(bucketKey , out var bucketName) )
+        if ( _settings.Buckets is null ||
+            !_settings.Buckets.TryGetValue(bucketKey , out var bucketName) ||
+            string.IsNullOrWhiteSpace(bucketName) )
         {
+            var availableTypes = _settings.Buckets is null
+                ? string.Empty
+                : string.Join(", " , _settings.Buckets.Keys);
+
             throw new ArgumentException(
-                $"Bucket type '{type}' is not configured. Available types: {string.Join(", " , _settings.Buckets.Keys)}");
+                $"Bucket type '{type}' is not configured. Available types: {availableTypes}");
         }
 
         return bucketName;
+    }
+
+    private static string BuildBucketKey(string type)
+    {
+        if ( string.IsNullOrWhiteSpace(type) )
+            return string.Empty;
+
+        type = type.Trim();
+
+        return char.ToUpperInvariant(type[0]) +
+               type[1..].ToLowerInvariant();
+    }
+
+    private static string NormalizeObjectKey(string objectKey)
+    {
+        if ( string.IsNullOrWhiteSpace(objectKey) )
+            throw new ArgumentException("Object key is required." , nameof(objectKey));
+
+        return objectKey
+            .Replace('\\' , '/')
+            .Trim()
+            .TrimStart('/');
+    }
+
+    private static string NormalizePrefix(string prefix)
+    {
+        if ( string.IsNullOrWhiteSpace(prefix) )
+            return string.Empty;
+
+        return prefix
+            .Replace('\\' , '/')
+            .Trim()
+            .TrimStart('/');
     }
 }
